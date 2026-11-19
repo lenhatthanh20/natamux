@@ -1,4 +1,4 @@
-//! Ports `packages/core/src/git/commit-message.ts`: the first line of a commit message, and the
+//! The first line of a commit message, and the
 //! simple draft for when no agent can write one.
 
 use natamux_proto::workspaces::changes::{COMMIT_SUBJECT_MAX, ChangeStatus};

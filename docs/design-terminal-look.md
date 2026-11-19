@@ -53,7 +53,7 @@ Four designs, dark and light. All are Natamux's own; popular themes were ideas o
 
 The demo screen shows a Claude Code style session, `ls --color`, `git log --graph`, `git diff --stat`, Vietnamese text with a selection, and the 16 colors. The browser drew `->` as an arrow there; xterm draws no ligatures.
 
-To switch to another palette later, copy its values into `DARK` and `LIGHT` in `packages/web/src/features/terminals/terminal-theme.ts`, set `--terminal` in `packages/web/src/styles.css` (both themes) to its background, and update the table in `docs/ui-spec.md`.
+To switch to another palette later, copy its values into the terminal palettes of the native app (the web files that held them were removed), and update the table in `docs/ui-spec.md`.
 
 ### Current (before this change)
 | | Dark (on `#0b0c0e`) | Light (on `#fbfbfc`) |

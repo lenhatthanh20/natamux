@@ -1,5 +1,5 @@
-//! Ports the cases of `packages/core/src/stages/__tests__/position.test.ts` for the functions that
-//! are in this crate. The others are tested in `natamux-proto`.
+//! Tests of the functions of `position.rs`
+//! that are in this crate. The others are tested in `natamux-proto`.
 
 use natamux_proto::stages::catalog::full_pipeline;
 use natamux_proto::stages::schema::{Gate, Stage, StageKind, Step};

@@ -1,5 +1,5 @@
-//! Task rules of the Rust daemon (L0): the zod schemas with their texts, and the pure task logic of
-//! `packages/core` that `natamux-proto` does not have. Types come from `natamux-proto`.
+//! Task rules of the Rust daemon (L0): the zod schemas with their texts, and the pure task logic
+//! that `natamux-proto` does not have. Types come from `natamux-proto`.
 
 pub mod agents {
     pub mod custom_agents;

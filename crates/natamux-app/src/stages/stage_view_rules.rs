@@ -1,5 +1,5 @@
-//! Pure rules of the stage views (`packages/web/src/features/stages/stage-view.ts`, and `markerLabel`,
-//! `linkKind` and the even-pixel rule of `StageMarker.tsx`). Times are ISO strings; the caller
+//! Pure rules of the stage views (`markerLabel`, `linkKind` and the
+//! even-pixel rule of the stage marker). Times are ISO strings; the caller
 //! passes `now_ms`, so no rule reads the clock.
 
 // Ported with their tests (spec D14); the stage views call them.

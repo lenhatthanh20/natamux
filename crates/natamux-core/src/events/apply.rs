@@ -1,4 +1,4 @@
-//! Applies one event to a task's position in its steps (`packages/core/src/events/apply.ts`).
+//! Applies one event to a task's position in its steps.
 
 use natamux_proto::events::task_event::{RECORD_ONLY_EVENT_TYPES, TaskEvent};
 use natamux_proto::stages::position::{path_of, step_to_run};

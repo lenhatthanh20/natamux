@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# The production images with demo data, for the end-to-end tests and for trying the dashboard in a
-# browser. Needs Docker, and the GitHub CLI to check pulled images. See docs/e2e.md.
+# The daemon image with demo data, for the live client tests of CI and for trying the API.
+# Needs Docker, and the GitHub CLI for E2E_RUN. See docs/docker.md.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -9,11 +9,8 @@ export NATAMUX_PORT="${NATAMUX_PORT:-8080}"
 # The repository is the volume of compose.e2e.yaml, not a folder of this machine.
 export NATAMUX_REPO=e2e-repo
 URL="http://127.0.0.1:$NATAMUX_PORT"
-IMAGES="${E2E_IMAGES:-ghcr.io/lenhatthanh20/natamux}"
-TAG="${E2E_TAG:-main}"
 # The repository whose Rust workflow built the images.
 SOURCE="${E2E_SOURCE:-lenhatthanh20/natamux}"
-# The tests in e2e/ look for these titles.
 DEMO_TITLE="Demo: changes and history"
 AGENT_TITLE="Command palette opened with Cmd+K"
 
@@ -21,18 +18,17 @@ usage() {
   cat <<'TEXT'
 Usage: scripts/e2e.sh <command>
 
-  up     Pull and check the images built on main, start them, then add demo data.
-         E2E_BUILD=1 builds them first (CI and codespaces only). E2E_LOCAL=1 starts the
-         natamux-daemon:local and natamux-web:local images that are there already.
-         E2E_RUN=<run-id> loads the images that a Rust run built (any branch, kept 3 days)
-         and starts them. The run of a branch:
+  up     Start the natamux-daemon:local image that is there already, then add demo data.
+         E2E_BUILD=1 builds it first (CI and codespaces only).
+         E2E_RUN=<run-id> loads the image that a Rust run built (any branch, kept 3 days)
+         and starts it. The run of a branch:
            gh run list -w rust.yml -b <branch> -L 1 --json databaseId --jq '.[0].databaseId'
-  build  Build the images (CI and codespaces only)
+  build  Build the image (CI and codespaces only)
   seed   Add the demo data, unless it is there
   logs   Show the logs
   down   Stop, and remove the demo data and repository
 
-Dashboard: http://localhost:8080 (NATAMUX_PORT), token e2e-token (NATAMUX_TOKEN).
+API: http://localhost:8080/api (NATAMUX_PORT), token e2e-token (NATAMUX_TOKEN).
 TEXT
 }
 
@@ -41,29 +37,13 @@ compose() {
 }
 
 build() {
-  # A build runs pnpm install. Packages are installed only in CI and in codespaces.
+  # A build runs cargo, whose build scripts run code. Only CI and codespaces build.
   if [ -z "${CI:-}" ] && [ -z "${CODESPACES:-}" ]; then
-    echo "A build installs packages to build the images. Run it in CI or a codespace." >&2
-    echo "Here, run scripts/e2e.sh up: it pulls the images that CI built." >&2
+    echo "A build compiles the daemon. Run it in CI or a codespace." >&2
+    echo "Here, run E2E_RUN=<run-id> scripts/e2e.sh up: it loads the image that CI built." >&2
     exit 1
   fi
-  compose build daemon web
-}
-
-# Pulls an image of main and prints its digest, once GitHub confirms that a workflow on main
-# of SOURCE built it. A tag can move, so the containers start from the digest that was checked.
-pull_checked() {
-  local ref="$IMAGES-$1:$TAG" digest
-  docker pull --quiet "$ref" >/dev/null
-  digest="$(docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$ref" |
-    grep -F -m 1 "$IMAGES-$1@")"
-  if ! gh attestation verify "oci://$digest" --repo "$SOURCE" \
-    --signer-workflow "$SOURCE/.github/workflows/rust.yml" --source-ref refs/heads/main \
-    >/dev/null; then
-    echo "$digest was not built by Rust on main of $SOURCE. Not starting it." >&2
-    exit 1
-  fi
-  echo "$digest"
+  compose build daemon
 }
 
 # Loads the images that a Rust run of SOURCE built before a branch merges.
@@ -94,7 +74,7 @@ load_run() {
 
 need_gh() {
   if ! command -v gh >/dev/null; then
-    echo "Checking the images needs the GitHub CLI (gh), signed in." >&2
+    echo "Loading the image of a run needs the GitHub CLI (gh), signed in." >&2
     exit 1
   fi
 }
@@ -105,23 +85,15 @@ up() {
   elif [ -n "${E2E_RUN:-}" ]; then
     need_gh
     load_run "$E2E_RUN"
+    # The image is built for Linux on x86. A Mac with Apple silicon runs it with Rosetta.
     export DOCKER_DEFAULT_PLATFORM=linux/amd64
-  elif [ "${E2E_LOCAL:-}" != 1 ]; then
-    need_gh
-    # The images are built for Linux on x86. A Mac with Apple silicon runs them with Rosetta.
-    export DOCKER_DEFAULT_PLATFORM=linux/amd64
-    NATAMUX_DAEMON_IMAGE="$(pull_checked daemon)"
-    NATAMUX_WEB_IMAGE="$(pull_checked web)"
-    export NATAMUX_DAEMON_IMAGE NATAMUX_WEB_IMAGE
-    echo "Checked: $NATAMUX_DAEMON_IMAGE"
-    echo "Checked: $NATAMUX_WEB_IMAGE"
   fi
   compose run --rm repo
-  compose up -d --no-build --wait --wait-timeout 180 daemon web
+  compose up -d --no-build --wait --wait-timeout 180 daemon
   seed
   echo
-  echo "Dashboard: http://localhost:$NATAMUX_PORT"
-  echo "Token:     $NATAMUX_TOKEN"
+  echo "API:   http://localhost:$NATAMUX_PORT/api"
+  echo "Token: $NATAMUX_TOKEN"
 }
 
 # Calls the API with the token. A third argument is the JSON body.

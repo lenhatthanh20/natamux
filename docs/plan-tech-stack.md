@@ -1,6 +1,8 @@
 # Natamux — Tech Stack Plan
 
-Status: historical plan. The current app, daemon and CLI are Rust; the dashboard and shared web types remain TypeScript. See [Rust migration](plan-rust-migration.md) and [Phase 5](rust-phase5.md) for the current build and release flow. The older choices below explain how the product started.
+Status: historical plan. The current app, daemon and CLI are Rust. See [Rust migration](plan-rust-migration.md) and [Phase 5](rust-phase5.md) for the current build and release flow. The older choices below explain how the product started.
+
+Note (2026-11-19): the web dashboard (React, `packages/web`, `packages/core`) and its Playwright suite were removed. The native app is the only UI. The daemon serves the API only. Web and Electron choices below are history.
 
 ## 1. Goals that drive the stack
 

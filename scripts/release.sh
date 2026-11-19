@@ -26,7 +26,7 @@ commit=$(git rev-parse HEAD)
 [ "$commit" = "$(git rev-parse origin/main)" ] \
   || fail "check out origin/main first: git switch --detach origin/main"
 [ -z "$(git status --porcelain --untracked-files=no)" ] || fail "commit or stash your changes first"
-version=$(sed -n 's/^  "version": "\(.*\)",$/\1/p' packages/web/package.json)
+version=$(sed -n 's/^version = "\(.*\)"$/\1/p' crates/natamux-app/Cargo.toml | head -n 1)
 [ "v$version" = "$tag" ] || fail "main has version $version, not ${tag#v}; merge the release pull request first"
 for manifest in crates/*/Cargo.toml; do
   rust_version=$(sed -n 's/^version = "\(.*\)"$/\1/p' "$manifest" | head -n 1)

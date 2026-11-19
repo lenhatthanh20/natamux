@@ -166,22 +166,3 @@ fn a_refused_write_keeps_its_status_and_message() {
         }
     );
 }
-
-// The web dashboard reads the diff sizes at most this often after `workspace.dirty`.
-#[test]
-fn the_diff_stats_time_matches_the_web_dashboard() {
-    let source = include_str!("../../../packages/web/src/lib/live.ts");
-    let marker = "export const DIFFSTATS_EVERY_MS = ";
-    let start = source.find(marker).unwrap() + marker.len();
-    let millis: u64 = source[start..]
-        .lines()
-        .next()
-        .unwrap()
-        .replace('_', "")
-        .parse()
-        .unwrap();
-    assert_eq!(
-        FeedTimes::default().diff_stats_every,
-        Duration::from_millis(millis)
-    );
-}

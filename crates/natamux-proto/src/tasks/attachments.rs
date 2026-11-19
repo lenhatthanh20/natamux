@@ -1,4 +1,4 @@
-//! Limits of the files attached to a new task (`packages/core/src/tasks/attachments.ts`).
+//! Limits of the files attached to a new task.
 
 use serde::{Deserialize, Serialize};
 

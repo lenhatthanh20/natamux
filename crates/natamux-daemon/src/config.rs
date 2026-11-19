@@ -18,7 +18,6 @@ pub struct Config {
     pub worktrees_dir: PathBuf,
     /// `NATAMUX_REPO_DIR`: the folder added once as the `default` project.
     pub repo_dir: Option<PathBuf>,
-    pub web_dir: Option<PathBuf>,
     pub token: String,
     pub token_was_generated: bool,
     /// Host names a request may name: the loopback names, `NATAMUX_HOST` and
@@ -110,7 +109,6 @@ pub fn load_config(env: &Env, cwd: &Path) -> Result<Config, String> {
         data_dir,
         worktrees_dir,
         repo_dir: value(env, "NATAMUX_REPO_DIR").map(PathBuf::from),
-        web_dir: value(env, "NATAMUX_WEB_DIR").map(PathBuf::from),
         token: configured.map_or_else(|| random_id(24), String::from),
         token_was_generated: configured.is_none(),
         silent_close: natamux_proto::terminals::messages::SILENT_CLOSE,

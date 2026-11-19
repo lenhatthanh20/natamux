@@ -12,10 +12,9 @@
     "ghcr.io/devcontainers/features/copilot-cli:1": {}
   },
   "onCreateCommand": "sudo apt-get update && sudo apt-get install -y --no-install-recommends python3 build-essential",
-  "postCreateCommand": "pnpm install --frozen-lockfile && pnpm build",
   "forwardPorts": [8080],
   "portsAttributes": {
-    "8080": { "label": "Natamux dashboard", "onAutoForward": "notify" }
+    "8080": { "label": "Natamux daemon (scripts/e2e.sh)", "onAutoForward": "notify" }
   },
   "hostRequirements": {
     "cpus": 2

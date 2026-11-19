@@ -1,6 +1,6 @@
 ---
 title: Install Natamux
-description: Download the desktop app for macOS, Windows or Linux, or run Natamux from source or in Docker.
+description: Download the desktop app for macOS, Windows or Linux, or run Natamux from source.
 sidebar:
   order: 1
 ---
@@ -88,7 +88,7 @@ Every file:
 | Debian, Ubuntu | [`Natamux-linux-amd64.deb`](https://github.com/lenhatthanh20/natamux/releases/latest/download/Natamux-linux-amd64.deb) |
 | Linux, no install | [`Natamux-linux-x64.tar.gz`](https://github.com/lenhatthanh20/natamux/releases/latest/download/Natamux-linux-x64.tar.gz) |
 
-Not sure which Mac you have? Open **Apple menu → About This Mac**. **Chip: Apple M…** means Apple silicon; **Processor: Intel** means Intel. Rust app builds run in CI. For a server install, see [Docker](/docs/guides/self-host-docker/).
+Not sure which Mac you have? Open **Apple menu → About This Mac**. **Chip: Apple M…** means Apple silicon; **Processor: Intel** means Intel. Rust app builds run in CI.
 
 ## Install
 
@@ -158,32 +158,6 @@ The package installs the app in `/opt/Natamux/natamux-app` and the Rust `natamux
 Unpack `Natamux-linux-x64.tar.gz` anywhere and run `natamux-app` from the folder. Keep `natamux-daemon`, `natamux` and `nmx` beside it. Install `curl` for update checks.
 
 </TabItem>
-<TabItem label="Docker">
-
-You need Docker with Compose, and a git repository. From a clone of the Natamux repository:
-
-<Steps>
-
-1. Set a token and the path of your repository:
-
-   ```sh frame="terminal"
-   export NATAMUX_TOKEN="$(openssl rand -base64 32)"
-   export NATAMUX_REPO=/path/to/the/git/repository
-   ```
-
-2. Start the two containers:
-
-   ```sh frame="terminal"
-   docker compose -f compose.prod.yaml up -d --build
-   ```
-
-3. Open `http://localhost:8080` and paste the token into the **Daemon token** field.
-
-</Steps>
-
-The images contain no coding agents. Docker keeps tasks, stages and the dashboard. To work with real agents, use the desktop app. See [Self-host with Docker](/docs/guides/self-host-docker/).
-
-</TabItem>
 </Tabs>
 
 ## Verify the download
@@ -219,24 +193,19 @@ On macOS and Linux you should see `OK` for the file you downloaded. On Windows t
 
 ## Run from source
 
-For contributors. Natamux is developed in a GitHub Codespace, where Docker, Node.js and pnpm are ready. In the codespace terminal:
+For contributors. Natamux is developed in a GitHub Codespace, where Docker is ready. In the codespace terminal, start the daemon test stack (no UI):
 
 ```sh
-scripts/e2e.sh build
-E2E_LOCAL=1 scripts/e2e.sh up
+E2E_BUILD=1 scripts/e2e.sh up
 ```
 
-Open port 8080 and sign in with the token `e2e-token`. The demo has tasks in several states and uses a fake agent. See `docs/dev-setup.md` and `docs/docker.md` in the repository.
+The daemon answers on port 8080 with the token `e2e-token`. See `docs/dev-setup.md` and `docs/docker.md` in the repository.
 
 The native app and daemon are built in CI by `.github/workflows/release.yml`. Do not run a Rust build on the owner's Mac.
 
 :::note
 The development containers have no real coding agent. Use the desktop app to work with real agents.
 :::
-
-## Run with Docker
-
-The production compose file runs the dashboard and the daemon in two hardened containers. It keeps tasks, stages and the dashboard, but its images contain no coding agents. See [Self-host with Docker](/docs/guides/self-host-docker/).
 
 ## Use the natamux command in your own shell
 
@@ -304,7 +273,7 @@ natamux task list
 </TabItem>
 </Tabs>
 
-The app uses port 4317 when it is free, and another free port when it is not. Check the address in the dashboard's browser URL or in the daemon log. See [Desktop app](/docs/guides/desktop-app/) and the [CLI reference](/docs/reference/cli/).
+The app uses port 4317 when it is free, and another free port when it is not. Check the address in the daemon log. See [Desktop app](/docs/guides/desktop-app/) and the [CLI reference](/docs/reference/cli/).
 
 ## Next
 

@@ -1,4 +1,4 @@
-//! Port of `branchOptions` in `packages/web/src/features/workspaces/branches.ts`. The last used
+//! `branchOptions`. The last used
 //! branch is kept in the app's view file, not here.
 
 use natamux_proto::projects::repo::ORIGIN_PREFIX;

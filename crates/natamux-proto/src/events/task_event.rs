@@ -1,4 +1,4 @@
-//! Task events (`packages/core/src/events/schema.ts`): the log that `GET /tasks/:id/events`
+//! Task events: the log that `GET /tasks/:id/events`
 //! sends, and the names a client may send.
 
 use serde::{Deserialize, Serialize};

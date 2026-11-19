@@ -1,4 +1,4 @@
-//! The pinned terminals of `packages/core/src/stages/terminal-lane.ts`: the terminal each stage got
+//! The pinned terminals: the terminal each stage got
 //! at its last start, and the stage a terminal works on.
 
 use natamux_proto::events::task_event::TaskEvent;

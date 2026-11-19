@@ -1,4 +1,4 @@
-//! Where a stage sits in a pipeline (`packages/core/src/stages/position.ts`): the step of a stage,
+//! Where a stage sits in a pipeline: the step of a stage,
 //! the path of a stage, and the words for a path's condition.
 
 use serde_json::{Map, Value};

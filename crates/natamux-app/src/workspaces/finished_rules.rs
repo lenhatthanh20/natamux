@@ -1,5 +1,5 @@
-//! What a done or cancelled task still has to do with git, for the remove dialog. Port of
-//! `branchChoice`, `busyShells`, `isAgentShell` and `removedText` in `packages/web/src/lib/finished.ts`.
+//! What a done or cancelled task still has to do with git, for the remove dialog:
+//! `branchChoice`, `busyShells`, `isAgentShell` and `removedText`.
 
 use natamux_proto::tasks::task::{PullRequestStatus, Task};
 use natamux_proto::terminals::list::{SHELL_PROGRAMS, TerminalList};

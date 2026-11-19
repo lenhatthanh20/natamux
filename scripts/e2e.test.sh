@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Usage: scripts/e2e.test.sh
-# Checks how scripts/e2e.sh picks the run whose images E2E_RUN loads, with stubs for gh and docker.
+# Checks how scripts/e2e.sh picks the run whose image E2E_RUN loads, and what it builds, with
+# stubs for gh and docker.
 set -u
 fails=0
 tmp=$(mktemp -d)
@@ -86,6 +87,23 @@ compose_line() {
 
 check "uses the production and E2E compose files" \
   '[ "$(compose_line)" = "docker compose -p natamux-e2e -f compose.prod.yaml -f compose.e2e.yaml ps" ]'
+
+# build(): only the daemon image, and only in CI or a codespace.
+build_line() {
+  : >"$log"
+  (
+    # shellcheck source=scripts/e2e.sh
+    source "$(dirname "$0")/e2e.sh"
+    build
+  ) >/dev/null 2>"$tmp/err"
+  echo $?
+}
+
+code=$(CI=1 build_line)
+check "builds only the daemon image" \
+  '[ "$code" = 0 ] && [ "$(cat "$log")" = "docker compose -p natamux-e2e -f compose.prod.yaml -f compose.e2e.yaml build daemon" ]'
+code=$(CI= CODESPACES= build_line)
+check "refuses to build outside CI and codespaces" '[ "$code" = 1 ] && [ ! -s "$log" ]'
 
 if [ "$fails" -gt 0 ]; then
   echo "$fails failed"

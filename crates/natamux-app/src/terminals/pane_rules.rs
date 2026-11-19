@@ -1,4 +1,4 @@
-//! Port of `packages/web/src/lib/panes.ts`: which tasks the agents grid shows, its columns, and the
+//! Which tasks the agents grid shows, its columns, and the
 //! text of a pane. `terminalState` is `sidebar/shell_rows.rs::terminal_state`.
 
 use std::borrow::Borrow;

@@ -1,4 +1,4 @@
-//! Port of `condense`, `forcedByWidth` and friends in `packages/web/src/features/app/status-bar.ts`:
+//! `condense`, `forcedByWidth` and friends:
 //! how the status bar loses labels and items as it gets narrow. Ids keep the order they were added
 //! in, as the sets of the web do.
 

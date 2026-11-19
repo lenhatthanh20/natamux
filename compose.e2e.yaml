@@ -1,5 +1,5 @@
-# End-to-end tests: the production images, on top of compose.prod.yaml, with a fake agent and a
-# throwaway repository in a volume. Use scripts/e2e.sh, not this file alone. See docs/e2e.md.
+# End-to-end tests: the daemon image, on top of compose.prod.yaml, with a fake agent and a
+# throwaway repository in a volume. Use scripts/e2e.sh, not this file alone. See docs/docker.md.
 services:
   # Makes the repository once, before the daemon starts. scripts/e2e.sh runs it.
   repo:
@@ -43,9 +43,6 @@ services:
       GIT_COMMITTER_EMAIL: e2e@example.invalid
     volumes:
       - ./scripts/fake-agent.sh:/opt/natamux/fake-agent.sh:ro
-
-  web:
-    image: ${NATAMUX_WEB_IMAGE:-natamux-web:local}
 
 volumes:
   e2e-repo:

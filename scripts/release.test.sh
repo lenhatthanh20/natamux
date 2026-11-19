@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Usage: scripts/release.test.sh [--published]
 # Checks that the files of the next release agree with each other. The version comes from
-# packages/web/package.json. The Release workflow checks only the packages and the notes file,
+# crates/natamux-app/Cargo.toml. The Release workflow checks only the crates and the notes file,
 # and only after the tag is pushed; this finds the same mistakes, and more, on the pull request.
 # With --published, it checks the pushed tag, the Release run and the GitHub release instead,
 # with its signature. That needs gh, signed in, minisign, and the network.
@@ -22,10 +22,6 @@ finish() {
   exit "$fails"
 }
 
-version_of() {
-  sed -n 's/^  "version": "\(.*\)",$/\1/p' "packages/$1/package.json"
-}
-
 rust_version_of() {
   sed -n 's/^version = "\(.*\)"$/\1/p' "$1" | head -n 1
 }
@@ -35,7 +31,7 @@ bundle_version() {
     crates/natamux-app/resources/Info.plist
 }
 
-version=$(version_of web)
+version=$(rust_version_of crates/natamux-app/Cargo.toml)
 tag="v$version"
 notes="docs/releases/$tag.md"
 changelog="site/src/content/docs/docs/help/changelog.md"
@@ -58,8 +54,8 @@ if [ "${1:-}" = "--published" ]; then
   check "tag $tag is on main" \
     '[[ "$(gh api "repos/{owner}/{repo}/compare/$sha...main" --jq .status)" =~ ^(ahead|identical)$ ]]'
   check "tag $tag has version $version" \
-    '[ "$(gh api "repos/{owner}/{repo}/contents/packages/web/package.json?ref=$sha" --jq .content \
-      | base64 -d | sed -n "s/^  \"version\": \"\(.*\)\",$/\1/p")" = "$version" ]'
+    '[ "$(gh api "repos/{owner}/{repo}/contents/crates/natamux-app/Cargo.toml?ref=$sha" --jq .content \
+      | base64 -d | sed -n "s/^version = \"\(.*\)\"$/\1/p" | head -n 1)" = "$version" ]'
 
   check "the Release run of $tag succeeded" \
     '[ "$(gh run list --workflow release.yml --branch "$tag" --event push --json conclusion --jq ".[0].conclusion")" = success ]'
@@ -121,11 +117,8 @@ links_in() {
   grep -oE '\]\((https://natamux\.github\.io)?/docs/[^)]*\)' | sed -E 's#^\]\((https://natamux\.github\.io)?##; s#\)$##'
 }
 
-# Case 1: the version in the shipped web packages and Rust crates.
+# Case 1: the version in the Rust crates.
 check "version $version looks like X.Y.Z" '[[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]'
-for dir in core web; do
-  check "packages/$dir is $version" '[ "$(version_of $dir)" = "$version" ]'
-done
 for manifest in crates/*/Cargo.toml; do
   check "$manifest is $version" '[ "$(rust_version_of "$manifest")" = "$version" ]'
 done
@@ -140,12 +133,11 @@ for name in $usage_keys; do
 done
 check "the macOS bundle has 13 usage descriptions" \
   '[ "$(grep -c "UsageDescription</key>" crates/natamux-app/resources/Info.plist)" = 13 ]'
-check "the root package.json pins pnpm" 'grep -qE "^  \"packageManager\": \"pnpm@[0-9]+\.[0-9]+\.[0-9]+\",$" package.json'
-check "the root package.json has no version" '! grep -q "^  \"version\":" package.json'
+check "the web packages are gone" '[ ! -e packages ] && [ ! -e package.json ]'
 check "Release does not build on a pull request" \
   '! sed -n "/^on:/,/^permissions:/p" .github/workflows/release.yml | grep -q "^  pull_request:"'
 check "manual Release validates its branch before checkout" \
-  'sed -n "/^  web:/,/^  package:/p" .github/workflows/release.yml | grep -q "Validate release ref"'
+  'sed -n "/^  validate:/,/^  package:/p" .github/workflows/release.yml | grep -q "Validate release ref"'
 check "the package job of release.yml does not restore target on every runner" \
   '! sed -n "/^  package:/,/^  release:/p" .github/workflows/release.yml | grep -qE "^ +target$"'
 check "the package job of release.yml restores target only on Intel and Windows" \
@@ -158,8 +150,7 @@ check "the Intel macOS release job uses python3" \
   'grep -q "mac-x64, os: macos-26-intel, cache: rust-app-mac-intel, py: python3" .github/workflows/release.yml'
 check "the package job of release.yml restores a cargo cache" \
   'sed -n "/^  package:/,/^  release:/p" .github/workflows/release.yml | grep -q "~/.cargo/registry"'
-check "packages depend on each other with workspace:*" \
-  '! grep -hE "\"@natamux/[a-z]+\": \"" packages/*/package.json | grep -v "\"workspace:\*\""'
+check "Release builds no web dashboard" '! grep -qE "NATAMUX_REQUIRE_WEB|packages/web|pnpm" .github/workflows/release.yml'
 
 # Case 2: the homepage.
 check "homepage version is $version" "grep -qx \"const version = '$version'\" $homepage"

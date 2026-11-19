@@ -1,4 +1,4 @@
-//! Helpers of the event tests (`packages/core/src/events/__tests__/events.fixture.ts`).
+//! Helpers of the event tests.
 
 use natamux_proto::events::task_event::TaskEvent;
 use natamux_proto::stages::catalog::full_pipeline;

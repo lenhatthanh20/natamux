@@ -160,7 +160,7 @@ Branches (owner, 2026-10-22):
 - Owner approves this plan and the GPL-3.0 switch.
   - Update `LICENSE`, README, site, `plan-tech-stack.md` and `research-native-app.md`.
   - `scripts/readme.test.py` checks for "MIT License" and must change with it.
-- Shoot the UI reference: every screen and state of today's app, light and dark, in `docs/ui-reference/`. Each shot links to its `ui-spec.md` section and its React component. The native screens copy layout and behaviour from it; the looks come from Zed.
+- Shoot the UI reference: every screen and state of today's app, light and dark, in `docs/ui-reference/` (removed 2026-11-19). Each shot links to its `ui-spec.md` section and its React component. The native screens copy layout and behaviour from it; the looks come from Zed.
 - Set up Rust safely (see "Safe local setup"):
   - `rust-toolchain.toml` pinned;
   - `cargo deny`, `cargo audit` and `cargo vet` in CI;
@@ -220,7 +220,7 @@ Decisions (owner, 2026-10-22):
   5. Stages: overview, progress, pipeline editor.
   6. Files and Docs.
   7. Settings, project settings, command palette, sign in.
-- Gate per screen: target numbers met, screenshot baselines in both themes, owner sign-off, and every state in `docs/ui-reference/` covered with the same behaviour as the React screen (same commands, same API calls).
+- Gate per screen: target numbers met, screenshot baselines in both themes, owner sign-off, and every state in `docs/ui-reference/` (removed 2026-11-19) covered with the same behaviour as the React screen (same commands, same API calls).
 
 ### Phase 4: daemon in Rust (10–14 weeks)
 
@@ -289,7 +289,7 @@ From `origin/main` (0.1.43). The Rust daemon and clients must keep all of these:
   - The default pipeline.
 - **Files** under `NATAMUX_DATA_DIR`, and `.natamux-task/` in each worktree.
 - **Env vars:**
-  - Daemon: `NATAMUX_PORT` (4317), `NATAMUX_HOST`, `NATAMUX_TOKEN`, `NATAMUX_DATA_DIR`, `NATAMUX_REPO_DIR`, `NATAMUX_WORKTREES_DIR`, `NATAMUX_WEB_DIR`, `NATAMUX_BIN_DIR`, `NATAMUX_<AGENT>_COMMAND` and `_ARGS`.
+  - Daemon: `NATAMUX_PORT` (4317), `NATAMUX_HOST`, `NATAMUX_TOKEN`, `NATAMUX_DATA_DIR`, `NATAMUX_REPO_DIR`, `NATAMUX_WORKTREES_DIR`, `NATAMUX_BIN_DIR`, `NATAMUX_<AGENT>_COMMAND` and `_ARGS`.
   - Set in task shells: `NATAMUX_TOKEN`, `NATAMUX_URL`, `NATAMUX_TASK_ID`, `NATAMUX_TERMINAL`.
 - **Agent integration:**
   - Claude Code hooks through `--settings`, and the command-hook file for Copilot.

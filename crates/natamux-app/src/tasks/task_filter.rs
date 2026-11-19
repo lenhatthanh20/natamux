@@ -1,4 +1,4 @@
-//! The search of the task list (`filterTasks` in `packages/web/src/lib/tasks.ts`). A child of
+//! The search of the task list (`filterTasks`). A child of
 //! `task_attention.rs`.
 
 use std::borrow::Borrow;

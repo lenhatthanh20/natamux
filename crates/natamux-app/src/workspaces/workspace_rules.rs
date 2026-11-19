@@ -1,5 +1,5 @@
-//! Port of `needsCommit`, `pushButton`, `pullRequestButton`, `nextGitStep`, `latestQuestion`,
-//! `reviewStages`, `createBlockedReason` and `tabToOpen` in `packages/web/src/lib/workspace.ts`.
+//! `needsCommit`, `pushButton`, `pullRequestButton`, `nextGitStep`, `latestQuestion`,
+//! `reviewStages`, `createBlockedReason` and `tabToOpen`.
 //! `waitReason`, `bannerText` and `rowText` are in `sidebar/sidebar_text.rs` and `natamux-proto`.
 
 use natamux_proto::tasks::task::{Task, TaskState};
