@@ -58,6 +58,10 @@ pub(super) fn hunk_buttons(
         .border_color(cx.theme().colors().border_variant)
         .bg(cx.theme().colors().editor_background)
         .block_mouse_except_scroll()
+        .debug_selector(move || {
+            let side = if new_side { "NEW" } else { "OLD" };
+            format!("DIFF-HUNK-BUTTONS-{side}")
+        })
         .children(comment)
         .child(revert)
         .into_any_element()
