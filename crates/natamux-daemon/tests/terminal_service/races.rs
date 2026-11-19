@@ -93,7 +93,7 @@ fn two_attaches_at_once_start_one_shell_and_share_it() {
 #[test]
 fn the_limit_holds_when_attaches_come_at_once() {
     let (service, spawned, _) = slow_service();
-    let count = natamux_daemon::terminals::limits::MAX_SESSIONS + 5;
+    let count = natamux_daemon::terminals::limits::MAX_SESSIONS_PER_TASK + 5;
     let barrier = Arc::new(Barrier::new(count));
     let threads: Vec<_> = (0..count)
         .map(|index| {
@@ -113,7 +113,10 @@ fn the_limit_holds_when_attaches_come_at_once() {
         .map(|thread| thread.join().unwrap())
         .filter(|ok| *ok)
         .count();
-    assert_eq!(started, natamux_daemon::terminals::limits::MAX_SESSIONS);
+    assert_eq!(
+        started,
+        natamux_daemon::terminals::limits::MAX_SESSIONS_PER_TASK
+    );
     assert_eq!(spawned.load(Ordering::SeqCst), started);
     assert_eq!(service.list("T-0001").len(), started);
 }

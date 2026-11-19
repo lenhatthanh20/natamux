@@ -1,6 +1,6 @@
 //! `describe('TerminalService')`.
 
-use natamux_daemon::terminals::limits::MAX_SESSIONS;
+use natamux_daemon::terminals::limits::{MAX_SESSIONS, MAX_SESSIONS_PER_TASK};
 use natamux_daemon::terminals::service::AttachOptions;
 use natamux_daemon::terminals::types::TerminalError;
 use natamux_proto::terminals::history::scrollback_lines;
@@ -217,4 +217,30 @@ fn refuses_a_new_shell_above_the_limit() {
         .service
         .attach("T-0999", one, SIZE, "1", AttachOptions::default());
     assert_eq!(refused.err(), Some(TerminalError::Limit(MAX_SESSIONS)));
+}
+
+#[test]
+fn refuses_a_new_shell_above_the_limit_of_one_task() {
+    let h = setup();
+    for number in 1..=MAX_SESSIONS_PER_TASK {
+        let (_, one) = client();
+        h.attach_to(
+            "T-0101",
+            &one,
+            SIZE,
+            &number.to_string(),
+            AttachOptions::default(),
+        );
+    }
+    let (_, one) = client();
+    let refused = h
+        .service
+        .attach("T-0101", one, SIZE, "extra", AttachOptions::default());
+    assert_eq!(
+        refused.err(),
+        Some(TerminalError::Limit(MAX_SESSIONS_PER_TASK))
+    );
+    // Another task still gets its terminal.
+    let (_, other) = client();
+    h.attach_to("T-0102", &other, SIZE, "1", AttachOptions::default());
 }
