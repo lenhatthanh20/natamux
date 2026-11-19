@@ -26,7 +26,7 @@ use ui::Tooltip;
 use super::cell_layout::BackgroundRect;
 use super::grid_layout::grid;
 use super::ime::TermInput;
-use super::model::{TermBounds, TermModel};
+use super::model::{GridArea, TermModel};
 use super::scrollbar::{
     self, BORDER, BORDER_ALPHA, TRACK_WIDTH, ThumbColours, ThumbState, thumb_colour,
 };
@@ -249,13 +249,13 @@ impl Element for TermElement {
         );
         let grid_height = laid.height;
         let width = (area.size.width - cell_width).max(cell_width * 2.);
-        let term_bounds = TermBounds::new(
-            line_height,
-            cell_width,
+        let term_bounds = GridArea::new(
             Bounds {
                 origin: laid.origin,
                 size: size(width, laid.height),
             },
+            cell_width,
+            line_height,
         );
         self.model.update(cx, |model, cx| {
             model.set_size(term_bounds);

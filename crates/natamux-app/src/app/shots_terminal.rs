@@ -213,10 +213,10 @@ fn grid_point(key: &str, line: usize, column: usize, cx: &App) -> Option<Point<P
     let remote = remote.read(cx);
     let content = remote.terminal().read(cx).last_content();
     let grid = content.terminal_bounds;
-    let origin = grid.bounds.origin;
+    let origin = grid.area.origin;
     Some(point(
         origin.x + grid.cell_width * (column as f32 + 0.5),
-        origin.y + grid.line_height * (line as f32 + 0.5),
+        origin.y + grid.cell_height * (line as f32 + 0.5),
     ))
 }
 

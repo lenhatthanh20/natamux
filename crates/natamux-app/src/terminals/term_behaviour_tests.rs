@@ -214,10 +214,10 @@ pub(super) fn cell(
 ) -> Point<Pixels> {
     content(terminal, cx, |content| {
         let grid = content.terminal_bounds;
-        let origin = grid.bounds.origin;
+        let origin = grid.area.origin;
         point(
             origin.x + grid.cell_width * (column as f32 + 0.5),
-            origin.y + grid.line_height * (line as f32 + 0.5),
+            origin.y + grid.cell_height * (line as f32 + 0.5),
         )
     })
 }
@@ -535,10 +535,10 @@ fn grid_rows(cx: &mut TestAppContext) -> Vec<Value> {
                         let (x, y, cw, lh) = content(&terminal, cx, |content| {
                             let grid = content.terminal_bounds;
                             (
-                                f32::from(grid.bounds.origin.x),
-                                f32::from(grid.bounds.origin.y),
+                                f32::from(grid.area.origin.x),
+                                f32::from(grid.area.origin.y),
                                 f32::from(grid.cell_width),
-                                f32::from(grid.line_height),
+                                f32::from(grid.cell_height),
                             )
                         });
                         rows.push(json!([
@@ -605,7 +605,7 @@ fn wheel_rows(cx: &mut TestAppContext) -> Vec<Value> {
     let mut rows = Vec::new();
     feed(&terminal, &history(200), cx);
     let at = cell(&terminal, (5, 10), cx);
-    let lh = content(&terminal, cx, |content| content.terminal_bounds.line_height);
+    let lh = content(&terminal, cx, |content| content.terminal_bounds.cell_height);
     let row = |case: &str, terminal: &Entity<RemoteTerminal>, cx: &mut VisualTestContext| {
         let offset = display_offset(terminal, cx);
         let wheels = host.read_with(cx, |host, _| host.wheels);
@@ -1160,7 +1160,7 @@ fn pointer_rows(cx: &mut TestAppContext) -> Vec<Value> {
         &format!("\x1b[H{}\x1b[K", POINTER_LINES.join("\x1b[K\r\n")),
         cx,
     );
-    let lh = content(&terminal, cx, |content| content.terminal_bounds.line_height);
+    let lh = content(&terminal, cx, |content| content.terminal_bounds.cell_height);
     let cw = content(&terminal, cx, |content| content.terminal_bounds.cell_width);
     let sgr = |mode: &str| format!("\x1b[?{mode}h\x1b[?1006h");
     let off = "\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l";
@@ -1578,9 +1578,9 @@ fn selection_edge_rows(cx: &mut TestAppContext) -> Vec<Value> {
         .collect();
     feed(&terminal, &format!("\x1b[H{}", rows_text.join("\r\n")), cx);
     let grid = content(&terminal, cx, |content| content.terminal_bounds);
-    let (cw, lh) = (grid.cell_width, grid.line_height);
-    let top = grid.bounds.origin.y;
-    let right = grid.bounds.origin.x + cw * 80.;
+    let (cw, lh) = (grid.cell_width, grid.cell_height);
+    let top = grid.area.origin.y;
+    let right = grid.area.origin.x + cw * 80.;
     let bottom = top + lh * 20.;
     let row = |case: &str, terminal: &Entity<RemoteTerminal>, cx: &mut VisualTestContext| {
         let text = selection(terminal, cx);
@@ -2270,7 +2270,7 @@ mod own {
         let mut wider = own
             .model
             .read_with(cx, |model, _| model.last_content().terminal_bounds);
-        wider.bounds.size.width += px(3.);
+        wider.area.size.width += px(3.);
         own.model.update(cx, |model, _| model.set_size(wider));
         settle(&own.model, cx);
         assert_eq!(grid(&own, cx), before, "a few pixels changed the grid");
@@ -2358,10 +2358,10 @@ mod own {
         let (cursor, cell_width) = super::content(&terminal, cx, |content| {
             let grid = content.terminal_bounds;
             let at = gpui::point(
-                grid.bounds.origin.x
+                grid.area.origin.x
                     + (grid.cell_width * content.cursor.point.column.0 as f32).floor(),
-                grid.bounds.origin.y
-                    + (grid.line_height * content.cursor.point.line.0 as f32).floor(),
+                grid.area.origin.y
+                    + (grid.cell_height * content.cursor.point.line.0 as f32).floor(),
             );
             (at, grid.cell_width)
         });

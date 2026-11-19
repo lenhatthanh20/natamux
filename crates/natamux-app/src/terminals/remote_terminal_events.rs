@@ -9,7 +9,7 @@ use gpui::{Entity, FocusHandle, Focusable, Subscription};
 use natamux_client::{TerminalEvent, TerminalStatus};
 use ui::prelude::*;
 
-use super::screen::{DisplayOnlyWriter, Terminal, TerminalBounds, TerminalView};
+use super::screen::{DisplayOnlyWriter, GridArea, Terminal, TerminalView};
 use super::{RemoteTerminal, send_input};
 use crate::app::app_log;
 use crate::terminals::terminal_parser::{Job, lane};
@@ -186,7 +186,7 @@ pub(super) struct Screen {
 /// a block and alternate scroll is on; the menu has only what works without a workspace.
 pub(super) fn build_screen(
     history: Option<usize>,
-    bounds: Option<TerminalBounds>,
+    bounds: Option<GridArea>,
     window: &mut Window,
     cx: &mut Context<RemoteTerminal>,
 ) -> Screen {

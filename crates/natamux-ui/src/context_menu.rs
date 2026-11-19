@@ -112,15 +112,18 @@ pub struct ContextMenuItem(Row);
 /// A row with a label, an optional icon, an optional check and an optional action whose keys
 /// show at the end.
 pub struct ContextMenuEntry {
+    // What the row shows.
     label: SharedString,
-    /// Where the check mark goes and whether it shows.
-    toggle: Option<(IconPosition, bool)>,
+    icon_position: IconPosition,
     icon: Option<IconName>,
     custom_icon_path: Option<SharedString>,
-    icon_position: IconPosition,
     icon_color: Option<Color>,
+    /// Where the check mark goes and whether it shows.
+    toggle: Option<(IconPosition, bool)>,
+    // What it does.
     handler: Handler,
     action: Option<Box<dyn Action>>,
+    // Its state.
     disabled: bool,
 }
 
@@ -133,11 +136,11 @@ impl ContextMenuEntry {
     fn placed(label: SharedString, icon_position: IconPosition) -> Self {
         Self {
             label,
-            toggle: None,
+            icon_position,
             icon: None,
             custom_icon_path: None,
-            icon_position,
             icon_color: None,
+            toggle: None,
             handler: Rc::new(|_, _, _| {}),
             action: None,
             disabled: false,
