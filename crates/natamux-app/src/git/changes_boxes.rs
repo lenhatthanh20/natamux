@@ -8,6 +8,7 @@ use ui::{Tooltip, prelude::*};
 use super::ChangesView;
 use crate::agents::agent_choices::{DEFAULT_AGENT, agent_label};
 use crate::app::source::reason;
+use crate::components::button_rows::{end_row, lead_row};
 use crate::components::button_style::{action_button, key_hint, quiet_button};
 use crate::components::form::{input_box, text_editor};
 use crate::git::comment_rules::{
@@ -17,6 +18,9 @@ use crate::git::comment_rules::{
 use crate::git::commit_rules::{commit_reason, draft_result, draft_tip};
 use crate::text_view::text_box::TextBox;
 use crate::workspaces::workspace_rules::GitStep;
+
+/// The key hint and "Committing…" fit in this width; below it Commit all takes its own line.
+const COMMIT_MIN: f32 = 136.;
 
 impl ChangesView {
     fn message_box(&mut self, window: &mut Window, cx: &mut App) -> TextBox {
@@ -229,13 +233,7 @@ impl ChangesView {
                 }
             }))
             .child(input_box(&message, cx))
-            .child(
-                h_flex()
-                    .flex_wrap()
-                    .gap_2()
-                    .child(generate)
-                    .child(div().flex_1().child(commit)),
-            )
+            .child(lead_row(generate, commit, COMMIT_MIN))
             .into_any_element()
     }
 
@@ -337,13 +335,8 @@ impl ChangesView {
                     .children(status),
             )
             .children(chip)
-            .child(
-                h_flex()
-                    .gap_2()
-                    .items_end()
-                    .child(div().flex_1().min_w_0().child(input_box(&comment, cx)))
-                    .child(v_flex().gap_1().child(add).child(second)),
-            )
+            .child(input_box(&comment, cx))
+            .child(end_row([second.into_any_element(), add]))
             .into_any_element()
     }
 }

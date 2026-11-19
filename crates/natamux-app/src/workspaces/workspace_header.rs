@@ -56,8 +56,12 @@ impl GitButtons {
     }
 }
 
+/// "Open pull request" fits in this width; below it the git buttons take one line each.
+pub const GIT_BUTTON_MIN: f32 = 148.;
+
 /// A labelled git button, grey with a border (T-0168): off with its reason in the tooltip, a
-/// spinner in place of its icon while its step runs.
+/// spinner in place of its icon while its step runs. It fills its box and reads like Commit all
+/// above it (T-0352).
 fn git_button(
     id: &'static str,
     icon: &str,
@@ -79,6 +83,7 @@ fn git_button(
     ButtonLike::new(id)
         .style(ButtonStyle::Outlined)
         .size(ButtonSize::Default)
+        .full_width()
         .disabled(off)
         .when_some(tip, |this, tip| this.tooltip(Tooltip::text(tip)))
         .on_click(move |_: &ClickEvent, window, cx| run(window, cx))
@@ -87,7 +92,7 @@ fn git_button(
                 .px_1p5()
                 .gap_1()
                 .child(icon)
-                .child(Label::new(button.label).size(LabelSize::Small)),
+                .child(Label::new(button.label)),
         )
         .into_any_element()
 }
@@ -96,6 +101,7 @@ fn open_pull_request(url: String) -> AnyElement {
     ButtonLike::new("workspace-open-pr")
         .style(ButtonStyle::Outlined)
         .size(ButtonSize::Default)
+        .full_width()
         .on_click(move |_, _, cx| open_link(&url, cx))
         .child(
             h_flex()
@@ -106,7 +112,7 @@ fn open_pull_request(url: String) -> AnyElement {
                         .size(IconSize::Small)
                         .color(Color::Muted),
                 )
-                .child(Label::new("Open pull request").size(LabelSize::Small)),
+                .child(Label::new("Open pull request")),
         )
         .into_any_element()
 }
