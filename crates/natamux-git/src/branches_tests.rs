@@ -78,6 +78,12 @@ fn keeps_a_branch_with_a_commit_that_origin_does_not_have() {
 }
 
 #[test]
+fn refuses_to_delete_a_pushed_branch_with_a_dash_name() {
+    let (_root, repo) = test_repo();
+    assert!(!delete_pushed_branch(&repo, "-D"));
+}
+
+#[test]
 fn keeps_a_branch_that_origin_does_not_have() {
     let (root, repo) = test_repo();
     let path = branch_with_work(root.path(), &repo);

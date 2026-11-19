@@ -5,7 +5,7 @@ use natamux_core::js::{is_js_space, js_trim};
 use natamux_core::json::write_string;
 use natamux_proto::terminals::list::SHELL_PROGRAMS;
 
-use crate::hook_files::{CODEX_EVENTS, codex_hook_value};
+pub use crate::trust::codex_hook_args;
 
 pub use natamux_proto::agents::model::takes_model;
 pub use natamux_proto::agents::start::{DEFAULT_PROGRAMS, LAUNCHABLE_AGENTS};
@@ -189,18 +189,13 @@ pub fn quote_argument(value: &str, platform: Platform) -> String {
     }
 }
 
-/// The hooks Codex takes for one session as `-c` overrides. They count only with the trust check
-/// off for this run: Codex asks to trust every hook it has not seen.
-pub fn codex_hook_args() -> Vec<String> {
-    CODEX_EVENTS
-        .iter()
-        .flat_map(|event| {
-            [
-                "-c".to_string(),
-                format!("hooks.{event}={}", codex_hook_value(event)),
-            ]
-        })
-        .collect()
+/// A prompt that starts with `-` (an imported issue title) would read as an option of the agent.
+fn task_word(prompt: &str) -> String {
+    if prompt.starts_with('-') {
+        format!("Task: {prompt}")
+    } else {
+        prompt.to_string()
+    }
 }
 
 /// Codex splits a `-c` key at each dot, so the path goes into a table value. A JSON string is a
@@ -258,7 +253,7 @@ pub fn launch_command(agent: &str, options: &LaunchOptions) -> String {
     let prompt: Vec<String> = if options.prompt.is_empty() {
         Vec::new()
     } else {
-        vec![quote(&options.prompt)]
+        vec![quote(&task_word(&options.prompt))]
     };
     let session = options.session.as_deref();
     // `--resume <id>`, or the flag of the newest session of the folder.
@@ -485,7 +480,7 @@ pub struct OneShot {
 /// prompt does not hit the limit of a command line. No hooks, no permission flags: it needs no
 /// tools, and must not move the task.
 pub fn one_shot_command(agent: &str, program: &str, prompt: &str, platform: Platform) -> OneShot {
-    let quote = |value: &str| quote_argument(value, platform);
+    let quote = |value: &str| quote_argument(&task_word(value), platform);
     let (line, stdin) = match agent {
         "claude-code" => (format!("{program} -p"), prompt.to_string()),
         "codex" => (format!("{program} exec -"), prompt.to_string()),

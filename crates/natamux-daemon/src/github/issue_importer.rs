@@ -4,10 +4,11 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 
-use natamux_core::js::{is_js_space, js_trim};
+use natamux_core::js::js_trim;
 use natamux_git::gh::{GitHubError, RunGh};
 use natamux_proto::projects::issues::GitHubIssue;
 use natamux_proto::tasks::task::Task;
+use natamux_stages::issue::imported_url;
 use serde_json::{Value, json};
 
 use crate::shared::jobs::Jobs;
@@ -101,16 +102,6 @@ fn issue_of(item: &Value) -> Option<GitHubIssue> {
         labels,
         task_id: None,
     })
-}
-
-/// The address in the last line of a task's notes, `/Imported from (\S+)\s*$/`.
-pub(crate) fn imported_url(description: &str) -> Option<&str> {
-    let end = description.trim_end_matches(is_js_space);
-    let start = end.rfind(is_js_space).map_or(0, |at| {
-        at + end[at..].chars().next().map_or(1, char::len_utf8)
-    });
-    let url = &end[start..];
-    (!url.is_empty() && end[..start].ends_with("Imported from ")).then_some(url)
 }
 
 pub struct IssueImporterOptions {
