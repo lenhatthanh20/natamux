@@ -1,16 +1,16 @@
 ---
 name: validate
-description: Run the Natamux checks (biome, typecheck, tests, site build) for a branch. Use before opening or merging a PR, after a code change, or when the user asks to test, lint or check. The local machine never runs pnpm or node, so checks run in the codespace or in CI.
+description: Run the Natamux checks (Rust CI and site build) for a branch. Use before opening or merging a PR, after a code change, or when the user asks to test, lint or check. The local machine never runs cargo, pnpm or node, so checks run in CI (or the codespace for the site).
 ---
 
 # Validate a branch
 
 ## Rule
 
-- Never run `pnpm`, `node`, `npx` or `npm` on the local machine. `.claude/settings.json` denies them.
-- Checks run in the codespace (fast, before a push is final) or in CI (always, on the PR).
+- Never run `cargo`, `pnpm`, `node`, `npx` or `npm` on the local machine. `.claude/settings.json` denies the web tools.
+- Rust checks run in CI only (`cargo xtask ci` in `rust.yml`). The site build runs in CI (`site.yml`) or in the codespace.
 
-## Option A: codespace
+## Option A: codespace (site build only)
 
 1. Push the branch first. The codespace checks out what is on GitHub.
 2. Find the codespace:
@@ -21,8 +21,7 @@ description: Run the Natamux checks (biome, typecheck, tests, site build) for a 
    ```sh
    gh codespace ssh -c <name> -- bash -l -s -- <branch> < .claude/skills/validate/remote-check.sh
    ```
-   - What it does: worktree `/tmp/v-<branch>` at the pushed commit, then `pnpm install`, `pnpm build`, `pnpm lint`, `pnpm test` and `scripts/fake-agent.test.sh`. It also builds `site/` when the branch changes it.
-   - Add `--fix` after the branch name to run `pnpm format` first. The script then prints a patch between `=== PATCH ===` and `=== END ===`. Apply it locally with `git apply`, commit, push.
+   - What it does: worktree `/tmp/v-<branch>` at the pushed commit, then `scripts/fake-agent.test.sh`. It also installs and builds `site/` when the branch changes it. It does not run Rust checks.
    - Runs take a few minutes. Use a timeout of 600000 ms.
 4. Read the result: the last line is `ALL CHECKS PASSED` or the failing step.
 
@@ -45,7 +44,7 @@ Codespace gotchas:
    gh run view <run-id> --log-failed | tail -80
    ```
 
-Jobs. Rust PRs target `main`. The Rust workflow runs on `main`, PRs into `main`, and snapshots. `Site` checks site changes. The web and core build, typecheck and tests can be run in a codespace.
+Jobs. Rust PRs target `main`. The Rust workflow runs on `main`, PRs into `main`, and snapshots. `Site` checks site changes.
 
 | Workflow | Job | Checks |
 |---|---|---|
@@ -53,17 +52,15 @@ Jobs. Rust PRs target `main`. The Rust workflow runs on `main`, PRs into `main`,
 | Rust | `check` | `cargo xtask ci`: fmt, clippy, tests, layers. Always runs |
 | Rust | `app-macos`, `app-windows`, daemon and client jobs | only when the change can break them (`scripts/ci-changes.py`); `main` runs all |
 | Rust | `app-shots (1..4)` | on demand only: a `Shots:` line (1 job) or `[ci: shots]` / `[ci: all]` (4 jobs) in the head commit message; never on `main` |
-| Rust | `e2e-image`, `e2e`, `e2e-publish` | build, test and publish the production daemon and web images; see the `e2e` skill |
+| Rust | `e2e-image`, `live-daemon` | build the daemon test image and run the live daemon tests against it (`scripts/e2e.sh`, `docs/docker.md`) |
 | Rust | `rust-ok` | red when any Rust job failed or was cancelled. Required to merge into `main` |
 | Rust | `supply-chain` | `cargo deny --locked check`, `cargo audit`, `cargo vet --locked` |
-| Release | `web`, `package` | build the dashboard and package the native app for release |
+| Release | `validate`, `package` | check the release ref and package the native app for release |
 
 - Rust snapshots: every task pushes to the shared `natamux-ci/rust` (the jobs the change needs) and `natamux-ci/rust-check` (only `check`, for the compile loop). Keep both branches at cleanup. Only a push to `main` saves Cargo caches (`check`, `app-macos`, `app-windows`); every other run restores them.
 - `[ci: all]` in the head commit message of a snapshot or a PR runs every job, `app-windows` too.
 
 ## Fixing without running anything
 
-- Biome format: line width 100, 2 spaces, single quotes, semicolons only where needed. A call that does not fit on one line is split one call per line, the way the CI log shows.
-- Imports are sorted by module path. Names inside braces are sorted without regard to case, with `type` imports mixed in by name.
-- Copy the fix that the CI log prints ("Formatter would have printed the following content") exactly.
+- Copy the fix that the CI log prints (rustfmt "Diff in", clippy suggestions) exactly.
 - Code that only fails on main (`os` job): a macOS or Windows difference. Check paths, line endings, file locks, and timeouts.

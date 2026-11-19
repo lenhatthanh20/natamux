@@ -1,4 +1,4 @@
-//! `STAGE_CATALOG` (`packages/core/src/stages/stage-catalog.ts`): the stages a project can pick
+//! `STAGE_CATALOG`: the stages a project can pick
 //! from, with what a pipeline holds when a stage is added. The long texts are in `catalog_text.rs`.
 
 use crate::stages::catalog_text::TEXTS;

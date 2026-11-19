@@ -45,7 +45,7 @@ pub struct LineCounts {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TreeFolder {
-    /// The full path of the deepest folder in the row, like `packages/web/src`.
+    /// The full path of the deepest folder in the row, like `crates/app/src`.
     pub key: String,
     /// The label, relative to the parent. Compacted folders join with `/`, like `web/src`.
     pub name: String,

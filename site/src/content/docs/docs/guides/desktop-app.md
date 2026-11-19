@@ -5,13 +5,13 @@ sidebar:
   order: 8
 ---
 
-The Rust desktop app starts a Rust daemon beside it, connects to it, and shows the dashboard. For installation, see [Install Natamux](/docs/getting-started/install/).
+The Rust desktop app starts a Rust daemon beside it, connects to it, and shows the task dashboard. For installation, see [Install Natamux](/docs/getting-started/install/).
 
 ## What the app does at start
 
 1. Starts the sibling `natamux-daemon` on port 4317, or another free port when 4317 is taken. It listens on `127.0.0.1` only.
 2. Sends the PATH of your login shell to the daemon through a private pipe. If the login shell fails or takes too long, it uses the app's PATH.
-3. Waits for the daemon's health check, then opens the window. The dashboard is also available at `http://127.0.0.1:<port>/`; enter the token from `daemon-token` when the browser asks.
+3. Waits for the daemon's health check, then opens the window.
 4. Ships the Rust `natamux` and `nmx` commands beside the app and daemon. A command in a task terminal connects to this daemon.
 
 If the daemon stops unexpectedly, the app shows an error and offers to restart the app.

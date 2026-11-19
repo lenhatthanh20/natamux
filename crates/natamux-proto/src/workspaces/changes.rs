@@ -1,4 +1,4 @@
-//! The git types of the Changes tab (`packages/core/src/git/changes.ts`, `commit-message.ts`): a
+//! The git types of the Changes tab: a
 //! file's status, its two texts, the commit, rollback and comment calls.
 
 use serde::{Deserialize, Serialize};

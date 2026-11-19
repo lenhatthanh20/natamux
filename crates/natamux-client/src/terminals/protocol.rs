@@ -1,6 +1,5 @@
 //! The client side of the terminal protocol, with no IO: what to send and what to tell the app,
-//! for each thing that happens. Same rules as the web client
-//! (packages/web/src/features/terminals/session/connection.ts and catch-up.ts).
+//! for each thing that happens. Same rules as the old web client.
 
 use natamux_proto::terminals::messages::{
     ACK_EVERY_BYTES, ClientMessage, FINAL_CLOSE_CODES, ServerMessage, input_chunks,

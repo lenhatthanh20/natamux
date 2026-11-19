@@ -1,6 +1,6 @@
-//! How much history a terminal keeps above its screen (`scrollbackLines` in
-//! `packages/core/src/terminals/terminal.ts`): the dashboard, and the screen the daemon keeps for
-//! each shell. Like Ghostty, the limit is memory, not lines: a wide terminal keeps fewer rows.
+//! How much history a terminal keeps above its screen (`scrollbackLines`): in the app, and in the
+//! screen the daemon keeps for each shell. Like Ghostty, the limit is memory, not lines: a wide
+//! terminal keeps fewer rows.
 
 pub const TERMINAL_HISTORY_BYTES: usize = 10_000_000;
 /// The size of an `alacritty_terminal` cell on 64-bit (the screen crate asserts it).

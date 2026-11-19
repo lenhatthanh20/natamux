@@ -1,4 +1,4 @@
-//! Port of `packages/web/src/lib/agents.ts`: the agents Natamux can start, in the order the
+//! The agents Natamux can start, in the order the
 //! pickers show them. The ids are the daemon's.
 
 use std::sync::atomic::{AtomicU64, Ordering};

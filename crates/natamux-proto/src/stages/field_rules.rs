@@ -1,5 +1,5 @@
 //! The rules of one field of a stage, a path or a condition (`stageSchema`, `stageIdSchema` and
-//! `conditionSchema` in `packages/core/src/stages/schema.ts`), as the messages zod gives.
+//! `conditionSchema`), as the messages zod gives.
 
 use crate::stages::schema::{Condition, Stage};
 

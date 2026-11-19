@@ -1,4 +1,4 @@
-//! When a command applies (`CommandState` and the `when` of `packages/web/src/lib/commands`).
+//! When a command applies (`CommandState` and the `when` of a command).
 
 use natamux_proto::tasks::task::TaskState;
 

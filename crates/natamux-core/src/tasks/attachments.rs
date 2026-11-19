@@ -1,4 +1,4 @@
-//! What `natamux-proto` lacks of `packages/core/src/tasks/attachments.ts`: safe names, preview
+//! What `natamux-proto` lacks: safe names, preview
 //! types and sizes in words.
 
 use natamux_proto::tasks::attachments::{

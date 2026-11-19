@@ -12,7 +12,5 @@ coverage/
 .pnpm-store/
 release/
 .playwright-cli/
-playwright-report/
-test-results/
 target/
 __pycache__/

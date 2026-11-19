@@ -1,6 +1,5 @@
 //! What the agents do now (`GET /activity`, `activity.changed`) and what they used
-//! (`GET /usage`, `usage.changed`). `packages/core/src/agents/usage.ts` and the hook service of
-//! the daemon.
+//! (`GET /usage`, `usage.changed`). The hook service of the daemon fills them.
 
 use std::collections::BTreeMap;
 

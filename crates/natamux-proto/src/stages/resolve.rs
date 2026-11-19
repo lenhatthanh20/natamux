@@ -1,4 +1,4 @@
-//! `resolveSteps`, `stepRefsOf` (`packages/core/src/stages/default-pipeline.ts`) and `activeSteps`
+//! `resolveSteps`, `stepRefsOf` and `activeSteps`
 //! (`schema.ts`): a task keeps the ids of its steps; the settings and the catalog say the rest.
 
 use std::collections::HashMap;

@@ -1,4 +1,4 @@
-//! Port of `packages/web/src/features/terminals/terminal-tabs.ts`.
+//! The order and names of the terminal tabs.
 
 use natamux_proto::terminals::list::TerminalList;
 

@@ -1,4 +1,4 @@
-//! Ports `packages/core/src/events/__tests__/reopen.test.ts`.
+//! Tests of `reopen.rs`.
 
 use natamux_proto::tasks::task::TaskState::{Done, Ready, Review, Running};
 use serde_json::json;

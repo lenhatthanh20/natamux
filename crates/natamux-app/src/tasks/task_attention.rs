@@ -1,5 +1,5 @@
 //! Which tasks need the user, how many tasks each state has, and the search of the list (`isQuiet`,
-//! `needsMeTasks`, `countByState`, `filterTasks` in `packages/web/src/lib/tasks.ts`).
+//! `needsMeTasks`, `countByState`, `filterTasks`).
 
 use std::borrow::Borrow;
 

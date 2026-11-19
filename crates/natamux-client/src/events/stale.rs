@@ -1,5 +1,5 @@
 //! What the dashboard data has out of date, from the messages of `/events`, and the one read per
-//! resource that brings it back (`applyLiveMessages` in packages/web/src/lib/live.ts).
+//! resource that brings it back (`applyLiveMessages`).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;

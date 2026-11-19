@@ -1,7 +1,7 @@
 //! What a done or cancelled task still has to do with git: the rules behind the finished banner
-//! and the wrap-up. Port of `isFinishedState`, `finishedBanner`, `wrapUpRows` and `finishedAt` in
-//! `packages/web/src/lib/finished.ts`, and `finishedText` in `lib/notify.ts`. The remove dialog
-//! reads the same rules in `finished_rules.rs`, so the three always agree.
+//! and the wrap-up: `isFinishedState`, `finishedBanner`, `wrapUpRows`, `finishedAt` and
+//! `finishedText`. The remove dialog reads the same rules in `finished_rules.rs`, so the three
+//! always agree.
 
 use natamux_proto::events::task_event::{RECORD_ONLY_EVENT_TYPES, StoredEvent};
 use natamux_proto::tasks::task::{Task, TaskState};

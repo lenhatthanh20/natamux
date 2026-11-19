@@ -4,8 +4,8 @@
 Usage: ci-changes.py flags | crates | mtimes | stamp
 
 flags   writes key=value lines to $GITHUB_OUTPUT (stdout when unset): the job flags, the changed
-        crates with their dependents, the E2E groups to run (`[e2e: a,b]`; the flag `e2e`
-        says whether the Rust daemon needs E2E at all), `all` and the shot shards (`Shots:`
+        crates with their dependents (the flag `e2e` says whether the daemon image and the live
+        client tests must run), `all` and the shot shards (`Shots:`
         line, `[ci: shots]` or `[ci: all]`; none on main) and `shots`, the states of the
         `Shots:` line.
         A head commit message with `[ci: all]` runs everything. A push to main reads the push
@@ -25,7 +25,6 @@ import sys
 import tomllib
 
 BASE = "origin/main"
-E2E_GROUPS = ["timing", "cache", "terminal", "rest"]
 DAEMON_CRATES = [
     "natamux-core",
     "natamux-store",
@@ -63,15 +62,9 @@ APP_PATHS = [
     "scripts/bundle-rust-app.sh",
     "scripts/motion-cost.sh",
 ]
-# Runtime inputs also affect the live client tests. Build inputs affect the images and E2E.
-IMAGE_RUNTIME_PATHS = ["scripts/e2e.sh", "compose.e2e.yaml", "compose.prod.yaml", "docker/prod.Dockerfile", "e2e/"]
-IMAGE_PATHS = [
-    *IMAGE_RUNTIME_PATHS,
-    "packages/core/", "packages/web/", "package.json", "pnpm-lock.yaml",
-    "pnpm-workspace.yaml", "tsconfig.base.json", "docker/nginx.conf",
-]
-# E2E runs the daemon binary in the images of main. The images also hold the CLI, whose agent
-# hook specs run in the rest group.
+# The daemon image and how scripts/e2e.sh starts it.
+IMAGE_PATHS = ["scripts/e2e.sh", "compose.e2e.yaml", "compose.prod.yaml", "docker/prod.Dockerfile"]
+# The live client tests run natamux-client against the daemon image, which also holds the CLI.
 E2E_PATHS = [
     *DAEMON_PATHS,
     *IMAGE_PATHS,
@@ -80,19 +73,15 @@ E2E_PATHS = [
 ]
 CLIENT_PATHS = [
     *(f"crates/natamux-{name}/" for name in ("client", "cli", "proto")),
-    *IMAGE_RUNTIME_PATHS,
+    *IMAGE_PATHS,
 ]
 LOCK_PATHS = ["Cargo.lock", "deny.toml", "supply-chain/", ".cargo/audit.toml"]
 CHECK_PATHS = [
     "crates/", "xtask/", "scripts/", "Cargo.toml", "Cargo.lock", "rust-toolchain.toml",
     ".cargo/", "deny.toml", "supply-chain/", ".github/workflows/rust.yml",
-    ".github/workflows/release.yml", "docs/releases/", "clippy.toml", "package.json",
-    "packages/web/package.json", "packages/core/package.json", "site/src/pages/index.astro",
+    ".github/workflows/release.yml", "docs/releases/", "clippy.toml",
+    "site/src/pages/index.astro",
     "site/src/content/docs/docs/",
-]
-WEB_PATHS = [
-    "packages/core/", "packages/web/", "package.json", "pnpm-lock.yaml",
-    "pnpm-workspace.yaml", "tsconfig.base.json", "biome.json", ".github/workflows/ci.yml",
 ]
 RELEASE_NOTE = "docs/releases/v*.md"
 # Cargo.lock: a new version of a dependency can break any build.
@@ -108,7 +97,7 @@ MAIN_FULL_PATHS = [".github/workflows/rust.yml", "scripts/ci-changes.py"]
 NO_CI_PATHS = ["docs/", "site/", ".claude/", "README.md"]
 ROUTED_PATHS = [
     *DAEMON_PATHS, *TERMINAL_PATHS, *APP_PATHS, *IMAGE_PATHS, *E2E_PATHS,
-    *CLIENT_PATHS, *LOCK_PATHS, *CHECK_PATHS, *WEB_PATHS, *ALL_PATHS, *MAIN_FULL_PATHS,
+    *CLIENT_PATHS, *LOCK_PATHS, *CHECK_PATHS, *ALL_PATHS, *MAIN_FULL_PATHS,
     *NO_CI_PATHS,
 ]
 SHARDS = [1, 2, 3, 4]
@@ -133,7 +122,7 @@ def path_flags(files, ref=""):
     """The job flags for a list of changed paths; None means the diff failed."""
     if full_run(files, ref):
         return dict.fromkeys(
-            ["daemon", "terminal", "app", "client", "lock", "e2e", "check", "web", "release_prep"],
+            ["daemon", "terminal", "app", "client", "lock", "e2e", "check", "release_prep"],
             True,
         )
     daemon = any(matches(f, DAEMON_PATHS) for f in files)
@@ -145,7 +134,6 @@ def path_flags(files, ref=""):
         "lock": any(matches(f, LOCK_PATHS) for f in files),
         "e2e": any(matches(f, E2E_PATHS) for f in files),
         "check": any(matches(f, CHECK_PATHS) for f in files),
-        "web": any(matches(f, WEB_PATHS) for f in files),
         "release_prep": any(matches(f, [RELEASE_NOTE]) for f in files),
     }
 
@@ -192,18 +180,6 @@ def changed_crates(files, graph):
     return sorted(out & set(graph))
 
 
-def parse_e2e_groups(message):
-    """The groups named by an `[e2e: a,b]` tag; all when there is no tag. Raises ValueError."""
-    found = re.search(r"\[e2e:([^\]]*)\]", message or "")
-    if not found:
-        return list(E2E_GROUPS)
-    names = [n.strip() for n in found.group(1).split(",")]
-    unknown = [n for n in names if n not in E2E_GROUPS]
-    if unknown:
-        raise ValueError(f"unknown e2e group {unknown}; valid names: {', '.join(E2E_GROUPS)}")
-    return [g for g in E2E_GROUPS if g in names]
-
-
 def parse_all(message):
     """True when the message has the tag `[ci: all]`."""
     return re.search(r"\[ci:\s*all\s*\]", message or "") is not None
@@ -237,12 +213,10 @@ def compute(files, message, run_all, graph, ref=""):
         crates = sorted(graph)
     else:
         crates = changed_crates(files, graph)
-    groups = list(E2E_GROUPS) if run_all or ref == "refs/heads/main" else parse_e2e_groups(message)
     daemon = [c for c in DAEMON_CRATES if c in crates]
     out = {k: str(v).lower() for k, v in flags.items()}
     out["crates"] = " ".join(crates)
     out["daemon_crates"] = " ".join(f"-p {c}" for c in daemon)
-    out["e2e_groups"] = json.dumps(groups)
     out["all"] = str(run_all).lower()
     out["shards"] = str(shot_shards(message, ref))
     out["shots"] = shot_states(message, ref)

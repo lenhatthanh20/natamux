@@ -1,5 +1,5 @@
-//! Review comments on a task's diff (`/tasks/:id/review-comments`,
-//! `packages/core/src/git/review-comments.ts`): notes a person leaves on lines of one side, kept
+//! Review comments on a task's diff (`/tasks/:id/review-comments`):
+//! notes a person leaves on lines of one side, kept
 //! by the daemon and sent to the agent in one batch.
 
 use serde::{Deserialize, Serialize};

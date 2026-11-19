@@ -26,6 +26,20 @@ async fn status(d: &TestDaemon, path: &str, host: &str, extra: &str) -> u16 {
         .unwrap_or(0)
 }
 
+/// The status of a raw request with no token.
+async fn status_without_token(d: &TestDaemon, path: &str) -> u16 {
+    let mut stream = TcpStream::connect(d.daemon.address).await.unwrap();
+    let request = format!("GET {path} HTTP/1.1\r\nhost: localhost\r\nconnection: close\r\n\r\n");
+    stream.write_all(request.as_bytes()).await.unwrap();
+    let mut answer = Vec::new();
+    stream.read_to_end(&mut answer).await.unwrap();
+    String::from_utf8_lossy(&answer)
+        .split_whitespace()
+        .nth(1)
+        .and_then(|code| code.parse().ok())
+        .unwrap_or(0)
+}
+
 fn upgrade(origin: Option<&str>) -> String {
     let origin = origin.map_or_else(String::new, |origin| format!("origin: {origin}\r\n"));
     format!(
@@ -35,7 +49,7 @@ fn upgrade(origin: Option<&str>) -> String {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn answers_403_for_a_host_that_is_not_allowed_also_for_a_static_file() {
+async fn answers_403_for_a_host_that_is_not_allowed_on_any_path() {
     let d = bare("edge-host").await;
     for path in ["/health", "/", "/index.html", "/tasks"] {
         assert_eq!(status(&d, path, "evil.example", "").await, 403, "{path}");
@@ -48,6 +62,16 @@ async fn answers_403_for_a_host_that_is_not_allowed_also_for_a_static_file() {
     assert_eq!(status(&d, "/health", "localhost:4317", "").await, 200);
     assert_eq!(status(&d, "/health", "127.0.0.1", "").await, 200);
     assert_eq!(status(&d, "/health", "[::1]:4317", "").await, 200);
+}
+
+// The daemon serves no dashboard page any more: `/` and page paths are API paths like any other.
+#[tokio::test(flavor = "multi_thread")]
+async fn serves_no_dashboard_page() {
+    let d = bare("edge-no-page").await;
+    for path in ["/", "/index.html", "/w/T-1"] {
+        assert_eq!(status_without_token(&d, path).await, 401, "{path}");
+        assert_eq!(status(&d, path, "localhost", "").await, 404, "{path}");
+    }
 }
 
 #[tokio::test(flavor = "multi_thread")]

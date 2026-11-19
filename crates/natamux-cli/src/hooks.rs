@@ -1,4 +1,4 @@
-//! `natamux hooks claude-code` (`claudeCodeHookSettings` in packages/core): Claude Code settings
+//! `natamux hooks claude-code` (`claudeCodeHookSettings`): Claude Code settings
 //! that post its hook events to the daemon. The token and the task id are not written here:
 //! Claude Code reads them from its environment when it sends a hook.
 

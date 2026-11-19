@@ -1,4 +1,4 @@
-//! `isTerminalState` (`packages/core/src/tasks/task-state.ts`).
+//! `isTerminalState`.
 
 use natamux_proto::tasks::task::TaskState;
 

@@ -65,22 +65,14 @@ class Flags(unittest.TestCase):
         self.assertEqual(true_flags(["crates/natamux-theme/src/lib.rs"]), ["app"])
         self.assertIn("app", true_flags(["crates/natamux-daemon/src/main.rs"]))
 
-    def test_production_image_change_runs_e2e(self):
+    def test_daemon_image_change_runs_e2e(self):
         self.assertIn("e2e", true_flags(["docker/prod.Dockerfile"]))
-
-    def test_all_production_image_inputs_run_e2e_without_client_jobs(self):
-        for path in ["packages/core/src/index.ts", "packages/web/src/main.tsx",
-                     "package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml",
-                     "tsconfig.base.json", "docker/nginx.conf"]:
-            flags = ci.path_flags([path])
-            self.assertTrue(flags["e2e"], path)
-            self.assertFalse(flags["client"], path)
 
     def test_client_and_cli(self):
         self.assertEqual(true_flags(["crates/natamux-cli/src/main.rs"]), ["client", "e2e"])
 
     def test_client_runs_e2e(self):
-        # The image builds the CLI, and the e2e rest group runs its agent hook specs.
+        # The live client tests run natamux-client against the daemon image.
         self.assertEqual(true_flags(["crates/natamux-client/src/lib.rs"]), ["client", "e2e"])
 
     def test_lock(self):
@@ -91,7 +83,7 @@ class Flags(unittest.TestCase):
         self.assertEqual(len(true_flags(["Cargo.lock"])), 6)
 
     def test_inputs_of_the_daemon_image_jobs(self):
-        for path in ["scripts/e2e.sh", "compose.e2e.yaml", "compose.prod.yaml", "e2e/tests/terminal-helpers.ts"]:
+        for path in ["scripts/e2e.sh", "compose.e2e.yaml", "compose.prod.yaml", "docker/prod.Dockerfile"]:
             self.assertEqual(true_flags([path]), ["client", "e2e"], path)
 
     def test_motion_script_is_app(self):
@@ -108,8 +100,8 @@ class Flags(unittest.TestCase):
         self.assertEqual(true_flags(["crates/natamux-git/src/exec.rs"]), ["daemon", "e2e"])
 
     def test_e2e_follows_the_daemon_and_the_images(self):
-        for path in ["crates/natamux-daemon/src/main.rs", "e2e/playwright.config.ts",
-                     "scripts/e2e.sh", ".github/workflows/rust.yml"]:
+        for path in ["crates/natamux-daemon/src/main.rs", "scripts/e2e.sh",
+                     ".github/workflows/rust.yml"]:
             self.assertIn("e2e", true_flags([path]), path)
 
     def test_e2e_is_off_for_retired_contract_app_and_docs_paths(self):
@@ -121,18 +113,19 @@ class Flags(unittest.TestCase):
         self.assertEqual(true_flags(["docs/rust-phase4.md"]), [])
         self.assertEqual(true_flags([]), [])
 
-    def test_web_inputs_and_rust_inputs(self):
-        for path in ["packages/core/src/index.ts", "packages/web/src/main.tsx",
-                     "package.json", "pnpm-lock.yaml", "biome.json", ".github/workflows/ci.yml"]:
-            self.assertTrue(ci.path_flags([path])["web"], path)
+    def test_rust_inputs_run_check(self):
         for path in ["crates/natamux-app/src/main.rs", "xtask/src/main.rs",
                      "scripts/release.test.sh", ".github/workflows/rust.yml"]:
             self.assertTrue(ci.path_flags([path])["check"], path)
-        self.assertFalse(ci.path_flags(["packages/web/src/main.tsx"])["check"])
-        self.assertFalse(ci.path_flags(["crates/natamux-app/src/main.rs"])["web"])
+        self.assertNotIn("web", ci.path_flags(["crates/natamux-app/src/main.rs"]))
+
+    def test_removed_web_paths_are_unknown_and_run_all(self):
+        # The web packages are gone: a path there is not routed, so it runs everything.
+        for path in ["packages/web/src/main.tsx", "package.json", "e2e/tests/tasks.spec.ts"]:
+            self.assertTrue(ci.full_run([path]), path)
 
     def test_check_reads_clippy_release_and_site_inputs(self):
-        for path in ["clippy.toml", "package.json", "site/src/content/docs/docs/guides/terminal.mdx"]:
+        for path in ["clippy.toml", "site/src/content/docs/docs/guides/terminal.mdx"]:
             self.assertTrue(ci.path_flags([path])["check"], path)
 
     def test_unknown_root_path_runs_every_job(self):
@@ -196,37 +189,6 @@ class Closure(unittest.TestCase):
         self.assertEqual(graph["natamux-c"], {"natamux-b"})
         self.assertEqual(graph["natamux-d"], {"natamux-c"})
         self.assertEqual(graph["natamux-e"], {"natamux-a"})
-
-
-class E2eGroups(unittest.TestCase):
-    def test_no_tag_is_all(self):
-        self.assertEqual(ci.parse_e2e_groups("Fix a thing"), ["timing", "cache", "terminal", "rest"])
-
-    def test_one_and_two_names_in_canonical_order(self):
-        self.assertEqual(ci.parse_e2e_groups("x [e2e: rest]"), ["rest"])
-        self.assertEqual(ci.parse_e2e_groups("x [e2e: rest, timing]"), ["timing", "rest"])
-
-    def test_unknown_name_names_the_valid_ones(self):
-        with self.assertRaises(ValueError) as caught:
-            ci.parse_e2e_groups("[e2e: timing,nope]")
-        self.assertIn("nope", str(caught.exception))
-        self.assertIn("timing, cache, terminal, rest", str(caught.exception))
-
-    def test_compute_gives_json_for_a_tag(self):
-        out = ci.compute(["crates/natamux-daemon/src/main.rs"], "[e2e: timing,rest]", False, GRAPH)
-        self.assertEqual(out["e2e_groups"], '["timing", "rest"]')
-
-    def test_run_all_ignores_the_tag(self):
-        out = ci.compute(["docs/x.md"], "[e2e: rest]", True, GRAPH)
-        self.assertEqual(out["e2e_groups"], '["timing", "cache", "terminal", "rest"]')
-        self.assertEqual(out["e2e"], "true")
-
-    def test_main_ignores_narrow_and_invalid_e2e_tags(self):
-        for tag in ["[e2e: rest]", "[e2e: no-such-group]"]:
-            out = ci.compute(["packages/web/src/main.tsx"], tag, False, GRAPH,
-                             "refs/heads/main")
-            self.assertEqual(json.loads(out["e2e_groups"]), ci.E2E_GROUPS)
-            self.assertEqual(out["e2e"], "true")
 
 
 class RunAll(unittest.TestCase):
@@ -333,10 +295,12 @@ class Compute(unittest.TestCase):
         self.assertEqual(out["check"], "true")
         self.assertEqual(out["app"], "false")
 
-    def test_unknown_diff_selects_web_and_check(self):
+    def test_unknown_diff_selects_check_and_e2e(self):
         out = ci.compute(None, "", False, GRAPH)
         self.assertEqual(out["check"], "true")
-        self.assertEqual(out["web"], "true")
+        self.assertEqual(out["e2e"], "true")
+        self.assertNotIn("web", out)
+        self.assertNotIn("e2e_groups", out)
 
     def test_daemon_only_change(self):
         out = ci.compute(["crates/natamux-pty/src/lib.rs"], "", False, GRAPH)
@@ -447,13 +411,13 @@ class PushRange(unittest.TestCase):
                 with mock.patch.object(ci, "workspace_graph", return_value=GRAPH):
                     out = ci.outputs()
         self.assertEqual(out["check"], "true")
-        self.assertEqual(out["web"], "true")
+        self.assertEqual(out["e2e"], "true")
         self.assertEqual(out["release_prep"], "true")
 
     def test_main_push_classifies_its_own_diff(self):
         with mock.patch.dict(os.environ, {"GITHUB_EVENT_NAME": "push",
                                           "GITHUB_REF": "refs/heads/main",
-                                          "HEAD_MESSAGE": "Fix app [e2e: no-such-group]"}):
+                                          "HEAD_MESSAGE": "Fix app"}):
             with mock.patch.object(ci, "push_base", return_value="a" * 40):
                 with mock.patch.object(ci, "changed_files", return_value=["crates/natamux-app/src/main.rs"]) as changed:
                     with mock.patch.object(ci, "workspace_graph", return_value=GRAPH):
@@ -462,7 +426,7 @@ class PushRange(unittest.TestCase):
         self.assertEqual(out["app"], "true")
         self.assertEqual(out["all"], "false")
         self.assertEqual(out["release_prep"], "false")
-        self.assertEqual(json.loads(out["e2e_groups"]), ci.E2E_GROUPS)
+        self.assertEqual(out["e2e"], "false")
 
 
 def git(root, *args):

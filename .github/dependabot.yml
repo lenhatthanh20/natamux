@@ -1,15 +1,5 @@
 version: 2
 updates:
-  - package-ecosystem: npm
-    directory: /
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
-    cooldown:
-      default-days: 7
-    groups:
-      minor-and-patch:
-        update-types: [minor, patch]
   - package-ecosystem: github-actions
     directory: /
     schedule:
@@ -22,22 +12,8 @@ updates:
       interval: weekly
     cooldown:
       default-days: 7
-    # The project targets Node 22, an LTS line.
-    ignore:
-      - dependency-name: node
-        update-types: [version-update:semver-major]
   - package-ecosystem: npm
     directory: /site
-    schedule:
-      interval: weekly
-    cooldown:
-      default-days: 7
-    open-pull-requests-limit: 5
-    groups:
-      minor-and-patch:
-        update-types: [minor, patch]
-  - package-ecosystem: npm
-    directory: /e2e
     schedule:
       interval: weekly
     cooldown:

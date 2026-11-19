@@ -1,4 +1,4 @@
-//! Pure rules about tasks (`packages/web/src/lib/tasks.ts`): state and stage labels, the actions
+//! Pure rules about tasks: state and stage labels, the actions
 //! of a state, the text of the confirmations and the agent button. Live changes are in
 //! `task_changes.rs`, the quiet check and filtering in `task_attention.rs`, sorting in
 //! `task_sort.rs`, time text in `task_time.rs`.

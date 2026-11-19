@@ -7,7 +7,7 @@ use serde::{Deserialize, Deserializer};
 
 use crate::tasks::task::TaskState;
 
-/// `SHELL_PROGRAMS` in `packages/core/src/terminals/terminal.ts`: a shell in front means nothing
+/// `SHELL_PROGRAMS`: a shell in front means nothing
 /// else runs in the terminal.
 pub const SHELL_PROGRAMS: [&str; 10] = [
     "bash",

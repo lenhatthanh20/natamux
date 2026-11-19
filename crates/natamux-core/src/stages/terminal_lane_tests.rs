@@ -1,4 +1,4 @@
-//! Tests of `terminal_lane.rs`: the cases of `packages/core/src/stages/__tests__/terminal-lane.test.ts`
+//! Tests of `terminal_lane.rs`: the cases
 //! for the pinned terminals, `terminalAtStart`, `stageAgent` and `endsShell1`. The lane cases are in
 //! `lanes_tests.rs`.
 

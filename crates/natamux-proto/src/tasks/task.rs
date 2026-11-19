@@ -1,4 +1,4 @@
-//! A task as `GET /tasks` sends it (`taskSchema` in `packages/core/src/tasks/task.ts`): every
+//! A task as `GET /tasks` sends it (`taskSchema`): every
 //! field, in the schema's order, so the `natamux` command prints the JSON the TypeScript one
 //! prints. Fields this build does not know are dropped, as zod does, so a newer daemon still
 //! parses.
@@ -6,7 +6,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-/// `TASK_STATES` in `packages/core/src/tasks/task-state.ts`.
+/// `TASK_STATES`.
 pub const TASK_STATES: [&str; 10] = [
     "draft",
     "ready",
@@ -20,13 +20,13 @@ pub const TASK_STATES: [&str; 10] = [
     "cancelled",
 ];
 
-/// `TASK_PRIORITIES` in `packages/core/src/tasks/task.ts`.
+/// `TASK_PRIORITIES`.
 pub const TASK_PRIORITIES: [&str; 4] = ["low", "normal", "high", "urgent"];
 
-/// `PULL_REQUEST_STATES` in `packages/core/src/tasks/task.ts`.
+/// `PULL_REQUEST_STATES`.
 pub const PULL_REQUEST_STATES: [&str; 4] = ["open", "draft", "merged", "closed"];
 
-/// `CHECK_STATES` in `packages/core/src/tasks/task.ts`.
+/// `CHECK_STATES`.
 pub const CHECK_STATES: [&str; 4] = ["passing", "failing", "pending", "none"];
 
 /// `title` of a task: at most this many characters, after trimming.
