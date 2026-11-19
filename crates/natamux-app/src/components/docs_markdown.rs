@@ -3,7 +3,7 @@
 //! parsed once into a tree: blocks that hold blocks or runs of styled spans. Each frame draws the
 //! tree as gpui blocks and text boxes, in the look of the Markdown preview the view had before.
 //! No HTML, no Mermaid and no images (an image shows its alt text); only web and mail links
-//! open. A mouse selection is look only: no key copies from it (D13).
+//! open. Mod+C and the right-click menu copy a mouse selection (`docs_copy.rs`).
 
 use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
@@ -26,6 +26,9 @@ use ui::{Checkbox, ScrollAxes, ToggleState, WithScrollbar, prelude::*};
 
 use super::scrollbars::plain_scrollbars;
 use crate::app::links::open_link;
+
+#[path = "docs_copy.rs"]
+pub mod copy;
 
 /// One view per shown file; a new text goes in with `set_text`.
 pub struct MarkdownDoc {
@@ -1775,7 +1778,11 @@ impl DocState {
             }
             return;
         }
-        if !phase.bubble() || event.button == MouseButton::Right {
+        if !phase.bubble() {
+            return;
+        }
+        if event.button == MouseButton::Right {
+            self.open_menu(event.position, hits, window, cx);
             return;
         }
         let hit = hits.hit(event.position);
@@ -2113,6 +2120,7 @@ impl Element for DocArea {
             };
             window.handle_input(&focus, input, cx);
         }
+        self.listen_keys(&frame.hits, window);
         self.listen(hitbox, &frame.hits, window, cx);
         frame.root.paint(window, cx);
     }

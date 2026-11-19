@@ -10,6 +10,7 @@ use gpui::{
 use theme::ActiveTheme;
 use ui::ContextMenu;
 
+use super::code_menu::{EditState, row_menu};
 use super::code_runs::input_edit;
 use super::code_view::CodeView;
 use super::outline::rows;
@@ -255,17 +256,19 @@ impl TextInput {
         }
     }
 
-    /// A right press on the text of a code view with a menu: the caret goes there unless it is
-    /// inside the selection, then the menu of its row opens at the pointer.
+    /// A right press on the text of a code view: the caret goes there unless it is inside the
+    /// selection, then the menu opens at the pointer: the edit items, then the blame items of
+    /// its row when blame is attached.
     pub(super) fn right_down(
         &mut self,
         event: &MouseDownEvent,
         window: &mut Window,
         cx: &mut gpui::Context<Self>,
     ) {
-        let Some(menu) = self.code.as_ref().and_then(|code| code.menu.clone()) else {
+        let Some(code) = self.code.as_ref() else {
             return;
         };
+        let blame = code.menu.clone();
         // As in the Zed editor, the line numbers open no menu, and a pinned row takes no right
         // press.
         if self.in_gutter(event.position) {
@@ -299,9 +302,9 @@ impl TextInput {
             None => Some(row),
         };
         cx.stop_propagation();
-        let Some(menu) = menu(row, window, cx) else {
-            return;
-        };
+        let selected = !self.model.selection().is_empty();
+        let edits = EditState::new(self.focus.clone(), selected, self.read_only);
+        let menu = row_menu(edits, blame, row, window, cx);
         let dismiss = cx.subscribe_in(
             &menu,
             window,

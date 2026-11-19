@@ -270,11 +270,9 @@ fn blame_labels_shift_their_rows_and_the_menu_opens_on_a_right_click(cx: &mut Te
     let asked: Rc<Cell<Option<Option<u32>>>> = Rc::default();
     let seen = asked.clone();
     let menu: RowMenu = Rc::new(
-        move |row: Option<u32>, window: &mut Window, cx: &mut App| -> Option<Entity<ContextMenu>> {
+        move |row: Option<u32>, menu: ContextMenu, _: &mut Window, _: &mut App| -> ContextMenu {
             seen.set(Some(row));
-            Some(ContextMenu::build(window, cx, |menu, _, _| {
-                menu.entry("Close Annotations", None, |_, _| {})
-            }))
+            menu.entry("Close Annotations", None, |_, _| {})
         },
     );
     cx.update(|_, cx| view.set_menu(menu, cx));
@@ -312,6 +310,45 @@ fn blame_labels_shift_their_rows_and_the_menu_opens_on_a_right_click(cx: &mut Te
     cx.update(|_, cx| view.clear_labels(cx));
     cx.run_until_parked();
     assert_eq!(x_of(cx), before, "the labels are gone");
+}
+
+/// T-0350: a file without blame (untracked, or before blame attaches) had no right-click menu,
+/// so the mouse could not copy.
+#[gpui::test]
+fn a_right_press_opens_the_edit_menu_without_blame(cx: &mut TestAppContext) {
+    let (_, input, cx) = open("x.rs", "fn a() {}\nfn b() {}\n", cx);
+    input.update(cx, |input, cx| {
+        // The whole first line: the press right of its end lands at its end, inside.
+        input.model.select(0, 9);
+        cx.notify();
+    });
+    cx.run_until_parked();
+    let at = input.update_in(cx, |input, window, cx| {
+        let bounds = input.last_bounds.unwrap();
+        let laid = input.layout(window, cx);
+        point(
+            bounds.right() - px(40.),
+            bounds.top() + laid.line_height * 0.5,
+        )
+    });
+    cx.simulate_event(MouseDownEvent {
+        button: MouseButton::Right,
+        position: at,
+        modifiers: Modifiers::default(),
+        click_count: 1,
+        first_mouse: false,
+    });
+    cx.run_until_parked();
+    let (open, selection) = input.read_with(cx, |input, _| {
+        let open = input.code.as_ref().unwrap().open_menu.is_some();
+        (open, input.model.selection().range())
+    });
+    assert!(open, "the edit menu opens with no blame attached");
+    assert_eq!(
+        selection,
+        0..9,
+        "a press inside the selection keeps it for Copy"
+    );
 }
 
 #[gpui::test]
@@ -590,11 +627,9 @@ fn a_pinned_row_takes_no_right_press_and_is_tinted_under_the_pointer(cx: &mut Te
     let asked: Rc<Cell<Option<Option<u32>>>> = Rc::default();
     let seen = asked.clone();
     let menu: RowMenu = Rc::new(
-        move |row: Option<u32>, window: &mut Window, cx: &mut App| -> Option<Entity<ContextMenu>> {
+        move |row: Option<u32>, menu: ContextMenu, _: &mut Window, _: &mut App| -> ContextMenu {
             seen.set(Some(row));
-            Some(ContextMenu::build(window, cx, |menu, _, _| {
-                menu.entry("Close Annotations", None, |_, _| {})
-            }))
+            menu.entry("Close Annotations", None, |_, _| {})
         },
     );
     cx.update(|_, cx| view.set_menu(menu, cx));

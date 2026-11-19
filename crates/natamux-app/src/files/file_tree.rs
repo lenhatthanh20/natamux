@@ -1,22 +1,28 @@
 //! The Files tab of the details panel (`FileTree.tsx`): the worktree as a tree, read one folder at
 //! a time. A click or Enter opens a file in the editor tab or folds a folder; a row can be
-//! dragged onto a terminal of the same task (see `terminals/pane_drop.rs`).
+//! dragged onto a terminal of the same task (see `terminals/pane_drop.rs`). A right press or
+//! Shift+F10 opens the row menu: Copy Path and Copy Relative Path.
 
 use std::collections::BTreeSet;
 use std::rc::Rc;
 
-use gpui::{ClickEvent, Entity, FocusHandle, KeyDownEvent, ScrollHandle, Subscription};
+use gpui::{
+    ClickEvent, ClipboardItem, Entity, FocusHandle, KeyDownEvent, MouseButton, MouseDownEvent,
+    Pixels, Point, ScrollHandle, Subscription, WeakEntity,
+};
 use natamux_proto::workspaces::files::EntryKind;
-use ui::{Tooltip, prelude::*};
+use ui::{ContextMenu, ContextMenuEntry, Tooltip, prelude::*};
 
 use super::draft_store::DraftStore;
-use super::explorer_tree::{ExplorerRow, first_child_key, folders_above, parent_key};
+use super::explorer_tree::{ExplorerRow, copy_paths, first_child_key, folders_above, parent_key};
 use super::file_reads::{FileReads, keep_open_folders, open_folders};
 use super::file_tree_rows::{RowLook, tree_row};
 use crate::app::clock::now_ms;
 use crate::app::dashboard::Dashboard;
 use crate::app::dashboard_data::{Part, Seen};
+use crate::components::menu::MenuLayer;
 use crate::components::skeleton::SkeletonList;
+use crate::components::toast_rules::ToastTone;
 use crate::sidebar::sidebar_text::{type_ahead_target, typed_word};
 
 pub struct FileTree {
@@ -150,6 +156,25 @@ impl FileTree {
         }
     }
 
+    /// The row menu at `position`; the row takes the cursor.
+    fn open_row_menu(
+        &mut self,
+        key: &str,
+        position: Point<Pixels>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        window.focus(&self.focus, cx);
+        self.cursor = Some(key.to_owned());
+        let (dashboard, task_id) = (self.dashboard.clone(), self.task_id.clone());
+        let (key, focus) = (key.to_owned(), self.focus.clone());
+        let menu = ContextMenu::build(window, cx, move |menu, _, cx| {
+            copy_path_items(menu.context(focus), &dashboard, &task_id, &key, cx)
+        });
+        MenuLayer::open(menu, position, window, cx);
+        cx.notify();
+    }
+
     fn click(&mut self, key: &str, window: &mut Window, cx: &mut Context<Self>) {
         window.focus(&self.focus, cx);
         let rows = self.rows();
@@ -159,17 +184,26 @@ impl FileTree {
     }
 
     /// Up, Down, Home, End, Right, Left, Enter, Space and letters (`useRovingFocus`).
-    fn on_key(&mut self, event: &KeyDownEvent, _: &mut Window, cx: &mut Context<Self>) {
+    fn on_key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         let rows = self.rows();
-        if rows.is_empty() || event.keystroke.modifiers.modified() {
-            return;
-        }
         let at = self
             .cursor
             .as_ref()
             .or(self.editor_file.as_ref())
             .and_then(|key| rows.iter().position(|row| &row.key == key))
             .unwrap_or(0);
+        let held = &event.keystroke.modifiers;
+        if event.keystroke.key == "f10" && held.shift && !held.secondary() && !held.alt {
+            let Some(key) = rows.get(at).map(|row| row.key.clone()) else {
+                return;
+            };
+            self.open_row_menu(&key, window.mouse_position(), window, cx);
+            cx.stop_propagation();
+            return;
+        }
+        if rows.is_empty() || held.modified() {
+            return;
+        }
         let last = rows.len() - 1;
         let row = &rows[at];
         match event.keystroke.key.as_str() {
@@ -268,11 +302,17 @@ impl FileTree {
                     tree_focused: focused,
                     at_cursor: focused && self.cursor.as_deref() == Some(row.key.as_str()),
                 };
-                let key = row.key.clone();
+                let (key, pressed) = (row.key.clone(), row.key.clone());
                 tree_row(index, row, &self.task_id, &look, cx)
                     .on_click(cx.listener(move |tree, _: &ClickEvent, window, cx| {
                         tree.click(&key, window, cx)
                     }))
+                    .on_mouse_down(
+                        MouseButton::Right,
+                        cx.listener(move |tree, event: &MouseDownEvent, window, cx| {
+                            tree.open_row_menu(&pressed, event.position, window, cx)
+                        }),
+                    )
                     .into_any_element()
             })
             .collect();
@@ -288,6 +328,45 @@ impl FileTree {
             .children(items)
             .into_any_element()
     }
+}
+
+/// Copy Path (the full path; off while the task's folder is not known) and Copy Relative Path
+/// for the worktree path `key` of a task. The Changes list adds them to its row menu too.
+pub fn copy_path_items(
+    menu: ContextMenu,
+    dashboard: &Entity<Dashboard>,
+    task_id: &str,
+    key: &str,
+    cx: &App,
+) -> ContextMenu {
+    let workspace = dashboard
+        .read(cx)
+        .data
+        .task(task_id)
+        .and_then(|task| task.workspace.clone());
+    let (full, relative) = copy_paths(workspace.as_deref(), key);
+    let (to_full, to_relative) = (dashboard.downgrade(), dashboard.downgrade());
+    let copy_full = ContextMenuEntry::new("Copy Path")
+        .disabled(full.is_none())
+        .handler(move |_, cx| {
+            if let Some(path) = &full {
+                copy_with_toast(&to_full, path, "path", cx);
+            }
+        });
+    menu.item(copy_full)
+        .entry("Copy Relative Path", None, move |_, cx| {
+            copy_with_toast(&to_relative, &relative, "relative path", cx)
+        })
+}
+
+fn copy_with_toast(dashboard: &WeakEntity<Dashboard>, text: &str, what: &str, cx: &mut App) {
+    cx.write_to_clipboard(ClipboardItem::new_string(text.to_owned()));
+    let said = format!("Copied the {what}.");
+    dashboard
+        .update(cx, |dashboard, cx| {
+            dashboard.toast(&said, ToastTone::Info, None, cx)
+        })
+        .ok();
 }
 
 impl Render for FileTree {

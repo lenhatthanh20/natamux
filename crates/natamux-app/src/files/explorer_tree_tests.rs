@@ -191,3 +191,52 @@ fn moves_and_opens_with_the_keys_of_a_tree() {
     assert_eq!(parent_key(&rows, "src"), None);
     assert_eq!(parent_key(&rows, "missing"), None);
 }
+
+/// The full path, as the platform joins `parts` onto `folder`.
+fn joined(folder: &str, parts: &[&str]) -> Option<String> {
+    let path = parts
+        .iter()
+        .fold(std::path::PathBuf::from(folder), |path, part| {
+            path.join(part)
+        });
+    Some(path.to_string_lossy().into_owned())
+}
+
+#[test]
+fn a_file_row_copies_its_full_and_its_worktree_path() {
+    assert_eq!(
+        copy_paths(Some("/work/t-1"), "src/lib/b.ts"),
+        (
+            joined("/work/t-1", &["src", "lib", "b.ts"]),
+            "src/lib/b.ts".to_string()
+        )
+    );
+}
+
+#[test]
+fn a_folder_row_copies_without_a_trailing_slash() {
+    assert_eq!(
+        copy_paths(Some("/work/t-1"), "src/lib/"),
+        (joined("/work/t-1", &["src", "lib"]), "src/lib".to_string())
+    );
+    assert_eq!(
+        copy_paths(Some("/work/t-1/"), ""),
+        (Some("/work/t-1".to_string()), String::new()),
+        "the worktree root is the folder itself"
+    );
+}
+
+#[test]
+fn a_task_folder_with_a_trailing_slash_gives_no_double_slash() {
+    let full = copy_paths(Some("/ws/"), "a.ts").0.unwrap_or_default();
+    assert!(full.starts_with("/ws") && full.ends_with("a.ts"), "{full}");
+    assert!(!full.contains("//"), "{full}");
+    #[cfg(unix)]
+    assert_eq!(full, "/ws/a.ts");
+}
+
+#[test]
+fn no_task_folder_gives_no_full_path() {
+    assert_eq!(copy_paths(None, "a.ts"), (None, "a.ts".to_string()));
+    assert_eq!(copy_paths(Some(""), "a.ts"), (None, "a.ts".to_string()));
+}
