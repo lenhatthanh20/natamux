@@ -1,7 +1,8 @@
 //! The rail of the details panel (T-0183): the panel's views as icon buttons in a column at the
 //! right edge of the window, as Zed's and VS Code's side bars. It stays while the panel is
 //! closed, so a view is one click away; a click on the picked view of an open panel closes it
-//! (`rail_click`). Changes shows the count of files to commit. "..." at the bottom is the task's
+//! (`rail_click`). History covers main instead, and its icon toggles it (T-0351). Changes shows
+//! the count of files to commit. "..." at the bottom is the task's
 //! menu, as in the panel's header over the list.
 
 use gpui::{Entity, Subscription};
@@ -12,7 +13,7 @@ use crate::app::dashboard::Dashboard;
 use crate::app::dashboard_data::Part;
 use crate::app::layout_mode::RAIL_WIDTH;
 use crate::app::tab_rules::details_tabs;
-use crate::app::view_rules::DetailsView;
+use crate::app::view_rules::{DetailsView, WorkspaceTab};
 use crate::components::chips::tip_with_keys;
 use crate::git::commit_rules::tab_count_label;
 use crate::tasks::details_panel::DetailsPanel;
@@ -53,6 +54,15 @@ fn view_button(view: DetailsView) -> ViewButton {
         ),
         DetailsView::Files => ("rail-files", IconName::Folder, "Files", Some("files.show")),
         DetailsView::Details => ("rail-details", IconName::Info, "Details", None),
+    }
+}
+
+/// The pill: History while main shows it, the other views while the open panel shows them.
+pub fn rail_on(view: DetailsView, picked: Option<DetailsView>, main_history: bool) -> bool {
+    if view == DetailsView::History {
+        main_history
+    } else {
+        picked == Some(view)
     }
 }
 
@@ -104,12 +114,11 @@ impl DetailsRail {
     fn button(
         &self,
         view: DetailsView,
-        picked: Option<DetailsView>,
+        on: bool,
         count: Option<usize>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let (id, icon, label, command) = view_button(view);
-        let on = picked == Some(view);
         let keys = command.and_then(shortcut_of);
         let badge = changes_badge(count);
         let tip = view_tip(label, badge);
@@ -170,12 +179,14 @@ impl Render for DetailsRail {
         let picked = dashboard
             .details_shown()
             .then(|| dashboard.details_view_now());
+        let main_history = dashboard.shown_workspace_tab() == WorkspaceTab::History;
         let count = dashboard.open_changes_of(&task.id);
         let buttons: Vec<AnyElement> = views
             .into_iter()
             .map(|view| {
                 let count = (view == DetailsView::Changes).then_some(count).flatten();
-                self.button(view, picked, count, cx)
+                let on = rail_on(view, picked, main_history);
+                self.button(view, on, count, cx)
             })
             .collect();
         let more = self
@@ -204,6 +215,16 @@ impl Render for DetailsRail {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_history_pill_follows_main_the_others_the_panel() {
+        use DetailsView::*;
+        assert!(rail_on(History, None, true));
+        assert!(!rail_on(History, Some(Progress), false));
+        assert!(rail_on(Changes, Some(Changes), true));
+        assert!(!rail_on(Changes, None, false));
+        assert!(!rail_on(Progress, None, true));
+    }
 
     #[test]
     fn shows_the_changes_badge_only_while_files_wait_to_be_committed() {

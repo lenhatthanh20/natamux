@@ -1,5 +1,5 @@
 //! A uniform_list lays each row out as a root: a commit row must still fit the list, so a long
-//! subject truncates and the age stays in view, in the narrow panel and over main (T-0231).
+//! subject truncates and the age stays in view, in a narrow and a wide main (T-0231, T-0351).
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
@@ -15,7 +15,6 @@ use crate::app::test_views;
 
 struct Frame {
     width: f32,
-    in_main: bool,
 }
 
 impl Render for Frame {
@@ -43,18 +42,16 @@ impl Render for Frame {
             graph: Some(Rc::new(graph)),
             error: None,
             uncommitted: 0,
-            in_main: self.in_main,
-            main_shows: self.in_main,
             on_show_changes: nothing(),
             on_refresh: nothing(),
-            on_toggle_main: nothing(),
+            on_terminals: nothing(),
         })
     }
 }
 
-fn row_fits(width: f32, in_main: bool, cx: &mut TestAppContext) {
+fn row_fits(width: f32, cx: &mut TestAppContext) {
     test_views::init(cx);
-    let (_frame, cx) = cx.add_window_view(|_, _| Frame { width, in_main });
+    let (_frame, cx) = cx.add_window_view(|_, _| Frame { width });
     cx.run_until_parked();
 
     let age = cx
@@ -77,13 +74,14 @@ fn row_fits(width: f32, in_main: bool, cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn a_long_commit_fits_the_narrow_panel(cx: &mut TestAppContext) {
-    row_fits(320., false, cx);
+fn a_long_commit_fits_a_narrow_main(cx: &mut TestAppContext) {
+    // Main beside the docked panel at a 1024 px window.
+    row_fits(384., cx);
 }
 
 #[gpui::test]
 fn a_long_commit_fits_main(cx: &mut TestAppContext) {
-    row_fits(700., true, cx);
+    row_fits(700., cx);
 }
 
 /// Lays the same graph out on two frames and keeps what each frame got.

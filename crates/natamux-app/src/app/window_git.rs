@@ -24,7 +24,7 @@ impl Root {
         }
     }
 
-    /// Keys 2 to 4: the panel opens on the view, and Changes or Docs covers the terminals.
+    /// Keys 2 to 4: Changes and Docs open the panel and cover the terminals; History covers them.
     pub(super) fn show_view(&mut self, view: DetailsView, cx: &mut Context<Self>) {
         if self.open_workspace_task(cx).is_some() {
             self.dashboard

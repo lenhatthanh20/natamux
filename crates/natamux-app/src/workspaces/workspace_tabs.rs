@@ -1,5 +1,5 @@
 //! The views of the open workspace that the details panel draws (T-0183): the Changes list with
-//! the commit box and the git buttons, History, and the Docs list. The workspace has no tab bar
+//! the commit box and the git buttons, and the Docs list (History covers main, T-0351). The workspace has no tab bar
 //! any more: main shows the terminals, or the picked file of Changes or Docs over them. New
 //! terminal and Back to wrap-up moved into each pane header.
 
@@ -38,17 +38,6 @@ impl WorkspaceView {
             .child(div().flex_1().min_h_0().child(list))
             .children(row)
             .into_any_element()
-    }
-
-    /// The panel's History view.
-    pub fn history_panel(&mut self, cx: &mut Context<Self>) -> AnyElement {
-        let Some(task) = self.task(cx).filter(|task| task.workspace.is_some()) else {
-            return div().into_any_element();
-        };
-        let Some(shown) = self.shown.as_ref() else {
-            return div().into_any_element();
-        };
-        self.history(&task.id, shown, false, cx)
     }
 
     /// The panel's Docs view: the stage files and attachments; the picked one covers main.
