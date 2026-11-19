@@ -10,7 +10,9 @@ use natamux_proto::terminals::history::CATCH_UP_HISTORY_ROWS;
 use natamux_proto::terminals::messages::ServerMessage;
 use natamux_pty::{Env, PtyEvents};
 
-use super::limits::{ENDED_IDLE_MS, MAX_SESSIONS, SHELL_PROGRAMS, WORKSPACE_QUIET_MS};
+use super::limits::{
+    ENDED_IDLE_MS, MAX_SESSIONS, MAX_SESSIONS_PER_TASK, SHELL_PROGRAMS, WORKSPACE_QUIET_MS,
+};
 use super::screen_files::{read_screen, save_screen};
 use super::service::TerminalOptions;
 use super::session_input::set_size;
@@ -235,8 +237,16 @@ impl Inner {
         size: Size,
     ) -> Result<SessionRef, TerminalError> {
         let cwd = (self.options.workspace_of)(task_id)?;
-        if lock(&self.sessions).len() >= MAX_SESSIONS {
-            return Err(TerminalError::Limit(MAX_SESSIONS));
+        {
+            let sessions = lock(&self.sessions);
+            if sessions.len() >= MAX_SESSIONS {
+                return Err(TerminalError::Limit(MAX_SESSIONS));
+            }
+            let prefix = session_key(task_id, "");
+            let own = sessions.keys().filter(|key| key.starts_with(&prefix));
+            if own.count() >= MAX_SESSIONS_PER_TASK {
+                return Err(TerminalError::Limit(MAX_SESSIONS_PER_TASK));
+            }
         }
         let key = session_key(task_id, terminal);
         let first = !lock(&self.started).contains(&key);

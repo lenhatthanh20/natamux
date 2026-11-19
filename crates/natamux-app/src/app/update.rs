@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 
 use gpui::{App, Global, WindowHandle};
 use natamux_update::check::{InstallKind, Release};
-use natamux_update::install::{InstallInput, install_kind, mac_bundle};
+use natamux_update::install::{InstallInput, appimage_for, install_kind, mac_bundle};
 use natamux_update::preferences;
 use natamux_update::signature::RELEASE_SIGNER;
 use natamux_update::transport::{CurlFeed, download_asset};
@@ -241,7 +241,7 @@ fn fetch() -> Result<(CheckOutcome, Option<Ready>), String> {
     log(&folder, "checking for an update");
     let current = std::env::current_exe().map_err(|error| error.to_string())?;
     let current_text = current.to_string_lossy();
-    let appimage = std::env::var("APPIMAGE").ok();
+    let appimage = appimage_here(&current);
     let replace = if let Some(bundle) = mac_bundle(&current_text) {
         PathBuf::from(bundle)
     } else if let Some(image) = &appimage {
@@ -419,13 +419,21 @@ fn offer(dialog: Confirm, cx: &mut App) {
     }
 }
 
+fn appimage_here(exe: &Path) -> Option<String> {
+    appimage_for(
+        exe,
+        std::env::var("APPIMAGE").ok().as_deref(),
+        std::env::var("APPDIR").ok().as_deref(),
+    )
+}
+
 fn packaged() -> bool {
     let Ok(exe) = std::env::current_exe() else {
         return false;
     };
     let text = exe.to_string_lossy();
     mac_bundle(&text).is_some()
-        || std::env::var_os("APPIMAGE").is_some()
+        || appimage_here(&exe).is_some()
         || text.starts_with("/opt/Natamux/")
         || cfg!(windows) && exe.with_file_name("natamux-daemon.exe").is_file()
 }

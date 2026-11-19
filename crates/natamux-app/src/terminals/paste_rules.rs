@@ -12,7 +12,12 @@ pub fn bracketed(text: &str, on: bool) -> String {
     if on {
         format!("{START}{clean}{END}")
     } else {
+        // Without the paste marks the shell reads every control byte as a key (^C, ^D, ^Z). Tab,
+        // newline and CR stay: a multi-line paste must work as before.
         clean
+            .chars()
+            .filter(|c| matches!(c, '\t' | '\n' | '\r') || !(*c < ' ' || *c == '\x7f'))
+            .collect()
     }
 }
 
@@ -25,7 +30,7 @@ pub fn os_drop_text(paths: &[PathBuf], windows: bool) -> String {
         .collect()
 }
 
-fn quote_path(text: &str, windows: bool) -> String {
+pub(crate) fn quote_path(text: &str, windows: bool) -> String {
     let safe = if windows { "._-\\:/" } else { "._/@+-" };
     let plain = !text.is_empty()
         && text
@@ -58,6 +63,12 @@ mod tests {
     fn strips_escape_so_the_text_cannot_end_the_paste() {
         assert_eq!(bracketed("a\x1b[201~b", true), "\x1b[200~a[201~b\x1b[201~");
         assert_eq!(bracketed("a\x1bb", false), "ab");
+    }
+
+    #[test]
+    fn strips_other_control_characters_when_it_is_off() {
+        assert_eq!(bracketed("a\x03b\x04c\x1ad\x7fe", false), "abcde");
+        assert_eq!(bracketed("a\tb\nc\r\nd", false), "a\tb\nc\r\nd");
     }
 
     fn paths(list: &[&str]) -> Vec<PathBuf> {

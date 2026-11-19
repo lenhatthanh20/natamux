@@ -28,8 +28,8 @@ check "deploy job downloads site-dist" \
   "job deploy | grep -q 'actions/download-artifact@' && job deploy | grep -q 'name: site-dist'"
 check "deploy job runs no repo or package code" \
   "! job deploy | grep -Eq 'actions/checkout|setup-node|pnpm|cache'"
-check "deploy job waits for build and skips pull requests" \
-  "job deploy | grep -q 'needs: build' && job deploy | grep -q \"if: github.event_name != 'pull_request'\""
+check "deploy job waits for build, skips pull requests and runs only on main" \
+  "job deploy | grep -q 'needs: build' && job deploy | grep -q \"if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'\""
 
 [ "$fails" = 0 ] && echo "all site deploy checks passed" || echo "$fails site deploy checks failed"
 exit "$fails"

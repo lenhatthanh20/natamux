@@ -6,10 +6,11 @@ use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use natamux_agents::custom::agent_kind;
 use natamux_agents::launch::has_one_shot;
 use natamux_git::changes::list_changes;
-use natamux_git::commit_drafter::{DraftInput, MAX_DIFF_CHARS, draft_commit_message};
+use natamux_git::commit_drafter::{AgentRun, DraftInput, MAX_DIFF_CHARS, draft_commit_message};
 use natamux_git::commit_push::{commit_all, push_branch, read_commit_diff};
 use natamux_git::gh::create_pull_request;
 use natamux_git::graph::has_remote_branch;
+use natamux_proto::projects::repo_trust::UNTRUSTED_REASON;
 use natamux_proto::tasks::task::Task;
 use natamux_proto::workspaces::changes::{CommitMessageDraft, DraftSource};
 use serde_json::json;
@@ -150,6 +151,15 @@ impl WorkspaceService {
             .unwrap_or_else(|| "claude-code".to_string());
         let diff = read_commit_diff(&workspace, MAX_DIFF_CHARS)?;
         let changes = list_changes(&workspace, false)?;
+        // No agent run in a repo whose commands are not approved: the agent would load the repo's
+        // own agent config. The simple draft takes its place.
+        let trusted = self.repos.is_trusted(task.repo.as_deref());
+        let untrusted = |_: AgentRun| Err::<String, String>(UNTRUSTED_REASON.to_string());
+        let run: &dyn Fn(AgentRun) -> Result<String, String> = if trusted {
+            &*self.run_agent_once
+        } else {
+            &untrusted
+        };
         let draft = draft_commit_message(
             &DraftInput {
                 program: (self.program_of)(&agent),
@@ -160,7 +170,7 @@ impl WorkspaceService {
                 diff,
                 timeout_ms: None,
             },
-            &*self.run_agent_once,
+            run,
         );
         if draft.source == DraftSource::Draft {
             (self.log)(&format!(

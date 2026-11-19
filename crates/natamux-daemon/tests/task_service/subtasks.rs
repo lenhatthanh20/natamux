@@ -15,8 +15,9 @@ fn makes_a_subtask_of_a_task() {
     assert_eq!(create(&fx.service, "Top").parent_id, None);
 }
 
+// Security T-0346 (F-01): a subtask in another project would start there with that project's trust.
 #[test]
-fn puts_a_subtask_in_the_project_of_its_parent_unless_it_names_one() {
+fn puts_a_subtask_in_the_project_of_its_parent_and_refuses_another() {
     let fx = Fixture::new();
     let parent = create_with(
         &fx.service,
@@ -27,13 +28,25 @@ fn puts_a_subtask_in_the_project_of_its_parent_unless_it_names_one() {
         &fx.service,
         json!({ "title": "Notes", "parentId": parent.id }),
     );
-    let site = create_with(
+    let null = create_with(
         &fx.service,
-        json!({ "title": "Site", "parentId": parent.id, "repo": "site" }),
+        json!({ "title": "Null", "parentId": parent.id, "repo": null }),
     );
+    let same = create_with(
+        &fx.service,
+        json!({ "title": "Same", "parentId": parent.id, "repo": "shop" }),
+    );
+    let other = json!({ "title": "Site", "parentId": parent.id, "repo": "site" });
+    let before = fx.service.list_tasks(None).unwrap().len();
 
     assert_eq!(notes.repo.as_deref(), Some("shop"));
-    assert_eq!(site.repo.as_deref(), Some("site"));
+    assert_eq!(null.repo.as_deref(), Some("shop"));
+    assert_eq!(same.repo.as_deref(), Some("shop"));
+    assert_eq!(
+        err_text(fx.service.create_task(Some(&other), &[], true)),
+        "A subtask is in its parent's project"
+    );
+    assert_eq!(fx.service.list_tasks(None).unwrap().len(), before);
 }
 
 #[test]

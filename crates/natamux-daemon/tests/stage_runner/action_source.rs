@@ -97,3 +97,34 @@ fn records_nothing_as_a_person_for_a_start_by_an_agent() {
         ("spec", TaskState::Running)
     );
 }
+
+// Security T-0346 (F-06): `natamux done` with the agent token passed a command stage that only
+// its script, with its ticket, may pass.
+#[test]
+fn refuses_a_report_by_the_agent_token_on_a_command_stage() {
+    const REFUSED: &str = "passes when its command passes";
+    let f = Fixture::new();
+    f.set_stages(json!([{ "id": "test", "kind": "testing", "gate": "auto", "command": "true" }]));
+    let task = f.implementing("test");
+    f.settle();
+    let before = f.task(&task.id);
+
+    let error = f
+        .runner
+        .run
+        .act(&task.id, StageAction::Report, &by_agent(true))
+        .unwrap_err();
+
+    assert!(error.to_string().contains(REFUSED), "{error}");
+    let now = f.task(&task.id);
+    assert_eq!((now.stage.as_str(), now.state), ("test", before.state));
+    assert!(f.last_of(&task.id, "stage.reported").is_none());
+    // A person's report is not this refusal.
+    if let Err(error) = f
+        .runner
+        .run
+        .act(&task.id, StageAction::Report, &by_agent(false))
+    {
+        assert!(!error.to_string().contains(REFUSED), "{error}");
+    }
+}

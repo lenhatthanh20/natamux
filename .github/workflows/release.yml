@@ -29,7 +29,7 @@ env:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - name: Validate release ref
         if: github.event_name == 'workflow_dispatch'
@@ -54,6 +54,19 @@ jobs:
               exit 1
               ;;
           esac
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ env.CHECKOUT_REF }}
+          fetch-depth: 0
+      # A tag on any other commit would run its own release.yml with the signing secrets.
+      - name: Check the release commit is on main
+        run: |
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor HEAD origin/main || {
+            echo "::error::The release commit is not on main."
+            exit 1
+          }
 
   package:
     needs: validate

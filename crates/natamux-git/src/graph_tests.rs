@@ -295,3 +295,16 @@ fn has_no_base_when_there_is_none_or_when_the_base_is_the_branch_itself() {
         assert!(graph.commits.iter().all(|commit| commit.on_branch));
     }
 }
+
+#[test]
+fn drops_a_base_that_looks_like_an_option() {
+    let f = fixture();
+    diverged_worktree(&f);
+
+    let graph = graph_of(&f, Some("--output=x"));
+    assert_eq!(
+        (graph.base.clone(), graph.ahead, graph.behind),
+        (None, None, None)
+    );
+    assert_eq!(subjects(&graph), ["two", "one", "init"]);
+}
