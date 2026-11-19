@@ -184,7 +184,7 @@ Goals:
 
 ## 9. Product and business notes
 
-- License and pricing are not decided. Options: open source core with a paid team tier, or source-available. Decide before the first public release.
+- License: MIT since 2026-11-18 (PR #542); releases up to v1.0.27 were GPL-3.0-or-later.
 - Keep the name, code and text independent from any employer or other product. Do not use the names Orca or Atlas.
 - Orca is MIT licensed. If any Orca code is ever reused, keep its copyright and license notice.
 - Check the author's employment contract on outside work before publishing. This is a personal responsibility, not a design item.

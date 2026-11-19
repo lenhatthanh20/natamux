@@ -44,7 +44,6 @@ tree-sitter-typescript.workspace = true
 tree-sitter-yaml.workspace = true
 ui = { package = "natamux-ui", path = "../natamux-ui" }
 unicode-segmentation.workspace = true
-util.workspace = true
 
 [dev-dependencies]
 gpui = { workspace = true, features = ["test-support"] }

@@ -547,9 +547,7 @@ impl RemoteTerminal {
 pub(crate) mod screen {
     #[cfg(test)]
     pub use crate::terminals::term::model::{Content, TermEvent as Event};
-    pub use crate::terminals::term::model::{
-        Search, TermBounds as TerminalBounds, TermModel as Terminal,
-    };
+    pub use crate::terminals::term::model::{GridArea, Search, TermModel as Terminal};
     pub use crate::terminals::term::view::TermView as TerminalView;
     pub use crate::terminals::term::writer::TermWriter as DisplayOnlyWriter;
     pub use alacritty_terminal::term::TermMode as Modes;

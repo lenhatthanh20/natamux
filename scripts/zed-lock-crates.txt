@@ -13,10 +13,8 @@ gpui_web
 gpui_wgpu
 gpui_windows
 http_client
-path
 refineable
 scheduler
 sum_tree
-util
 ztracing
 ztracing_macro

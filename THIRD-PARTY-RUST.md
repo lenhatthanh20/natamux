@@ -5,228 +5,16 @@ Other notices are in `THIRD-PARTY-NOTICES.md`.
 
 ## Licenses used
 
-- [MIT License](#MIT) (604 crates)
-- [Apache License 2.0](#Apache-2.0) (20 crates)
+- [MIT License](#MIT) (571 crates)
 - [Unicode License v3](#Unicode-3.0) (19 crates)
-- [BSD 3-Clause "New" or "Revised" License](#BSD-3-Clause) (8 crates)
+- [Apache License 2.0](#Apache-2.0) (16 crates)
+- [BSD 3-Clause "New" or "Revised" License](#BSD-3-Clause) (7 crates)
 - [ISC License](#ISC) (5 crates)
-- [zlib License](#Zlib) (4 crates)
 - [Creative Commons Zero v1.0 Universal](#CC0-1.0) (3 crates)
 - [Mozilla Public License 2.0](#MPL-2.0) (3 crates)
+- [zlib License](#Zlib) (3 crates)
 - [BSD 2-Clause "Simplified" License](#BSD-2-Clause) (1 crates)
 - [Boost Software License 1.0](#BSL-1.0) (1 crates)
-
-## Apache License 2.0 {#Apache-2.0}
-
-Used by:
-
-- include-flate 0.3.4 (https://github.com/SOF3/include-flate.git)
-
-```
-
-                                 Apache License
-                           Version 2.0, January 2004
-                        http://www.apache.org/licenses/
-
-   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
-
-   1. Definitions.
-
-      "License" shall mean the terms and conditions for use, reproduction,
-      and distribution as defined by Sections 1 through 9 of this document.
-
-      "Licensor" shall mean the copyright owner or entity authorized by
-      the copyright owner that is granting the License.
-
-      "Legal Entity" shall mean the union of the acting entity and all
-      other entities that control, are controlled by, or are under common
-      control with that entity. For the purposes of this definition,
-      "control" means (i) the power, direct or indirect, to cause the
-      direction or management of such entity, whether by contract or
-      otherwise, or (ii) ownership of fifty percent (50%) or more of the
-      outstanding shares, or (iii) beneficial ownership of such entity.
-
-      "You" (or "Your") shall mean an individual or Legal Entity
-      exercising permissions granted by this License.
-
-      "Source" form shall mean the preferred form for making modifications,
-      including but not limited to software source code, documentation
-      source, and configuration files.
-
-      "Object" form shall mean any form resulting from mechanical
-      transformation or translation of a Source form, including but
-      not limited to compiled object code, generated documentation,
-      and conversions to other media types.
-
-      "Work" shall mean the work of authorship, whether in Source or
-      Object form, made available under the License, as indicated by a
-      copyright notice that is included in or attached to the work
-      (an example is provided in the Appendix below).
-
-      "Derivative Works" shall mean any work, whether in Source or Object
-      form, that is based on (or derived from) the Work and for which the
-      editorial revisions, annotations, elaborations, or other modifications
-      represent, as a whole, an original work of authorship. For the purposes
-      of this License, Derivative Works shall not include works that remain
-      separable from, or merely link (or bind by name) to the interfaces of,
-      the Work and Derivative Works thereof.
-
-      "Contribution" shall mean any work of authorship, including
-      the original version of the Work and any modifications or additions
-      to that Work or Derivative Works thereof, that is intentionally
-      submitted to Licensor for inclusion in the Work by the copyright owner
-      or by an individual or Legal Entity authorized to submit on behalf of
-      the copyright owner. For the purposes of this definition, "submitted"
-      means any form of electronic, verbal, or written communication sent
-      to the Licensor or its representatives, including but not limited to
-      communication on electronic mailing lists, source code control systems,
-      and issue tracking systems that are managed by, or on behalf of, the
-      Licensor for the purpose of discussing and improving the Work, but
-      excluding communication that is conspicuously marked or otherwise
-      designated in writing by the copyright owner as "Not a Contribution."
-
-      "Contributor" shall mean Licensor and any individual or Legal Entity
-      on behalf of whom a Contribution has been received by Licensor and
-      subsequently incorporated within the Work.
-
-   2. Grant of Copyright License. Subject to the terms and conditions of
-      this License, each Contributor hereby grants to You a perpetual,
-      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
-      copyright license to reproduce, prepare Derivative Works of,
-      publicly display, publicly perform, sublicense, and distribute the
-      Work and such Derivative Works in Source or Object form.
-
-   3. Grant of Patent License. Subject to the terms and conditions of
-      this License, each Contributor hereby grants to You a perpetual,
-      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
-      (except as stated in this section) patent license to make, have made,
-      use, offer to sell, sell, import, and otherwise transfer the Work,
-      where such license applies only to those patent claims licensable
-      by such Contributor that are necessarily infringed by their
-      Contribution(s) alone or by combination of their Contribution(s)
-      with the Work to which such Contribution(s) was submitted. If You
-      institute patent litigation against any entity (including a
-      cross-claim or counterclaim in a lawsuit) alleging that the Work
-      or a Contribution incorporated within the Work constitutes direct
-      or contributory patent infringement, then any patent licenses
-      granted to You under this License for that Work shall terminate
-      as of the date such litigation is filed.
-
-   4. Redistribution. You may reproduce and distribute copies of the
-      Work or Derivative Works thereof in any medium, with or without
-      modifications, and in Source or Object form, provided that You
-      meet the following conditions:
-
-      (a) You must give any other recipients of the Work or
-          Derivative Works a copy of this License; and
-
-      (b) You must cause any modified files to carry prominent notices
-          stating that You changed the files; and
-
-      (c) You must retain, in the Source form of any Derivative Works
-          that You distribute, all copyright, patent, trademark, and
-          attribution notices from the Source form of the Work,
-          excluding those notices that do not pertain to any part of
-          the Derivative Works; and
-
-      (d) If the Work includes a "NOTICE" text file as part of its
-          distribution, then any Derivative Works that You distribute must
-          include a readable copy of the attribution notices contained
-          within such NOTICE file, excluding those notices that do not
-          pertain to any part of the Derivative Works, in at least one
-          of the following places: within a NOTICE text file distributed
-          as part of the Derivative Works; within the Source form or
-          documentation, if provided along with the Derivative Works; or,
-          within a display generated by the Derivative Works, if and
-          wherever such third-party notices normally appear. The contents
-          of the NOTICE file are for informational purposes only and
-          do not modify the License. You may add Your own attribution
-          notices within Derivative Works that You distribute, alongside
-          or as an addendum to the NOTICE text from the Work, provided
-          that such additional attribution notices cannot be construed
-          as modifying the License.
-
-      You may add Your own copyright statement to Your modifications and
-      may provide additional or different license terms and conditions
-      for use, reproduction, or distribution of Your modifications, or
-      for any such Derivative Works as a whole, provided Your use,
-      reproduction, and distribution of the Work otherwise complies with
-      the conditions stated in this License.
-
-   5. Submission of Contributions. Unless You explicitly state otherwise,
-      any Contribution intentionally submitted for inclusion in the Work
-      by You to the Licensor shall be under the terms and conditions of
-      this License, without any additional terms or conditions.
-      Notwithstanding the above, nothing herein shall supersede or modify
-      the terms of any separate license agreement you may have executed
-      with Licensor regarding such Contributions.
-
-   6. Trademarks. This License does not grant permission to use the trade
-      names, trademarks, service marks, or product names of the Licensor,
-      except as required for reasonable and customary use in describing the
-      origin of the Work and reproducing the content of the NOTICE file.
-
-   7. Disclaimer of Warranty. Unless required by applicable law or
-      agreed to in writing, Licensor provides the Work (and each
-      Contributor provides its Contributions) on an "AS IS" BASIS,
-      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
-      implied, including, without limitation, any warranties or conditions
-      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
-      PARTICULAR PURPOSE. You are solely responsible for determining the
-      appropriateness of using or redistributing the Work and assume any
-      risks associated with Your exercise of permissions under this License.
-
-   8. Limitation of Liability. In no event and under no legal theory,
-      whether in tort (including negligence), contract, or otherwise,
-      unless required by applicable law (such as deliberate and grossly
-      negligent acts) or agreed to in writing, shall any Contributor be
-      liable to You for damages, including any direct, indirect, special,
-      incidental, or consequential damages of any character arising as a
-      result of this License or out of the use or inability to use the
-      Work (including but not limited to damages for loss of goodwill,
-      work stoppage, computer failure or malfunction, or any and all
-      other commercial damages or losses), even if such Contributor
-      has been advised of the possibility of such damages.
-
-   9. Accepting Warranty or Additional Liability. While redistributing
-      the Work or Derivative Works thereof, You may choose to offer,
-      and charge a fee for, acceptance of support, warranty, indemnity,
-      or other liability obligations and/or rights consistent with this
-      License. However, in accepting such obligations, You may act only
-      on Your own behalf and on Your sole responsibility, not on behalf
-      of any other Contributor, and only if You agree to indemnify,
-      defend, and hold each Contributor harmless for any liability
-      incurred by, or claims asserted against, such Contributor by reason
-      of your accepting any such warranty or additional liability.
-
-   END OF TERMS AND CONDITIONS
-
-   APPENDIX: How to apply the Apache License to your work.
-
-      To apply the Apache License to your work, attach the following
-      boilerplate notice, with the fields enclosed by brackets "[]"
-      replaced with your own identifying information. (Don't include
-      the brackets!)  The text should be enclosed in the appropriate
-      comment syntax for the file format. We also recommend that a
-      file or class name and description of purpose be included on the
-      same "printed page" as the copyright notice for easier
-      identification within third-party archives.
-
-   Copyright [yyyy] [name of copyright owner]
-
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
-
-```
 
 ## Apache License 2.0 {#Apache-2.0}
 
@@ -445,7 +233,6 @@ Used by:
 Used by:
 
 - codespan-reporting 0.13.0 (https://github.com/brendanzab/codespan)
-- command-fds 0.3.2 (https://github.com/google/command-fds/)
 - self_cell 1.2.2 (https://github.com/Voultapher/self_cell)
 - unicode-linebreak 0.1.5 (https://github.com/axelf4/unicode-linebreak)
 
@@ -658,7 +445,7 @@ Used by:
 
 Used by:
 
-- alacritty_terminal 0.26.1-dev (https://github.com/alacritty/alacritty)
+- alacritty_terminal 0.26.0 (https://github.com/alacritty/alacritty)
 
 ```
                               Apache License
@@ -1295,8 +1082,6 @@ Used by:
 
 - dunce 1.0.5 (https://gitlab.com/kornelski/dunce)
 - gl_generator 0.14.0 (https://github.com/brendanzab/gl-rs/)
-- include-flate-codegen 0.3.4 (https://github.com/SOF3/include-flate.git)
-- include-flate-compress 0.3.4 (https://github.com/SOF3/include-flate.git)
 - khronos_api 3.1.0 (https://github.com/brendanzab/gl-rs/)
 - ryu 1.0.23 (https://github.com/dtolnay/ryu)
 - spirv 0.4.0+sdk-1.4.341.0 (https://github.com/gfx-rs/rspirv)
@@ -1650,44 +1435,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Used by:
 
-- zstd-safe 7.3.0 (https://github.com/gyscos/zstd-rs)
-
-```
-BSD 3-Clause License
-
-Copyright (c) 2026, Alexandre Bury
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
-
-1. Redistributions of source code must retain the above copyright notice, this
-   list of conditions and the following disclaimer.
-
-2. Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
-
-3. Neither the name of the copyright holder nor the names of its
-   contributors may be used to endorse or promote products derived from
-   this software without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-```
-
-## BSD 3-Clause "New" or "Revised" License {#BSD-3-Clause}
-
-Used by:
-
 - tiny-skia-path 0.11.4 (https://github.com/RazrFalcon/tiny-skia/tree/master/path)
 - tiny-skia 0.11.4 (https://github.com/RazrFalcon/tiny-skia)
 
@@ -1895,7 +1642,7 @@ DEALINGS IN THE SOFTWARE.
 
 Used by:
 
-- notify 9.0.0-rc.4 (https://github.com/notify-rs/notify.git)
+- notify 9.0.0-rc.9 (https://github.com/notify-rs/notify.git)
 
 ```
 Creative Commons CC0 1.0 Universal
@@ -2100,7 +1847,7 @@ Used by:
 
 Used by:
 
-- inotify-sys 0.1.5 (https://github.com/hannobraun/inotify-sys)
+- inotify-sys 0.1.8 (https://github.com/hannobraun/inotify-sys)
 
 ```
 Copyright (c) Hanno Braun and contributors
@@ -2122,7 +1869,7 @@ THIS SOFTWARE.
 
 Used by:
 
-- inotify 0.11.0 (https://github.com/hannobraun/inotify)
+- inotify 0.11.5 (https://github.com/hannobraun/inotify-rs)
 
 ```
 Copyright (c) Hanno Braun and contributors
@@ -2480,7 +2227,6 @@ Used by:
 - cc 1.4.3 (https://github.com/rust-lang/cc-rs)
 - cfg-if 1.0.4 (https://github.com/rust-lang/cfg-if)
 - find-msvc-tools 0.1.11 (https://github.com/rust-lang/cc-rs)
-- jobserver 0.1.34 (https://github.com/rust-lang/jobserver-rs)
 - js-sys 0.3.97 (https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/js-sys)
 - pkg-config 0.3.32 (https://github.com/rust-lang/pkg-config-rs)
 - rustc-demangle 0.1.26 (https://github.com/rust-lang/rustc-demangle)
@@ -2963,46 +2709,10 @@ THE SOFTWARE.
 
 Used by:
 
-- new_debug_unreachable 1.0.6 (https://github.com/mbrubeck/rust-debug-unreachable)
 - ordered-float 5.5.0 (https://github.com/reem/rust-ordered-float)
 
 ```
 Copyright (c) 2015 Jonathan Reem
-
-Permission is hereby granted, free of charge, to any
-person obtaining a copy of this software and associated
-documentation files (the "Software"), to deal in the
-Software without restriction, including without
-limitation the rights to use, copy, modify, merge,
-publish, distribute, sublicense, and/or sell copies of
-the Software, and to permit persons to whom the Software
-is furnished to do so, subject to the following
-conditions:
-
-The above copyright notice and this permission notice
-shall be included in all copies or substantial portions
-of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
-ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
-TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
-PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
-SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
-CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
-IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-
-```
-
-## MIT License {#MIT}
-
-Used by:
-
-- tendril 0.5.1 (https://github.com/servo/html5ever)
-
-```
-Copyright (c) 2015 Keegan McAllister
 
 Permission is hereby granted, free of charge, to any
 person obtaining a copy of this software and associated
@@ -5805,35 +5515,6 @@ DEALINGS IN THE SOFTWARE.
 
 Used by:
 
-- no_std_io2 0.9.4 (https://github.com/wcampbell0x2a/no-std-io2)
-
-```
-Copyright (c) 2020-2021  Brendan Molloy <brendan@bbqsrc.net>
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-```
-
-## MIT License {#MIT}
-
-Used by:
-
 - pollster 0.4.0 (https://github.com/zesterer/pollster)
 
 ```
@@ -6299,7 +5980,7 @@ SOFTWARE.
 
 Used by:
 
-- notify-types 2.1.0 (https://github.com/notify-rs/notify.git)
+- notify-types 2.3.1 (https://github.com/notify-rs/notify.git)
 
 ```
 Copyright (c) 2023 Notify Contributors
@@ -6850,35 +6531,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 Used by:
 
-- rle-decode-fast 1.0.3 (https://github.com/WanzenBug/rle-decode-helper)
-
-```
-Copyright 2019 Moritz "WanzenBug" Wanzenböck
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights to
-use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
-of the Software, and to permit persons to whom the Software is furnished to do
-so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-```
-
-## MIT License {#MIT}
-
-Used by:
-
 - as-raw-xcb-connection 1.0.1 (https://github.com/psychon/as-raw-xcb-connection)
 
 ```
@@ -7418,69 +7070,6 @@ SOFTWARE.
 
 Used by:
 
-- proc-macro-error-attr3 3.1.1 (https://github.com/gamma0987/proc-macro-error3)
-
-```
-MIT License
-
-Copyright (c) 2019-2020 CreepySkeleton
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-```
-
-## MIT License {#MIT}
-
-Used by:
-
-- proc-macro-error3 3.1.1 (https://github.com/gamma0987/proc-macro-error3)
-
-```
-MIT License
-
-Copyright (c) 2019-2020 CreepySkeleton
-Copyright (c) 2026 gamma0987 <gamma0987@posteo.de>
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-```
-
-## MIT License {#MIT}
-
-Used by:
-
 - zeroize_derive 1.4.2 (https://github.com/RustCrypto/utils/tree/master/zeroize/derive)
 
 ```
@@ -7694,38 +7283,6 @@ Used by:
 MIT License
 
 Copyright (c) 2021 1Password
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-```
-
-## MIT License {#MIT}
-
-Used by:
-
-- async_zip 0.0.18 (https://github.com/Majored/rs-async-zip)
-
-```
-MIT License
-
-Copyright (c) 2021 Harry
-Copyright (c) 2023 Cognite AS
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -8046,12 +7603,9 @@ Used by:
 - accesskit_macos 0.26.3 (https://github.com/AccessKit/accesskit)
 - accesskit_unix 0.22.1 (https://github.com/AccessKit/accesskit)
 - accesskit_windows 0.34.0 (https://github.com/AccessKit/accesskit)
-- async-compression 0.4.32 (https://github.com/Nullus157/async-compression)
 - block2 0.6.2 (https://github.com/madsmtm/objc2)
 - block 0.1.6 (http://github.com/SSheldon/rust-block)
 - chrono 0.4.42 (https://github.com/chronotope/chrono)
-- compression-codecs 0.4.31 (https://github.com/Nullus157/async-compression)
-- compression-core 0.4.29 (https://github.com/Nullus157/async-compression)
 - dispatch2 0.3.1 (https://github.com/madsmtm/objc2)
 - fax 0.2.6 (https://github.com/pdf-rs/fax)
 - fax_derive 0.2.0 (https://github.com/pdf-rs/fax)
@@ -8119,31 +7673,21 @@ Used by:
 - windows-strings 0.5.1 (https://github.com/microsoft/windows-rs)
 - windows-sys 0.52.0 (https://github.com/microsoft/windows-rs)
 - windows-sys 0.59.0 (https://github.com/microsoft/windows-rs)
-- windows-sys 0.60.2 (https://github.com/microsoft/windows-rs)
 - windows-sys 0.61.2 (https://github.com/microsoft/windows-rs)
 - windows-targets 0.52.6 (https://github.com/microsoft/windows-rs)
-- windows-targets 0.53.5 (https://github.com/microsoft/windows-rs)
 - windows-threading 0.1.0 (https://github.com/microsoft/windows-rs)
 - windows-threading 0.2.1 (https://github.com/microsoft/windows-rs)
 - windows-version 0.1.7 (https://github.com/microsoft/windows-rs)
 - windows 0.61.3 (https://github.com/microsoft/windows-rs)
 - windows 0.62.2 (https://github.com/microsoft/windows-rs)
 - windows_aarch64_gnullvm 0.52.6 (https://github.com/microsoft/windows-rs)
-- windows_aarch64_gnullvm 0.53.1 (https://github.com/microsoft/windows-rs)
 - windows_aarch64_msvc 0.52.6 (https://github.com/microsoft/windows-rs)
-- windows_aarch64_msvc 0.53.1 (https://github.com/microsoft/windows-rs)
 - windows_i686_gnu 0.52.6 (https://github.com/microsoft/windows-rs)
-- windows_i686_gnu 0.53.1 (https://github.com/microsoft/windows-rs)
 - windows_i686_gnullvm 0.52.6 (https://github.com/microsoft/windows-rs)
-- windows_i686_gnullvm 0.53.1 (https://github.com/microsoft/windows-rs)
 - windows_i686_msvc 0.52.6 (https://github.com/microsoft/windows-rs)
-- windows_i686_msvc 0.53.1 (https://github.com/microsoft/windows-rs)
 - windows_x86_64_gnu 0.52.6 (https://github.com/microsoft/windows-rs)
-- windows_x86_64_gnu 0.53.1 (https://github.com/microsoft/windows-rs)
 - windows_x86_64_gnullvm 0.52.6 (https://github.com/microsoft/windows-rs)
-- windows_x86_64_gnullvm 0.53.1 (https://github.com/microsoft/windows-rs)
 - windows_x86_64_msvc 0.52.6 (https://github.com/microsoft/windows-rs)
-- windows_x86_64_msvc 0.53.1 (https://github.com/microsoft/windows-rs)
 - zune-inflate 0.2.54
 
 ```
@@ -8579,7 +8123,6 @@ Used by:
 - atomic-waker 1.1.2 (https://github.com/smol-rs/atomic-waker)
 - blocking 1.6.2 (https://github.com/smol-rs/blocking)
 - concurrent-queue 2.5.0 (https://github.com/smol-rs/concurrent-queue)
-- dary_heap 0.3.9 (https://github.com/hanmertens/dary_heap)
 - displaydoc 0.2.5 (https://github.com/yaahc/displaydoc)
 - dyn-clone 1.0.20 (https://github.com/dtolnay/dyn-clone)
 - endi 1.1.0 (https://github.com/zeenix/endi)
@@ -8622,7 +8165,6 @@ Used by:
 - serde_derive 1.0.229 (https://github.com/serde-rs/serde)
 - serde_derive_internals 0.29.1 (https://github.com/serde-rs/serde)
 - serde_json 1.0.151 (https://github.com/serde-rs/json)
-- serde_json_lenient 0.2.4 (https://github.com/google/serde_json_lenient)
 - serde_repr 0.1.20 (https://github.com/dtolnay/serde-repr)
 - smol 2.0.2 (https://github.com/smol-rs/smol)
 - smol_str 0.3.6 (https://github.com/rust-lang/rust-analyzer/tree/master/lib/smol_str)
@@ -8826,38 +8368,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 Used by:
 
-- libflate 2.3.1 (https://github.com/sile/libflate)
-- libflate_lz77 2.3.0 (https://github.com/sile/libflate)
-
-```
-The MIT License
-
-Copyright (c) 2016 Takeru Ohta <phjgt308@gmail.com>
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-
-```
-
-## MIT License {#MIT}
-
-Used by:
-
 - pulldown-cmark 0.13.6 (https://github.com/raphlinus/pulldown-cmark)
 
 ```
@@ -8882,40 +8392,6 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
-
-```
-
-## MIT License {#MIT}
-
-Used by:
-
-- deflate64 0.1.10 (https://github.com/anatawa12/deflate64-rs)
-
-```
-The MIT License (MIT)
-
-Copyright (c) .NET Foundation and Contributors
-Copyright (c) anatawa12 2023
-
-All rights reserved.
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
 
 ```
 
@@ -9178,7 +8654,6 @@ Used by:
 - aho-corasick 1.1.3 (https://github.com/BurntSushi/aho-corasick)
 - byteorder-lite 0.1.0 (https://github.com/image-rs/byteorder-lite)
 - byteorder 1.5.0 (https://github.com/BurntSushi/byteorder)
-- globset 0.4.17 (https://github.com/BurntSushi/ripgrep/tree/master/crates/globset)
 - memchr 2.8.3 (https://github.com/BurntSushi/memchr)
 - walkdir 2.5.0 (https://github.com/BurntSushi/walkdir)
 
@@ -9811,71 +9286,6 @@ SOFTWARE.
 
 Used by:
 
-- rust-embed-impl 8.11.0 (https://pyrossh.dev/repos/rust-embed)
-- rust-embed-utils 8.11.0 (https://pyrossh.dev/repos/rust-embed)
-- rust-embed 8.11.0 (https://pyrossh.dev/repos/rust-embed)
-
-```
-The MIT License (MIT)
-
-Copyright (c) 2018 pyros2097
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-
-```
-
-## MIT License {#MIT}
-
-Used by:
-
-- bstr 1.12.1 (https://github.com/BurntSushi/bstr)
-
-```
-The MIT License (MIT)
-
-Copyright (c) 2018-2019 Andrew Gallant
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-
-```
-
-## MIT License {#MIT}
-
-Used by:
-
 - xmlwriter 0.1.0 (https://github.com/RazrFalcon/xmlwriter)
 
 ```
@@ -10295,25 +9705,6 @@ HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
 WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 OTHER DEALINGS IN THE SOFTWARE.
-
-```
-
-## MIT License {#MIT}
-
-Used by:
-
-- zstd-sys 2.0.16+zstd.1.5.7 (https://github.com/gyscos/zstd-rs)
-- zstd 0.13.3 (https://github.com/gyscos/zstd-rs)
-
-```
-The MIT License (MIT)
-Copyright (c) 2016 Alexandre Bury
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ```
 
@@ -11390,26 +10781,5 @@ the following restrictions:
     misrepresented as being the original software.
 
 3. This notice may not be removed or altered from any source distribution.
-```
-
-## zlib License {#Zlib}
-
-Used by:
-
-- adler32 1.2.0 (https://github.com/remram44/adler32-rs)
-
-```
-zlib License
-
-This software is provided 'as-is', without any express or implied warranty.  In no event will the authors be held liable for any damages arising from the use of this software.
-
-Permission is granted to anyone to use this software for any purpose, including commercial applications, and to alter it and redistribute it freely, subject to the following restrictions:
-
-     1. The origin of this software must not be misrepresented; you must not claim that you wrote the original software. If you use this software in a product, an acknowledgment in the product documentation would be appreciated but is not required.
-
-     2. Altered source versions must be plainly marked as such, and must not be misrepresented as being the original software.
-
-     3. This notice may not be removed or altered from any source distribution.
-
 ```
 

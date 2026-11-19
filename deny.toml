@@ -1,16 +1,12 @@
 # Config for cargo-deny 0.20. Rules: docs/plan-rust-migration.md, "Safe local setup".
 
 [advisories]
-# Each one OK'd by the owner (T-0143). All come through gpui, gpui_platform and util, the Zed
+# Each one OK'd by the owner (T-0143). All come through gpui and gpui_platform, the Zed
 # crates the app keeps (Apache-2.0).
 # .cargo/audit.toml keeps the same vulnerability list for cargo audit.
 ignore = [
   { id = "RUSTSEC-2026-0194", reason = "quick-xml, fixed only in 0.41 (breaking); only gpui's Linux crates (wayland-scanner at build time, xcb for screen capture, zbus_xml) use it, on local XML only. Review by 2026-12-31." },
   { id = "RUSTSEC-2026-0195", reason = "quick-xml, fixed only in 0.41 (breaking); only gpui's Linux crates (wayland-scanner at build time, xcb for screen capture, zbus_xml) use it, on local XML only. Review by 2026-12-31." },
-  { id = "RUSTSEC-2026-0391", reason = "zstd stream context reuse, fixed only in 0.14 (breaking); only util's rust-embed (include-flate, files built into a binary) calls zstd. Review by 2026-12-31." },
-  { id = "RUSTSEC-2026-0398", reason = "zstd-safe Seekable, fixed only in 8.2 (breaking); only util's rust-embed calls zstd, and nothing reads a seekable archive. Review by 2026-12-31." },
-  { id = "RUSTSEC-2026-0403", reason = "zstd-safe legacy-frame stream decoder, fixed only in 8.2 (breaking); only util's rust-embed calls zstd. Review by 2026-12-31." },
-  { id = "RUSTSEC-2026-0410", reason = "zstd-sys allocator shim on wasm32 only; Natamux is never built for wasm32. Review by 2026-12-31." },
   { id = "RUSTSEC-2024-0436", reason = "paste unmaintained; gpui's dependencies metal (macOS) and rav1e use it (macro only), no known hole. Review by 2026-12-31." },
   { id = "RUSTSEC-2026-0206", reason = "rustybuzz unmaintained; gpui uses it through usvg, no known hole. Review by 2026-12-31." },
   { id = "RUSTSEC-2026-0192", reason = "ttf-parser unmaintained; gpui uses it (also through fontdb and rustybuzz), no known hole. Review by 2026-12-31." },
@@ -54,13 +50,10 @@ allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 # Zed (the owner's fork of it, docs/rust-phase1.md) and the owner's forks of the repos that its
 # manifest pins at our Zed rev (Cargo.toml, "Every git dependency"). Each one by its exact URL.
 allow-git = [
-  "https://github.com/lenhatthanh20/alacritty",
   "https://github.com/lenhatthanh20/async-process.git",
-  "https://github.com/lenhatthanh20/async-tar",
   "https://github.com/lenhatthanh20/async-task.git",
   "https://github.com/lenhatthanh20/calloop",
   "https://github.com/lenhatthanh20/font-kit",
-  "https://github.com/lenhatthanh20/notify",
   "https://github.com/lenhatthanh20/proptest",
   "https://github.com/lenhatthanh20/scap",
   "https://github.com/lenhatthanh20/tree-sitter",

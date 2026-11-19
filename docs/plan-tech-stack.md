@@ -233,5 +233,5 @@ Inside each package, code is grouped by feature (`tasks`, `stages`, `workspaces`
 ## 11. Open decisions
 
 - CodeMirror or Monaco for diffs.
-- License: open source core or source-available (see `plan-features.md`, section 9).
+- License: MIT since 2026-11-18 (PR #542); releases up to v1.0.27 were GPL-3.0-or-later.
 - Whether to reuse any part of Orca (MIT). Default: write from scratch and use it for ideas only.

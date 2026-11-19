@@ -50,47 +50,48 @@ pub enum TermEvent {
     OutputReplaced,
 }
 
-/// The cell size and the bounds of the grid.
+/// The pixel area of the grid, and the size of one cell in it.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct TermBounds {
+pub struct GridArea {
+    pub area: Bounds<Pixels>,
+    pub cell_height: Pixels,
     pub cell_width: Pixels,
-    pub line_height: Pixels,
-    pub bounds: Bounds<Pixels>,
 }
 
-impl TermBounds {
-    pub fn new(line_height: Pixels, cell_width: Pixels, bounds: Bounds<Pixels>) -> Self {
-        TermBounds {
+impl GridArea {
+    pub fn new(area: Bounds<Pixels>, cell_width: Pixels, cell_height: Pixels) -> Self {
+        GridArea {
+            area,
+            cell_height,
             cell_width,
-            line_height,
-            bounds,
         }
     }
 
     /// The rows that fit, counted one float step up, so 3.9999999 counts as 4.
-    pub fn num_lines(&self) -> usize {
-        whole(f32::from(self.bounds.size.height) / f32::from(self.line_height))
+    pub fn rows(&self) -> usize {
+        whole(f32::from(self.area.size.height) / f32::from(self.cell_height))
     }
 
-    pub fn num_columns(&self) -> usize {
-        whole(f32::from(self.bounds.size.width) / f32::from(self.cell_width)).max(2)
+    /// The columns that fit; never fewer than 2.
+    pub fn columns(&self) -> usize {
+        whole(f32::from(self.area.size.width) / f32::from(self.cell_width)).max(2)
     }
 
     /// For the text area size answer: the cell size in whole pixels.
     fn window_size(&self) -> WindowSize {
         let whole_px = |value: Pixels| f32::from(value) as u16;
         WindowSize {
-            num_lines: self.num_lines().min(usize::from(u16::MAX)) as u16,
-            num_cols: self.num_columns().min(usize::from(u16::MAX)) as u16,
+            num_lines: self.rows().min(usize::from(u16::MAX)) as u16,
+            num_cols: self.columns().min(usize::from(u16::MAX)) as u16,
             cell_width: whole_px(self.cell_width),
-            cell_height: whole_px(self.line_height),
+            cell_height: whole_px(self.cell_height),
         }
     }
 
     /// At least one cell each way, so the screen always has a row and a column.
     fn at_least_one_cell(mut self) -> Self {
-        self.bounds.size.width = self.bounds.size.width.max(self.cell_width);
-        self.bounds.size.height = self.bounds.size.height.max(self.line_height);
+        self.area.size.width = self.area.size.width.max(self.cell_width);
+        self.area.size.height = self.area.size.height.max(self.cell_height);
         self
     }
 
@@ -102,9 +103,9 @@ impl TermBounds {
         columns: usize,
         lines: usize,
     ) -> (i32, Column, Side) {
-        let from = position - self.bounds.origin;
+        let from = position - self.area.origin;
         let (x, y) = (f32::from(from.x), f32::from(from.y));
-        let (width, height) = (f32::from(self.cell_width), f32::from(self.line_height));
+        let (width, height) = (f32::from(self.cell_width), f32::from(self.cell_height));
         // The rest of a division, as the old view took it: a press in the very middle of a cell
         // falls on either side by the last bit of the float (T-S1).
         let mut side = if x.max(0.) % width > width / 2. {
@@ -130,36 +131,36 @@ impl TermBounds {
     }
 
     /// A change the shell would see: the grid or the cell size.
-    fn differs(&self, other: &TermBounds) -> bool {
-        self.num_lines() != other.num_lines()
-            || self.num_columns() != other.num_columns()
+    fn differs(&self, other: &GridArea) -> bool {
+        self.rows() != other.rows()
+            || self.columns() != other.columns()
             || self.cell_width != other.cell_width
-            || self.line_height != other.line_height
+            || self.cell_height != other.cell_height
     }
 }
 
 /// Before the first layout: 500 x 30 px of 5 x 5 px cells, 100 x 6.
-impl Default for TermBounds {
+impl Default for GridArea {
     fn default() -> Self {
-        TermBounds::new(
-            px(5.),
-            px(5.),
+        GridArea::new(
             Bounds::new(point(px(0.), px(0.)), size(px(500.), px(30.))),
+            px(5.),
+            px(5.),
         )
     }
 }
 
-impl Dimensions for TermBounds {
+impl Dimensions for GridArea {
     fn total_lines(&self) -> usize {
         self.screen_lines()
     }
 
     fn screen_lines(&self) -> usize {
-        self.num_lines()
+        self.rows()
     }
 
     fn columns(&self) -> usize {
-        self.num_columns()
+        self.columns()
     }
 }
 
@@ -194,7 +195,7 @@ pub struct Content {
     pub selection_text: Option<String>,
     pub cursor: RenderableCursor,
     pub cursor_char: char,
-    pub terminal_bounds: TermBounds,
+    pub terminal_bounds: GridArea,
     pub last_hovered_word: Option<HoveredWord>,
     /// The cursor or some text is on the last row.
     pub bottom_row_used: bool,
@@ -214,7 +215,7 @@ impl Search {
 
 /// A change the view asked for; it runs at the next sync, in the order asked.
 enum Change {
-    Resize(TermBounds),
+    Resize(GridArea),
     Clear,
     Scroll(Scroll),
     ScrollToPoint(Point),
@@ -241,7 +242,7 @@ pub struct TermModel {
     queue: VecDeque<Change>,
     last_content: Content,
     /// The size asked for last; it reaches the screen at the next sync.
-    bounds: TermBounds,
+    bounds: GridArea,
     /// Parses the output tests and shots write with no writer.
     processor: Processor,
     /// The last byte `write_output` got was a CR.
@@ -259,7 +260,7 @@ impl EventEmitter<TermEvent> for TermModel {}
 
 impl TermModel {
     /// `history`: the lines of history it keeps (fixed); `bounds`: the grid it starts at.
-    pub fn new(history: Option<usize>, bounds: Option<TermBounds>, cx: &mut Context<Self>) -> Self {
+    pub fn new(history: Option<usize>, bounds: Option<GridArea>, cx: &mut Context<Self>) -> Self {
         let config = Config {
             scrolling_history: history.unwrap_or(MAX_HISTORY),
             default_cursor_style: CursorStyle {
@@ -473,7 +474,7 @@ impl TermModel {
 
     /// The new bounds are kept at once (points are mapped from their origin); the screen is
     /// resized, at the next sync, only when the grid or the cell size changes.
-    pub fn set_size(&mut self, bounds: TermBounds) {
+    pub fn set_size(&mut self, bounds: GridArea) {
         let bounds = bounds.at_least_one_cell();
         let resize = bounds.differs(&self.bounds);
         self.bounds = bounds;
@@ -814,7 +815,7 @@ fn simple(range: RangeInclusive<Point>) -> Selection {
 /// does.
 fn copy_content(
     term: &Term<Listener>,
-    bounds: TermBounds,
+    bounds: GridArea,
     hovered: Option<HoveredWord>,
     mut cells: Vec<IndexedCell>,
     version: u64,

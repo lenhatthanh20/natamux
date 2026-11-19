@@ -463,11 +463,11 @@ impl TermView {
     fn nearest_cell(&self, position: Point<Pixels>, cx: &App) -> GridPoint {
         let content = self.model.read(cx).last_content();
         let grid = content.terminal_bounds;
-        let from = position - grid.bounds.origin;
+        let from = position - grid.area.origin;
         let column = (f32::from(from.x) / f32::from(grid.cell_width))
             .round()
             .max(0.) as usize;
-        let line = (f32::from(from.y) / f32::from(grid.line_height))
+        let line = (f32::from(from.y) / f32::from(grid.cell_height))
             .round()
             .max(0.) as usize;
         let column = column.min(content.columns.saturating_sub(1));
@@ -711,7 +711,7 @@ impl TermView {
             }
         }
         let content = self.model.read(cx).last_content();
-        let line_height = content.terminal_bounds.line_height;
+        let line_height = content.terminal_bounds.cell_height;
         let alt_screen = content.mode.contains(TermMode::ALT_SCREEN);
         let at = event.position;
         let scroll = self.laid.filter(|_| !alt_screen).and_then(|laid| {
@@ -802,9 +802,9 @@ impl TermView {
             _ => return,
         }
         let content = self.model.read(cx).last_content();
-        let line_height = content.terminal_bounds.line_height;
+        let line_height = content.terminal_bounds.cell_height;
         let mode = content.mode;
-        let screen = content.terminal_bounds.bounds.size.height;
+        let screen = content.terminal_bounds.area.size.height;
         let old = self.wheel;
         let new = old + event.delta.pixel_delta(line_height).y;
         let lines = (new / line_height) as i32 - (old / line_height) as i32;

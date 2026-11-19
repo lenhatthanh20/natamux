@@ -13,22 +13,22 @@ use alacritty_terminal::selection::{Selection, SelectionType};
 use futures::channel::mpsc::{UnboundedReceiver, unbounded};
 use gpui::{AppContext as _, Bounds, Entity, Pixels, TestAppContext, point, px, size};
 
-use super::{Search, TermBounds, TermEvent, TermModel};
+use super::{GridArea, Search, TermEvent, TermModel};
 use crate::terminals::term::writer::TermWriter;
 
 /// The cell of the test font (7.8 x 16.9 px), as the old tests measure it.
 const CELL: (f32, f32) = (7.8, 16.9);
 
 /// A grid of `columns` x `lines` cells, with half a cell to spare each way.
-pub(crate) fn bounds(columns: usize, lines: usize) -> TermBounds {
+pub(crate) fn bounds(columns: usize, lines: usize) -> GridArea {
     let extent = size(
         px((columns as f32 + 0.5) * CELL.0),
         px((lines as f32 + 0.5) * CELL.1),
     );
-    TermBounds::new(
-        px(CELL.1),
-        px(CELL.0),
+    GridArea::new(
         Bounds::new(point(px(0.), px(0.)), extent),
+        px(CELL.0),
+        px(CELL.1),
     )
 }
 
@@ -491,7 +491,7 @@ fn a_size_asked_for_before_a_replace_is_the_new_screens_size(cx: &mut TestAppCon
 fn a_moved_pane_keeps_its_grid_and_takes_the_new_origin(cx: &mut TestAppContext) {
     let mut screen = screen(cx, (40, 10));
     let mut moved = bounds(40, 10);
-    moved.bounds.origin = point(px(120.), px(30.));
+    moved.area.origin = point(px(120.), px(30.));
     change(&screen, cx, |model| model.set_size(moved));
     let (grid, stored) = screen.model.read_with(cx, |model, _| {
         let content = model.last_content();
@@ -524,12 +524,30 @@ fn write_output_turns_a_bare_lf_into_cr_lf(cx: &mut TestAppContext) {
 }
 
 #[test]
+fn rows_and_columns_round_a_float_step_up_and_keep_two_columns() {
+    let at = |width: f32, height: f32| {
+        GridArea::new(
+            Bounds::new(point(px(0.), px(0.)), size(px(width), px(height))),
+            px(8.),
+            px(1.),
+        )
+    };
+    // One float step under 4 rows counts as 4 rows.
+    assert_eq!(at(80., 4.0_f32.next_down()).rows(), 4);
+    assert_eq!(at(80., 3.9).rows(), 3);
+    // Narrower than 2 cells gives 2 columns.
+    assert_eq!(at(9., 4.).columns(), 2);
+    assert_eq!(at(0., 4.).columns(), 2);
+    assert_eq!(at(80., 4.).columns(), 10);
+}
+
+#[test]
 fn a_point_past_the_grid_takes_the_whole_cell() {
     // 10 columns and 5 lines of 8 x 10 px.
-    let grid = TermBounds::new(
-        px(10.),
-        px(8.),
+    let grid = GridArea::new(
         Bounds::new(point(px(0.), px(0.)), size(px(80.), px(50.))),
+        px(8.),
+        px(10.),
     );
     let at = |x: f32, y: f32| grid.shown_cell(point(px(x), px(y)), 10, 5);
     assert_eq!(at(5., 1.), (0, Column(0), Side::Right));
