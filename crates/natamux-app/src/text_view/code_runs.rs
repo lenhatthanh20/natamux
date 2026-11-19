@@ -85,6 +85,12 @@ pub(super) fn line_bytes(text: &str, lines: &Range<usize>) -> Range<usize> {
     start..end.max(start)
 }
 
+/// The whole blocks from the one before `first` to the one after `last`.
+fn around(first: usize, last: usize) -> Range<usize> {
+    let start = (first / BLOCK).saturating_sub(1) * BLOCK;
+    start..(last / BLOCK + 2) * BLOCK
+}
+
 impl TextInput {
     /// The lines whose colours a layout asks for: the shown lines and a block more on each side,
     /// as whole blocks. None when there is nothing to colour (no language or no tree yet).
@@ -104,8 +110,24 @@ impl TextInput {
         let row = |y: gpui::Pixels| (y / line_height).max(0.) as usize;
         let first = laid.line_index_of_row(row(self.scroll.y));
         let last = laid.line_index_of_row(row(self.scroll.y + bounds.size.height));
-        let start = (first / BLOCK).saturating_sub(1) * BLOCK;
-        Some(start..(last / BLOCK + 2) * BLOCK)
+        Some(around(first, last))
+    }
+
+    /// `query_lines` for the first layout, before there is one to map rows to lines. With no wrap
+    /// and no diff each line is one row, so these are the lines the layout after the scroll is
+    /// clamped asks for, and the first draw lays the text out once. Else the top lines.
+    pub(super) fn first_query_lines(&self, line_height: gpui::Pixels, wraps: bool) -> Range<usize> {
+        let one_row_each = !wraps && self.code.as_ref().is_some_and(|code| code.diff.is_none());
+        let Some(bounds) = self.last_bounds.filter(|_| one_row_each) else {
+            return 0..2 * BLOCK;
+        };
+        let last_line = self.model.text().matches('\n').count();
+        let line_height = line_height.max(gpui::px(1.));
+        let line = |y: gpui::Pixels| ((y / line_height).max(0.) as usize).min(last_line);
+        around(
+            line(self.scroll.y),
+            line(self.scroll.y + bounds.size.height),
+        )
     }
 
     /// The head lines of the outline items whose rows sticky scroll may pin over the shown ones,
@@ -233,3 +255,7 @@ pub(super) fn styled_runs(
     }
     runs
 }
+
+#[cfg(test)]
+#[path = "code_runs_tests.rs"]
+mod tests;

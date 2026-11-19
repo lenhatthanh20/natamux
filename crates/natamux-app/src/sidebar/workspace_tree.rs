@@ -14,14 +14,14 @@ use ui::prelude::*;
 
 use crate::app::clock::follow_labels;
 use crate::app::dashboard::{Dashboard, TerminalReader};
-use crate::app::dashboard_data::{Part, Seen};
+use crate::app::dashboard_data::Seen;
 use crate::app::shortcuts::{
     Back, CollapseRow, ExpandRow, OpenRowMenu, OpenSelected, RemoveRow, RenameRow, SelectFirst,
     SelectLast, SelectNext, SelectPrevious,
 };
 use crate::sidebar::snapshot_memo::{SnapshotKey, SnapshotMemo};
 use crate::sidebar::tree_entries::{EntryAction, TreeKey, move_target, tree_key};
-use crate::sidebar::tree_lines::{LinesChange, changed_lines};
+use crate::sidebar::tree_lines::{LinesChange, changed_lines, tree_news};
 use crate::sidebar::tree_model::{Line, TaskLook, TreeInput, TreeModel};
 use crate::sidebar::tree_rename::Rename;
 use crate::sidebar::workspace_groups::{Hold, held_id, next_hold};
@@ -92,21 +92,17 @@ pub struct WorkspaceTree {
 
 impl WorkspaceTree {
     pub fn new(dashboard: Entity<Dashboard>, cx: &mut Context<Self>) -> Self {
-        let observe = cx.observe(&dashboard, |tree, dashboard, cx| {
+        let observe = Dashboard::observe(&dashboard, cx, |tree, dashboard, cx| {
             let gens = dashboard.read(cx).data.gens;
-            let changed = tree.seen.take(&gens);
-            if changed.any(MODEL_PARTS) {
+            let news = tree_news(&tree.seen.take(&gens));
+            if news.build {
                 tree.model_fresh = false;
             }
-            // Cards also show the activity, the waiting boxes and the diff stat.
-            if changed.any(MODEL_PARTS)
-                || changed.any(&[Part::Activity, Part::Events, Part::DiffStats])
-            {
+            if news.draw {
                 tree.memo.invalidate();
                 cx.notify();
             }
-            // The waiting box and the blur change a card's height, not the lines.
-            if changed.any(&[Part::Events, Part::View]) {
+            if news.measure {
                 tree.list.remeasure_items(0..tree.list.item_count());
             }
         });
@@ -416,9 +412,6 @@ impl WorkspaceTree {
         snapshot
     }
 }
-
-/// What the tree builds from: the lines and the terminals each row reads.
-const MODEL_PARTS: &[Part] = &[Part::Tasks, Part::Repos, Part::Terminals, Part::View];
 
 /// The task id of a task row's key.
 pub(super) fn task_of(key: &str) -> Option<String> {

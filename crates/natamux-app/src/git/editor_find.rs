@@ -96,8 +96,11 @@ impl EditorFind {
 
     fn run(&mut self, cx: &mut Context<Self>) {
         let term = self.term(cx);
-        let text = self.target.text(cx);
-        let found = find_ranges(&text, &term, self.match_case, self.regex);
+        let (match_case, regex) = (self.match_case, self.regex);
+        let mut found = Ok(Vec::new());
+        self.target.read_text(cx, &mut |text: &str| {
+            found = find_ranges(text, &term, match_case, regex);
+        });
         self.invalid = found.is_err();
         let matches = found.unwrap_or_default();
         self.first = first_after(&matches, self.target.caret(cx));

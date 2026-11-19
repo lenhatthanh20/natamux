@@ -40,6 +40,8 @@ fn route_of(event: &DashboardEvent) -> Option<String> {
         }
         DashboardEvent::WorkspaceStep(_)
         | DashboardEvent::TaskChanged(_)
+        | DashboardEvent::ActivityOf { .. }
+        | DashboardEvent::UsageOf { .. }
         | DashboardEvent::Status(_)
         | DashboardEvent::WorkspaceChanged { .. }
         | DashboardEvent::ShellsChanged { .. }
@@ -102,15 +104,13 @@ fn each_kind_reads_only_its_own_part() {
             ),
             (r#"{"kind":"task.deleted","taskId":"T-1"}"#, "GET /tasks"),
             (r#"{"kind":"repos.changed"}"#, "GET /repos"),
-            (r#"{"kind":"jobs.changed","jobs":[]}"#, "GET /jobs"),
+            // A body that carries no jobs: read.
+            (r#"{"kind":"jobs.changed"}"#, "GET /jobs"),
             (
-                r#"{"kind":"activity.changed","taskId":"T-1","activity":{}}"#,
+                r#"{"kind":"activity.changed","taskId":"T-1"}"#,
                 "GET /activity",
             ),
-            (
-                r#"{"kind":"usage.changed","taskId":"T-1","usage":{}}"#,
-                "GET /usage",
-            ),
+            (r#"{"kind":"usage.changed","taskId":"T-1"}"#, "GET /usage"),
             (r#"{"kind":"limits.changed","limits":[]}"#, "GET /limits"),
             (
                 r#"{"kind":"workspace.dirty","taskId":"T-1"}"#,

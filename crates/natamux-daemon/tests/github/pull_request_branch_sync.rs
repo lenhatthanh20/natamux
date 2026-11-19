@@ -14,7 +14,7 @@ use natamux_git::test_support::{TempDir, run_git, test_repo};
 use natamux_proto::tasks::task::Task;
 use serde_json::json;
 
-use super::pull_request_watcher::{Found, github, on_origin, options};
+use super::pull_request_watcher::{Found, github, options, origin_with};
 use super::{Fx, values_of};
 
 const OLD: &str = "natamux/t-1-fix-it";
@@ -45,7 +45,7 @@ fn syncing(fx: &Fx, repo: &Path) -> SyncBranch {
 
 fn finding(fx: &Fx, gh: RunGh, repo: &Path) -> PullRequestWatcherOptions {
     let mut options = options(fx, gh);
-    options.has_remote_branch = Some(on_origin());
+    options.remote_branches = Some(origin_with(&[SWITCHED], &Arc::default()));
     options.sync_branch = syncing(fx, repo);
     options
 }

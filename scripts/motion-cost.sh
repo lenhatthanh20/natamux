@@ -4,12 +4,14 @@
 # With a task (for example T-0146, 4 shell panes), the window opens that task with --open-task:
 # motion and the clock run as for a user, and nothing prints. That case also has focus limits:
 # at most 1 draw a second and 2% CPU.
-# With PROFILE=1, macOS `sample` profiles the app for 10 s after the background phase, still in
-# the background, into PROFILE_FILE (default: a temp file); the path is printed. The numbers do
-# not include the sampling.
+# With PROFILE=1, macOS `sample` profiles the app for 10 s twice: after the focused phase, still
+# with focus, into PROFILE_FOCUS_FILE, and after the background phase, still in the background,
+# into PROFILE_FILE (defaults: temp files); the paths are printed. The numbers do not include the
+# sampling.
 # Runs in CI only, on macOS (.github/workflows/rust.yml, perf.yml): cargo never runs on the
 # owner's Mac.
-# Usage: [PROFILE=1 [PROFILE_FILE=path]] scripts/motion-cost.sh [binary] [task]
+# Usage: [PROFILE=1 [PROFILE_FILE=path] [PROFILE_FOCUS_FILE=path]] scripts/motion-cost.sh
+#        [binary] [task]
 set -euo pipefail
 
 binary=${1:-target/release/natamux-app}
@@ -19,7 +21,7 @@ out=$(mktemp)
 err=$(mktemp)
 profile=${PROFILE:-}
 hold=50
-[ "$profile" = 1 ] && hold=65
+[ "$profile" = 1 ] && hold=75
 args=(--fake-daemon --size 1280x800 --count-draws --hold "$hold")
 [ -n "$task" ] && args+=(--open-task "$task")
 "$binary" "${args[@]}" >"$out" 2>"$err" &
@@ -29,6 +31,11 @@ pid=$!
 cpu() { ps -o time= -p "$pid" | awk '{ n = split($1, part, ":"); s = 0; for (i = 1; i <= n; i++) s = s * 60 + part[i]; print s }'; }
 lines() { wc -l <"$out" | tr -d ' '; }
 alive() { kill -0 "$pid" 2>/dev/null || { echo "motion-cost: the app quit early" >&2; cat "$out" "$err" >&2; exit 1; }; }
+# sample <file> <name>: 10 s of macOS `sample`, after the phase's numbers were read.
+profile_into() {
+  sample "$pid" 10 -file "$1" >/dev/null 2>&1 || echo "motion-cost: $2 sample failed" >&2
+  echo "motion-cost: $2 profile $1"
+}
 
 sleep 10
 alive
@@ -36,6 +43,10 @@ focus_cpu=$(cpu) focus_from=$(lines)
 sleep 15
 alive
 focus_cpu_end=$(cpu) focus_to=$(lines)
+if [ "$profile" = 1 ]; then
+  profile_into "${PROFILE_FOCUS_FILE:-$(mktemp -t motion-focus-sample)}" focused
+  alive
+fi
 osascript -e 'tell application "Finder" to activate'
 sleep 5
 alive
@@ -44,9 +55,7 @@ sleep 15
 alive
 back_cpu_end=$(cpu) back_to=$(lines)
 if [ "$profile" = 1 ]; then
-  profile_file=${PROFILE_FILE:-$(mktemp -t motion-sample)}
-  sample "$pid" 10 -file "$profile_file" >/dev/null 2>&1 || echo "motion-cost: sample failed" >&2
-  echo "motion-cost: profile $profile_file"
+  profile_into "${PROFILE_FILE:-$(mktemp -t motion-sample)}" background
 fi
 kill "$pid"
 wait "$pid" || true

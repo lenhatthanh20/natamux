@@ -16,6 +16,23 @@ fn gives_the_branch_of_a_checkout_and_none_when_head_is_detached() {
 }
 
 #[test]
+fn reads_the_branch_of_a_linked_worktree_from_its_files_without_git() {
+    let (root, repo) = test_repo();
+    let worktree = root.path().join("T-0001");
+    let path = worktree.to_string_lossy().into_owned();
+    run_git(&repo, &["worktree", "add", "-q", "-b", "t-1", &path]);
+
+    let before = thread_spawn_count();
+    assert_eq!(current_branch(&worktree).as_deref(), Some("t-1"));
+    assert_eq!(thread_spawn_count() - before, 0);
+
+    run_git(&worktree, &["checkout", "-q", "--detach"]);
+    let before = thread_spawn_count();
+    assert_eq!(current_branch(&worktree), None);
+    assert_eq!(thread_spawn_count() - before, 0);
+}
+
+#[test]
 fn adds_settings_after_the_ones_that_are_there() {
     let env = with_git_config(Some("1"), &[("a.b", "c")]);
     let has = |key: &str, value: &str| env.contains(&(key.to_string(), value.to_string()));

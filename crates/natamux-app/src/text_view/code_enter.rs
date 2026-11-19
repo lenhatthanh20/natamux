@@ -15,6 +15,7 @@ use std::ops::Range;
 use tree_sitter::Tree;
 
 use super::code_rules::Typing;
+use super::code_runs::input_edit;
 use super::text_input::TAB_SIZE;
 use crate::git::languages::Lang;
 use crate::text::motion;
@@ -27,11 +28,17 @@ pub struct Enter {
     pub caret: usize,
 }
 
-/// `text` parsed in `lang`.
-pub(super) fn parse(lang: &Lang, text: &str) -> Option<Tree> {
+/// `text` parsed in `lang`. `old` is an earlier text with its tree: only what changed since is
+/// parsed again, which gives the same tree as a whole parse.
+pub(super) fn parse(lang: &Lang, text: &str, old: Option<(&str, &Tree)>) -> Option<Tree> {
     let mut parser = tree_sitter::Parser::new();
     parser.set_language(&(lang.grammar)()).ok()?;
-    parser.parse(text, None)
+    let old = old.map(|(old_text, tree)| {
+        let mut tree = tree.clone();
+        tree.edit(&input_edit(old_text, text));
+        tree
+    });
+    parser.parse(text, old.as_ref())
 }
 
 /// The leading spaces and tabs of `line`.
@@ -77,13 +84,14 @@ pub fn enter(
     let scope = tree.map_or_else(Default::default, |tree| {
         typing.scope_at(tree, text, range.start)
     });
+    let old = tree.map(|tree| (text, tree));
     if range.is_empty() && typing.expands(text, range.start, scope) {
         // The spaces after the caret go; the ones before it stay on the line.
         let at = range.start;
         let rest = &text[at..];
         let end = at + rest.len() - rest.trim_start_matches([' ', '\t']).len();
         let after = format!("{}\n\n{lead}{}", &text[..at], &text[end..]);
-        let middle = indent(typing, lang, &after, row_of(text, at) + 1, &lead);
+        let middle = indent(typing, lang, &after, row_of(text, at) + 1, &lead, old);
         let inserted = format!("\n{middle}\n{lead}");
         return Enter {
             range: at..end,
@@ -97,7 +105,14 @@ pub fn enter(
     let after = format!("{}\n{}", &text[..range.start], &text[end..]);
     let new_indent = match tree.and_then(|tree| after_braceless(text, tree, range.start)) {
         Some(lead) => lead,
-        None => indent(typing, lang, &after, row_of(text, range.start) + 1, &lead),
+        None => indent(
+            typing,
+            lang,
+            &after,
+            row_of(text, range.start) + 1,
+            &lead,
+            old,
+        ),
     };
     // Spaces after the caret that fit in the new indent stay, as part of it.
     let kept = &rest[..spaces];
@@ -158,9 +173,17 @@ fn after_braceless(text: &str, tree: &Tree, at: usize) -> Option<String> {
     None
 }
 
-/// The indent of `row` of `text` by the language's rules, `lead` when it does not parse.
-fn indent(typing: &Typing, lang: &Lang, text: &str, row: usize, lead: &str) -> String {
-    parse(lang, text).map_or_else(
+/// The indent of `row` of `text` by the language's rules, `lead` when it does not parse. `old` is
+/// the text before Enter with its tree, when there is one.
+fn indent(
+    typing: &Typing,
+    lang: &Lang,
+    text: &str,
+    row: usize,
+    lead: &str,
+    old: Option<(&str, &Tree)>,
+) -> String {
+    parse(lang, text, old).map_or_else(
         || lead.to_owned(),
         |tree| typing.indent_for(text, &tree, row),
     )

@@ -143,13 +143,21 @@ impl IdlePause {
     }
 
     fn tick(&self) {
-        let this = self.this.clone();
-        // A pause writes files and an event, so it must not hold the timers.
-        self.options.scheduler.off_thread(move || {
-            if let Some(this) = this.upgrade() {
-                this.check();
-            }
-        });
+        let any_ended = self
+            .lock()
+            .seen
+            .values()
+            .any(|seen| seen.signal == Signal::TurnEnded);
+        // No thread for an empty round: only a turn end can pause.
+        if any_ended {
+            let this = self.this.clone();
+            // A pause writes files and an event, so it must not hold the timers.
+            self.options.scheduler.off_thread(move || {
+                if let Some(this) = this.upgrade() {
+                    this.check();
+                }
+            });
+        }
         self.arm();
     }
 

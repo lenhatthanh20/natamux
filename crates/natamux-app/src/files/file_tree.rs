@@ -3,15 +3,14 @@
 //! dragged onto a terminal of the same task (see `terminals/pane_drop.rs`).
 
 use std::collections::BTreeSet;
+use std::rc::Rc;
 
 use gpui::{ClickEvent, Entity, FocusHandle, KeyDownEvent, ScrollHandle, Subscription};
 use natamux_proto::workspaces::files::EntryKind;
 use ui::{Tooltip, prelude::*};
 
 use super::draft_store::DraftStore;
-use super::explorer_tree::{
-    ExplorerRow, change_marks, explorer_rows, first_child_key, folders_above, parent_key,
-};
+use super::explorer_tree::{ExplorerRow, first_child_key, folders_above, parent_key};
 use super::file_reads::{FileReads, keep_open_folders, open_folders};
 use super::file_tree_rows::{RowLook, tree_row};
 use crate::app::clock::now_ms;
@@ -49,7 +48,7 @@ impl FileTree {
         let mut seen = Seen::default();
         let subscriptions = vec![
             cx.observe(&drafts, |_, _, cx| cx.notify()),
-            cx.observe(&dashboard, move |tree, dashboard, cx| {
+            Dashboard::observe(&dashboard, cx, move |tree, dashboard, cx| {
                 let gens = dashboard.read(cx).data.gens;
                 if seen.changed(&gens, &[Part::View]) {
                     tree.sync_editor_file(cx);
@@ -100,6 +99,7 @@ impl FileTree {
             let above = folders_above(&path);
             if above.iter().any(|folder| !self.expanded.contains(folder)) {
                 self.expanded.extend(above);
+                self.reads.forget_rows();
                 keep_open_folders(&self.task_id, &self.expanded, cx);
                 self.read_new_folders(cx);
             }
@@ -108,14 +108,15 @@ impl FileTree {
         cx.notify();
     }
 
-    fn rows(&self) -> Vec<ExplorerRow> {
-        explorer_rows(&self.reads.folders, &self.expanded)
+    fn rows(&mut self) -> Rc<Vec<ExplorerRow>> {
+        self.reads.rows(&self.expanded)
     }
 
     fn toggle(&mut self, key: &str, cx: &mut Context<Self>) {
         if !self.expanded.remove(key) {
             self.expanded.insert(key.to_owned());
         }
+        self.reads.forget_rows();
         keep_open_folders(&self.task_id, &self.expanded, cx);
         self.read_new_folders(cx);
         cx.notify();
@@ -151,8 +152,9 @@ impl FileTree {
 
     fn click(&mut self, key: &str, window: &mut Window, cx: &mut Context<Self>) {
         window.focus(&self.focus, cx);
-        if let Some(row) = self.rows().into_iter().find(|row| row.key == key) {
-            self.activate(&row, cx);
+        let rows = self.rows();
+        if let Some(row) = rows.iter().find(|row| row.key == key) {
+            self.activate(row, cx);
         }
     }
 
@@ -251,7 +253,6 @@ impl FileTree {
                 .child(Label::new("No files.").color(Color::Muted))
                 .into_any_element();
         }
-        let marks = change_marks(&self.reads.changes);
         let focused = self.focus.contains_focused(window, cx);
         let editor_file = self.editor_file.clone();
         let items: Vec<AnyElement> = rows
@@ -260,8 +261,8 @@ impl FileTree {
             .map(|(index, row)| {
                 let is_file = row.kind == EntryKind::File;
                 let look = RowLook {
-                    status: marks.files.get(&row.key).copied(),
-                    changed_below: marks.folders.contains(&row.key),
+                    status: self.reads.marks.files.get(&row.key).copied(),
+                    changed_below: self.reads.marks.folders.contains(&row.key),
                     unsaved: self.drafts.read(cx).file(&self.task_id, &row.key).is_some(),
                     selected: is_file && editor_file.as_deref() == Some(row.key.as_str()),
                     tree_focused: focused,

@@ -333,7 +333,8 @@ impl StageRun {
     /// Lookups use the pinned terminals, not the settings, so a settings change never moves an
     /// agent that runs.
     pub fn pinned(&self, task_id: &str) -> PinnedTerminals {
-        let events = self.events(task_id);
+        let events = self.options.tasks.stage_starts(task_id);
+        let events = events.unwrap_or_default();
         pinned_terminals_of(events.iter().map(|stored| (stored.accepted, &stored.event)))
     }
 
@@ -363,14 +364,7 @@ impl StageRun {
 
     /// The step the task runs now. In a branch, that is the stage of the path it is at.
     pub fn step_of(&self, task: &Task) -> StageResult<Step> {
-        let steps = self.steps(task)?;
-        match step_to_run(&steps, &task.stage) {
-            Some(step) if !step.is_branch() => Ok(step),
-            _ => Err(action(format!(
-                "{} is at an unknown stage \"{}\"",
-                task.id, task.stage
-            ))),
-        }
+        step_in(task, &self.steps(task)?)
     }
 
     /// Applies an event; its message has reached the runner and every other listener when this
@@ -396,5 +390,16 @@ impl StageRun {
             .record_event(task_id, kind, payload, "system");
         self.options.bus.deliver_all();
         Ok(task?)
+    }
+}
+
+/// `step_of` for a caller that has the steps of the task.
+pub fn step_in(task: &Task, steps: &[Step]) -> StageResult<Step> {
+    match step_to_run(steps, &task.stage) {
+        Some(step) if !step.is_branch() => Ok(step),
+        _ => Err(action(format!(
+            "{} is at an unknown stage \"{}\"",
+            task.id, task.stage
+        ))),
     }
 }

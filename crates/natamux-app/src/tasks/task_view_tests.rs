@@ -142,13 +142,61 @@ fn a_sort_by_changes_or_by_cost_sorts_again_on_its_part(cx: &mut TestAppContext)
 type Step = dyn Fn(&mut Dashboard, &mut gpui::Context<Dashboard>);
 
 #[gpui::test]
-fn a_filter_a_sort_or_a_selection_still_refreshes(cx: &mut TestAppContext) {
+fn a_selection_or_a_panel_width_does_not_sort_again(cx: &mut TestAppContext) {
+    let (dashboard, view, cx) = all_tasks(cx);
+    let before = refreshes(&view, cx);
+    let steps: [&Step; 3] = [
+        &|dashboard, cx| dashboard.select(Some("T-0146".into()), cx),
+        &|dashboard, cx| dashboard.set_sidebar_width(300.0, cx),
+        &|dashboard, cx| dashboard.set_details_width(400.0, cx),
+    ];
+    for step in steps {
+        dashboard.update(cx, |dashboard, cx| step(dashboard, cx));
+        cx.run_until_parked();
+    }
+    assert_eq!(refreshes(&view, cx), before);
+}
+
+#[gpui::test]
+fn a_hidden_list_sorts_nothing_until_it_shows_again(cx: &mut TestAppContext) {
+    let (dashboard, view, cx) = all_tasks(cx);
+    let opens: [&Step; 2] = [
+        &|dashboard, cx| dashboard.open("T-0147", cx),
+        &|dashboard, cx| dashboard.open_agents(cx),
+    ];
+    for open in opens {
+        dashboard.update(cx, |dashboard, cx| open(dashboard, cx));
+        cx.run_until_parked();
+        let before = refreshes(&view, cx);
+        let task = dashboard.read_with(cx, |dashboard, _| dashboard.data.task("T-0147").cloned());
+        let mut task = task.unwrap();
+        task.title.push_str(" again");
+        send(&dashboard, DashboardEvent::TaskChanged(Box::new(task)), cx);
+        dashboard.update(cx, |dashboard, cx| {
+            dashboard.set_filter("T-0146".into(), cx)
+        });
+        cx.run_until_parked();
+        assert_eq!(refreshes(&view, cx), before, "the hidden list sorted");
+
+        dashboard.update(cx, |dashboard, cx| dashboard.back(cx));
+        cx.run_until_parked();
+        assert_eq!(refreshes(&view, cx), before + 1);
+        view.read_with(cx, |view, _| {
+            assert!(view.shown_ids.iter().any(|id| id == "T-0146"));
+            assert!(!view.shown_ids.iter().any(|id| id == "T-0147"));
+        });
+        dashboard.update(cx, |dashboard, cx| dashboard.set_filter(String::new(), cx));
+        cx.run_until_parked();
+    }
+}
+
+#[gpui::test]
+fn a_filter_or_a_sort_still_refreshes(cx: &mut TestAppContext) {
     let (dashboard, view, cx) = all_tasks(cx);
     let mut before = refreshes(&view, cx);
-    let steps: [&Step; 3] = [
+    let steps: [&Step; 2] = [
         &|dashboard, cx| dashboard.set_filter("T-0146".into(), cx),
         &|dashboard, cx| dashboard.sort_by(SortKey::Id, cx),
-        &|dashboard, cx| dashboard.select(Some("T-0146".into()), cx),
     ];
     for step in steps {
         dashboard.update(cx, |dashboard, cx| step(dashboard, cx));

@@ -54,6 +54,61 @@ TARGETS = {
     "table_background_draws": (0.2, True),
 }
 HIGHER_IS_BETTER = set()
+# Shown with no target and no baseline until a few CI runs show what they hold.
+REPORTED = {"term_draws_per_wake", "term_flood_frame_p95_ms"}
+# daemon_bench (memory per shell, hooks on the daemon's wiring) and terminal_bench.
+REPORTED |= {
+    "daemon_idle_30_shells_rss_mb",
+    "daemon_idle_shell_kib",
+    "daemon_busy_grown_mb",
+    "daemon_busy_shell_mb",
+    "hook_staged_single_p50_ms",
+    "hook_staged_paced_p95_ms",
+    "hook_staged_paced_max_ms",
+    "parse_plain_mb_s",
+    "parse_sgr_mb_s",
+}
+REPORTED |= {
+    f"{case}_{what}"
+    for case in ("flood", "tui")
+    for what in ("frames_per_s", "bytes_per_frame", "wire_over_raw")
+}
+REPORTED |= {
+    f"snapshot_{cols}_{style}_{what}"
+    for cols in (80, 120, 200)
+    for style in ("plain", "sgr")
+    for what in ("bytes", "serialize_ms")
+}
+# The app: terminal flows, start steps, memory, idle cost, binary sizes and gate 2.
+REPORTED |= {
+    f"terminal_key{case}_to_{what}_p95_ms" for case in ("", "_flood") for what in ("glyph", "echo")
+}
+REPORTED |= {
+    "app_rss_per_terminal_mb",
+    "app_rss_per_hidden_terminal_mb",
+    "app_rss_per_empty_terminal_mb",
+    "app_rss_per_hidden_empty_terminal_mb",
+    "app_rss_smoke_mb",
+    "keymap_ms",
+    "menus_ms",
+    "window_open_ms",
+    "first_draw_ms",
+    "table_focus_draws",
+    "task_focus_cpu_pct",
+    "task_background_cpu_pct",
+    "task_focus_draws",
+    "task_background_draws",
+    "app_binary_mb",
+    "daemon_binary_mb",
+    "cli_binary_mb",
+    "gate2_key_to_glyph_p95_ms",
+    "gate2_key_to_echo_p95_ms",
+    "gate2_hidden_draws_per_s",
+    "gate2_hidden_cpu_pct",
+    "gate2_show_latency_p95_ms",
+    "gate2_panes_frame_p99_ms",
+}
+HIGHER_IS_BETTER |= {"parse_plain_mb_s", "parse_sgr_mb_s"}
 
 
 def parse_line(line):
@@ -114,7 +169,7 @@ def over(value, target, higher):
 def check(runs, baseline):
     """Rows of (name, median, runs, target, baseline, result, failed), sorted by name."""
     rows = []
-    for name in sorted(set(runs) | set(TARGETS) | set(baseline)):
+    for name in sorted(set(runs) | set(TARGETS) | set(baseline) | REPORTED):
         values = runs.get(name, [])
         target, gated = TARGETS.get(name, (None, False))
         base = baseline.get(name)

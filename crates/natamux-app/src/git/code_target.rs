@@ -12,7 +12,8 @@ use ui::ContextMenu;
 pub trait FindTarget {
     /// The same view gives the same id: a second Mod+F on it only refocuses the bar.
     fn id(&self) -> EntityId;
-    fn text(&self, cx: &App) -> String;
+    /// Calls `read` with the text, borrowed: find reads it again after every edit.
+    fn read_text(&self, cx: &App, read: &mut dyn FnMut(&str));
     /// The selected text when it lies within one line.
     fn one_line_selection(&self, cx: &mut App) -> Option<String>;
     /// The offset of the caret.

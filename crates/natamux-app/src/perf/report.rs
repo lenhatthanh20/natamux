@@ -15,6 +15,8 @@ use super::stats::{PerfStats, percentile};
 static STARTED: OnceLock<Instant> = OnceLock::new();
 static FIRST_FRAME: OnceLock<Duration> = OnceLock::new();
 static FIRST_DATA: OnceLock<Duration> = OnceLock::new();
+/// The end of the app's start code, before the event loop runs.
+static START_DONE: OnceLock<Instant> = OnceLock::new();
 /// Start steps before the first frame (`timed`), by name, in ms.
 static STEPS: Mutex<Vec<(&'static str, f64)>> = Mutex::new(Vec::new());
 
@@ -23,9 +25,20 @@ pub fn mark_start() {
     STARTED.get_or_init(Instant::now);
 }
 
+/// The start code is done: the wait from here to the first frame is the `first_draw_ms` step.
+pub fn mark_start_done() {
+    START_DONE.get_or_init(Instant::now);
+}
+
 /// The window drew its first frame. Later calls change nothing.
 pub fn mark_first_frame() {
+    if FIRST_FRAME.get().is_some() {
+        return;
+    }
     mark(&FIRST_FRAME);
+    if let Some(done) = START_DONE.get() {
+        mark_step("first_draw_ms", done.elapsed());
+    }
 }
 
 /// The task list came for the first time. Later calls change nothing.

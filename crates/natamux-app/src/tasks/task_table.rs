@@ -2,6 +2,7 @@
 //! columns by the main width (`table_columns`), sortable headers, a card list under 560, one tab
 //! stop with j/k, arrows, Home/End, Enter, Shift+F10 and type-ahead, and the row menu.
 
+use std::sync::Arc;
 use std::time::Instant;
 
 use gpui::{
@@ -37,7 +38,7 @@ pub struct KeyMoved;
 pub struct TaskTable {
     dashboard: Entity<Dashboard>,
     /// In the order to show: sorted, filtered and held still by the task view.
-    rows: Vec<Task>,
+    rows: Vec<Arc<Task>>,
     main_width: Option<f32>,
     /// The optional columns with a value in some row, found once per change, not per draw.
     has: HasValue,
@@ -76,7 +77,7 @@ impl TaskTable {
     /// False: the rows and the width are the ones shown, so nothing draws.
     pub fn set_rows(
         &mut self,
-        rows: Vec<Task>,
+        rows: Vec<Arc<Task>>,
         main_width: Option<f32>,
         cx: &mut Context<Self>,
     ) -> bool {

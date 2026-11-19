@@ -3,6 +3,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
+use std::cell::RefCell;
 use std::rc::Rc;
 
 use gpui::TestAppContext;
@@ -39,7 +40,7 @@ impl Render for Frame {
         let nothing = || Rc::new(|_: &mut Window, _: &mut App| {});
         div().w(px(self.width)).h(px(400.)).child(HistoryView {
             id: "T-0001".to_owned(),
-            graph: Some(graph),
+            graph: Some(Rc::new(graph)),
             error: None,
             uncommitted: 0,
             in_main: self.in_main,
@@ -83,4 +84,35 @@ fn a_long_commit_fits_the_narrow_panel(cx: &mut TestAppContext) {
 #[gpui::test]
 fn a_long_commit_fits_main(cx: &mut TestAppContext) {
     row_fits(700., true, cx);
+}
+
+/// Lays the same graph out on two frames and keeps what each frame got.
+struct Twice {
+    graph: Rc<GitGraph>,
+    seen: Rc<RefCell<Vec<Rc<GitGraph>>>>,
+}
+
+impl Render for Twice {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let layout = super::layout_of("T-0002", &self.graph, window, cx);
+        self.seen.borrow_mut().push(layout.graph);
+        div()
+    }
+}
+
+#[gpui::test]
+fn the_layout_is_kept_by_pointer_between_frames(cx: &mut TestAppContext) {
+    test_views::init(cx);
+    let graph = Rc::new(GitGraph::default());
+    let seen = Rc::new(RefCell::new(Vec::new()));
+    let (_view, cx) = cx.add_window_view(|_, _| Twice {
+        graph: graph.clone(),
+        seen: seen.clone(),
+    });
+    cx.run_until_parked();
+    cx.update(|window, cx| window.draw(cx).clear(cx));
+    let seen = seen.borrow();
+    assert!(seen.len() >= 2, "drew {} times", seen.len());
+    // The kept layout holds the shown graph itself, not a copy of it.
+    assert!(seen.iter().all(|kept| Rc::ptr_eq(kept, &graph)));
 }

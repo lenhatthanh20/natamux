@@ -1,10 +1,19 @@
 //! Which tasks need the user, how many tasks each state has, and the search of the list (`isQuiet`,
 //! `needsMeTasks`, `countByState`, `filterTasks` in `packages/web/src/lib/tasks.ts`).
 
+use std::borrow::Borrow;
+
 use natamux_proto::tasks::task::{Task, TaskState};
 
+use super::task_changes::task_of;
 use super::task_rules::needs_me;
-use super::task_time::{next_age_change_ms, parse_iso_ms};
+use super::task_time::{age_change_after, parse_iso_ms};
+
+#[path = "task_filter.rs"]
+mod filter;
+pub use filter::filter_task_refs;
+#[cfg(test)]
+pub use filter::filter_tasks;
 
 /// Ten minutes: a long command can keep an agent silent for a while without a problem.
 pub const QUIET_AFTER_MS: i64 = 10 * 60 * 1000;
@@ -26,11 +35,21 @@ pub fn next_quiet_ms<'a>(tasks: impl IntoIterator<Item = &'a Task>, now_ms: i64)
         .min()
 }
 
+/// Only a running task that waits for no background work turns quiet.
+fn may_turn_quiet(task: &Task) -> bool {
+    task.state == TaskState::Running && task.background_since.is_none()
+}
+
 fn quiet_wait(task: &Task, now_ms: i64) -> Option<i64> {
-    if task.state != TaskState::Running || task.background_since.is_some() {
+    if !may_turn_quiet(task) {
         return None;
     }
-    let wait = parse_iso_ms(&task.updated_at)? + QUIET_AFTER_MS - now_ms;
+    quiet_wait_from(parse_iso_ms(&task.updated_at)?, now_ms)
+}
+
+/// The wait of a task that may turn quiet and was last updated at `at_ms`.
+fn quiet_wait_from(at_ms: i64, now_ms: i64) -> Option<i64> {
+    let wait = at_ms + QUIET_AFTER_MS - now_ms;
     (wait > 0).then_some(wait)
 }
 
@@ -43,9 +62,12 @@ pub fn next_row_change_ms<'a>(
     tasks
         .into_iter()
         .flat_map(|task| {
+            // Read once: the age label and the quiet mark both count from this time.
+            let at = parse_iso_ms(&task.updated_at);
+            let quiet = at.filter(|_| may_turn_quiet(task));
             [
-                next_age_change_ms(&task.updated_at, now_ms),
-                quiet_wait(task, now_ms),
+                at.and_then(|at| age_change_after(at, now_ms)),
+                quiet.and_then(|at| quiet_wait_from(at, now_ms)),
             ]
         })
         .flatten()
@@ -53,19 +75,27 @@ pub fn next_row_change_ms<'a>(
 }
 
 /// How many tasks `needs_me_tasks` gives, with no copy of them.
-pub fn needs_me_count(tasks: &[Task], now_ms: i64) -> usize {
+pub fn needs_me_count<T: Borrow<Task>>(tasks: &[T], now_ms: i64) -> usize {
     tasks
         .iter()
+        .map(task_of)
         .filter(|task| needs_me(task.state) || is_quiet(task, now_ms))
         .count()
 }
 
 /// Tasks that need the user: waiting on them, or running but quiet. The longest wait comes first.
+/// Only the tests still want the clones.
+#[cfg(test)]
 pub fn needs_me_tasks(tasks: &[Task], now_ms: i64) -> Vec<Task> {
-    let mut list: Vec<Task> = tasks
+    needs_me_refs(tasks, now_ms).into_iter().cloned().collect()
+}
+
+/// `needs_me_tasks` without cloning: the same tasks in the same order, borrowed.
+pub fn needs_me_refs<T: Borrow<Task>>(tasks: &[T], now_ms: i64) -> Vec<&Task> {
+    let mut list: Vec<&Task> = tasks
         .iter()
+        .map(task_of)
         .filter(|task| needs_me(task.state) || is_quiet(task, now_ms))
-        .cloned()
         .collect();
     list.sort_by(|a, b| {
         a.updated_at
@@ -76,7 +106,7 @@ pub fn needs_me_tasks(tasks: &[Task], now_ms: i64) -> Vec<Task> {
 }
 
 /// Every state with its count, zero for the empty ones, in the order of `TASK_STATES`.
-pub fn count_by_state(tasks: &[Task]) -> Vec<(TaskState, usize)> {
+pub fn count_by_state<'a>(tasks: impl IntoIterator<Item = &'a Task>) -> Vec<(TaskState, usize)> {
     let mut counts = [
         TaskState::Draft,
         TaskState::Ready,
@@ -96,40 +126,6 @@ pub fn count_by_state(tasks: &[Task]) -> Vec<(TaskState, usize)> {
         }
     }
     counts.to_vec()
-}
-
-/// The tasks in this state (all when None) whose id, title, agent, branch or labels have the
-/// search text in them, ignoring case.
-pub fn filter_tasks(tasks: &[Task], state_filter: Option<TaskState>, search: &str) -> Vec<Task> {
-    filter_task_refs(tasks, state_filter, search)
-        .into_iter()
-        .cloned()
-        .collect()
-}
-
-/// `filter_tasks` without cloning: the same tasks in the same order, borrowed.
-pub fn filter_task_refs<'a>(
-    tasks: &'a [Task],
-    state_filter: Option<TaskState>,
-    search: &str,
-) -> Vec<&'a Task> {
-    let needle = search.trim().to_lowercase();
-    tasks
-        .iter()
-        .filter(|task| {
-            if state_filter.is_some_and(|state| task.state != state) {
-                return false;
-            }
-            if needle.is_empty() {
-                return true;
-            }
-            let mut parts = vec![task.id.as_str(), task.title.as_str()];
-            parts.extend(task.agent.as_deref());
-            parts.extend(task.branch.as_deref());
-            parts.extend(task.labels.iter().map(String::as_str));
-            parts.join(" ").to_lowercase().contains(&needle)
-        })
-        .collect()
 }
 
 #[cfg(test)]
@@ -196,7 +192,7 @@ mod tests {
             needs_me_count(&tasks, now),
             needs_me_tasks(&tasks, now).len()
         );
-        assert_eq!(needs_me_count(&[], now), 0);
+        assert_eq!(needs_me_count::<Task>(&[], now), 0);
     }
 
     #[test]
@@ -364,6 +360,24 @@ mod tests {
         assert_eq!(order, ALL_STATES);
     }
 
+    #[test]
+    fn counts_borrowed_tasks_as_their_clones() {
+        let tasks = [
+            with("T-0001", TaskState::Running, ""),
+            with("T-0002", TaskState::Review, ""),
+            with("T-0012", TaskState::Running, ""),
+        ];
+        let borrowed = count_by_state(filter_task_refs(&tasks, None, "T-000"));
+        assert_eq!(
+            borrowed,
+            count_by_state(&filter_tasks(&tasks, None, "T-000"))
+        );
+        let running = borrowed
+            .iter()
+            .find(|(state, _)| *state == TaskState::Running);
+        assert_eq!(running, Some(&(TaskState::Running, 1)));
+    }
+
     fn filter_ids(state: Option<TaskState>, search: &str) -> Vec<String> {
         let tasks = [
             make(|t| {
@@ -471,5 +485,15 @@ mod tests {
         let old = with("T-3", TaskState::Done, "2026-09-01T09:00:00.000Z");
         assert_eq!(next_row_change_ms([&old], now), None);
         assert_eq!(next_row_change_ms(Vec::<Task>::new().iter(), now), None);
+        // A task that waits for background work never turns quiet: only its age changes. It
+        // is 9m 50s old.
+        let mut waits = with("T-4", TaskState::Running, "2026-10-08T08:59:50.000Z");
+        waits.background_since = Some("2026-10-08T09:00:00.000Z".into());
+        assert_eq!(next_row_change_ms([&waits], now), Some(10_000));
+        // A quiet task stays quiet, 30 minutes old; a time that does not read changes nothing.
+        let quiet = with("T-5", TaskState::Running, "2026-10-08T08:39:40.000Z");
+        assert_eq!(next_row_change_ms([&quiet], now), Some(60_000));
+        let bad = with("T-6", TaskState::Running, "soon");
+        assert_eq!(next_row_change_ms([&bad], now), None);
     }
 }

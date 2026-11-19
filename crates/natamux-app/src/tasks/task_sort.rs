@@ -1,12 +1,15 @@
 //! The order of the task table (`sortTasks`, `nextSort`, `STATE_ORDER` in `packages/web/src/lib/
 //! tasks.ts`).
 
+use std::borrow::Borrow;
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 
 use natamux_proto::agents::activity::TaskUsage;
 use natamux_proto::tasks::task::{Task, TaskState};
 use natamux_proto::workspaces::workspace::DiffStat;
+
+use super::task_changes::task_of;
 
 /// What needs the user comes first, finished work last. The default sort and the order of the
 /// filter chips.
@@ -62,12 +65,25 @@ pub fn state_rank(state: TaskState) -> i32 {
 
 /// "T-0042" -> 42, so T-10000 sorts after T-9999.
 pub fn task_number(id: &str) -> i64 {
-    let digits: String = id
+    let digits = id
         .trim_start_matches(|c: char| !c.is_ascii_digit())
         .chars()
-        .take_while(char::is_ascii_digit)
-        .collect();
-    digits.parse().unwrap_or(0)
+        .take_while(char::is_ascii_digit);
+    let mut number: i64 = 0;
+    for digit in digits {
+        let Some(value) = digit.to_digit(10) else {
+            return 0;
+        };
+        // A number too long for i64 is 0, as `parse` gave.
+        let Some(next) = number
+            .checked_mul(10)
+            .and_then(|shifted| shifted.checked_add(i64::from(value)))
+        else {
+            return 0;
+        };
+        number = next;
+    }
+    number
 }
 
 fn by_id(a: &Task, b: &Task) -> Ordering {
@@ -149,26 +165,33 @@ pub fn sort_tasks(
 }
 
 /// The same tasks in a stable order, borrowed. Ties fall back to the default order, so two rows
-/// never swap places just because a value is equal.
-pub fn sort_task_refs<'a>(
-    mut sorted: Vec<&'a Task>,
+/// never swap places just because a value is equal. The tasks are held by value or shared.
+pub fn sort_task_refs<'a, T: Borrow<Task>>(
+    mut sorted: Vec<&'a T>,
     sort: TaskSort,
     diff_stats: &BTreeMap<String, DiffStat>,
     usage: &BTreeMap<String, TaskUsage>,
-) -> Vec<&'a Task> {
+) -> Vec<&'a T> {
     let Some(column) = sort else {
-        sorted.sort_by(|a, b| by_default(a, b));
+        sorted.sort_by(|a, b| by_default(task_of(*a), task_of(*b)));
         return sorted;
     };
-    sorted.sort_by(|a, b| {
-        let left = sort_value(a, column.key, diff_stats, usage);
-        let right = sort_value(b, column.key, diff_stats, usage);
+    // The value is made once per task, not twice per compare.
+    let mut keyed: Vec<(Option<SortValue>, &'a T)> = sorted
+        .into_iter()
+        .map(|held| {
+            let value = sort_value(task_of(held), column.key, diff_stats, usage);
+            (value, held)
+        })
+        .collect();
+    keyed.sort_by(|(left, a), (right, b)| {
+        let (a, b) = (task_of(*a), task_of(*b));
         match (left, right) {
             (None, None) => by_default(a, b),
             (None, Some(_)) => Ordering::Greater,
             (Some(_), None) => Ordering::Less,
             (Some(left), Some(right)) => {
-                let order = compare_values(&left, &right);
+                let order = compare_values(left, right);
                 let order = if column.direction == SortDirection::Desc {
                     order.reverse()
                 } else {
@@ -178,7 +201,7 @@ pub fn sort_task_refs<'a>(
             }
         }
     });
-    sorted
+    keyed.into_iter().map(|(_, held)| held).collect()
 }
 
 /// A click on a column header: first ascending, then descending, then the default order again.
@@ -281,6 +304,31 @@ mod tests {
             .filter(|id| !["T-0004", "T-0005"].contains(&id.as_str()))
             .collect();
         assert_eq!(desc[2..], rest[..]);
+    }
+
+    #[test]
+    fn reads_the_task_number_like_a_parse_of_the_digits() {
+        let old = |id: &str| -> i64 {
+            let digits: String = id
+                .trim_start_matches(|c: char| !c.is_ascii_digit())
+                .chars()
+                .take_while(char::is_ascii_digit)
+                .collect();
+            digits.parse().unwrap_or(0)
+        };
+        for id in [
+            "T-0042",
+            "T-10000",
+            "T-",
+            "",
+            "42",
+            "T-7x9",
+            "T-99999999999999999999",
+            "T-9223372036854775807",
+            "T-9223372036854775808",
+        ] {
+            assert_eq!(task_number(id), old(id), "{id}");
+        }
     }
 
     #[test]

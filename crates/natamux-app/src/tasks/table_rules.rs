@@ -2,15 +2,25 @@
 //! `features/tasks/usage-format.ts`, `DiffSize.tsx`), what a task waits for (core `waitsFor`),
 //! the row menu of `TaskTable.tsx`, and the keys of a list (`lib/roving.ts`).
 
+use std::borrow::Borrow;
+
 use natamux_proto::tasks::task::{Task, TaskState};
 use natamux_proto::workspaces::workspace::DiffStat;
 
+use super::task_changes::task_of;
 use super::task_rules::{AgentAction, TaskAction, actions_for, agent_action};
+
+#[path = "table_waits.rs"]
+mod waits;
+pub use waits::{OpenSubtasks, open_subtasks, waits_for_in};
 
 /// The tasks this task waits for: the ones it depends on that are not done, and its open
 /// subtasks while no stage has started yet. A task that does not exist is not waited for.
-pub fn waits_for(task: &Task, tasks: &[Task]) -> Vec<String> {
-    let state_of = |id: &str| tasks.iter().find(|other| other.id == id).map(|t| t.state);
+pub fn waits_for<T: Borrow<Task>>(task: &Task, tasks: &[T]) -> Vec<String> {
+    let state_of = |id: &str| {
+        let held = tasks.iter().map(task_of).find(|other| other.id == id);
+        held.map(|other| other.state)
+    };
     let mut waits: Vec<String> = task
         .depends_on
         .iter()
@@ -21,6 +31,7 @@ pub fn waits_for(task: &Task, tasks: &[Task]) -> Vec<String> {
         waits.extend(
             tasks
                 .iter()
+                .map(task_of)
                 .filter(|other| {
                     other.parent_id.as_deref() == Some(task.id.as_str())
                         && !other.state.is_finished()
@@ -175,7 +186,7 @@ fn starts_agent(state: TaskState) -> bool {
 }
 
 /// The row menu of the table (`menuFor` in `TaskTable.tsx`).
-pub fn row_menu(task: &Task, tasks: &[Task]) -> Vec<RowItem> {
+pub fn row_menu<T: Borrow<Task>>(task: &Task, tasks: &[T]) -> Vec<RowItem> {
     let mut items = vec![RowItem::Open, RowItem::Details];
     if task.parent_id.is_none() {
         items.push(RowItem::AddSubtask);
@@ -407,7 +418,7 @@ mod tests {
         task.parent_id = Some("T-1".into());
         task.branch = Some("natamux/t-2".into());
         assert_eq!(
-            labels(&row_menu(&task, &[])),
+            labels(&row_menu::<Task>(&task, &[])),
             vec![
                 "Open",
                 "Details",
@@ -434,7 +445,7 @@ mod tests {
         // A running task's agent works, so the menu offers no start.
         let running = make("T-4", TaskState::Running);
         assert!(
-            !row_menu(&running, &[])
+            !row_menu::<Task>(&running, &[])
                 .iter()
                 .any(|item| matches!(item, RowItem::Agent { .. }))
         );

@@ -1,6 +1,18 @@
 use super::web::{WebAssets, clean_path};
 use hyper::Method;
+use hyper::body::Bytes;
 use hyper::header::{CACHE_CONTROL, CONTENT_TYPE};
+
+#[test]
+fn embedded_files_are_served_without_a_copy() {
+    static FILE: &[u8] = b"console.log('ready')";
+    let web = WebAssets::for_test(&[("assets/app.js", FILE)]);
+    let first = web.bytes_for("/assets/app.js").expect("embedded file");
+    let second = web.bytes_for("/assets/app.js").expect("embedded file");
+    assert_eq!(first.as_ptr(), FILE.as_ptr());
+    assert_eq!(second.as_ptr(), FILE.as_ptr());
+    assert_eq!(first, FILE);
+}
 
 #[test]
 fn refuses_paths_outside_the_web_root() {
@@ -76,7 +88,10 @@ fn external_web_dir_takes_precedence_over_embedded_files() {
     std::fs::create_dir_all(&root).expect("temp web dir");
     std::fs::write(root.join("index.html"), "external").expect("temp index");
     let web = WebAssets::for_test(&[("index.html", b"embedded")]).with_dir(root.clone());
-    assert_eq!(web.bytes_for("/index.html"), Some(b"external".to_vec()));
+    assert_eq!(
+        web.bytes_for("/index.html"),
+        Some(Bytes::from_static(b"external"))
+    );
     assert_eq!(web.bytes_for("/missing.js"), None);
     std::fs::remove_file(root.join("index.html")).expect("remove temp index");
     std::fs::remove_dir(root).expect("remove temp dir");

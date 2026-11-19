@@ -30,7 +30,7 @@ use serde_json::{Value, json};
 
 use crate::shared::event_bus::DaemonMessage;
 use crate::stages::errors::{StageError, StageResult};
-use crate::stages::run::{EventInput, StageRun, StageRunOptions, Work, key};
+use crate::stages::run::{EventInput, StageRun, StageRunOptions, Work, key, step_in};
 use crate::tasks::errors::TaskError;
 use crate::tasks::helpers::position_of;
 use crate::tasks::store::Applied;
@@ -427,8 +427,8 @@ impl StageRun {
         task: &Task,
         terminal: Option<&str>,
     ) -> StageResult<Option<(String, TaskState)>> {
-        let step = self.step_of(task)?;
         let steps = self.steps(task)?;
+        let step = step_in(task, &steps)?;
         let pinned = self.pinned(&task.id);
         let stage = stage_of_terminal(&steps, &step, terminal.unwrap_or(MAIN_TERMINAL), &pinned);
         Ok(stage.map(|stage| {
