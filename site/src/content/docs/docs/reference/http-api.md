@@ -32,7 +32,7 @@ The agent token of a task may call only:
 - every route under `/tasks/<its id>`, except `DELETE`;
 - `GET` routes under `/tasks/<id>` of its direct subtasks;
 - `GET /tasks`, `/jobs`, `/templates`, `/activity`, `/usage`, `/limits`, `/diffstats`, `/workspaces/preparing`, `/repos`, `/repos/:id/settings`, `/repos/:id/skills`, `/git/branches`, `/git/remote-branches` and `/events`;
-- `POST /tasks` with `parentId` set to its own task;
+- `POST /tasks` with `parentId` set to its own task. A `repo` other than the parent's answers 4xx: a subtask stays in its parent's project;
 - `POST /hooks/:agent`. The hook is for the token's task; the `X-Natamux-Task` header and the folder are not used;
 - `POST /limits/:agent`, which `natamux statusline` sends for Claude Code.
 
@@ -41,15 +41,18 @@ Everything else answers 403 `forbidden`. At most two requests with a large body 
 With the agent token:
 
 - `POST /tasks/:id/events` records `source: agent`, whatever `source` the request names.
-- Stage actions record `source: agent`.
+- Stage actions record `source: agent`. Every send-back by the agent counts for `maxSendBacks`, with or without a `terminal`.
 - These answer 403 `forbidden` and change nothing:
-  - `POST /tasks/:id/events` with `review.approved`, `stage.approved`, `stage.passed`, `stage.skipped` or `state.overridden`
+  - `POST /tasks/:id/events` with `review.approved`, `stage.approved`, `stage.passed`, `stage.skipped` or `state.overridden`, and with the events only the daemon sends: `stage.checked`, `stage.started`, `stage.reopened` and `pr.merged`
+  - `POST /tasks/:id/fan-out`
   - `POST /tasks/:id/stage` with `approve`, `skip` or `pass`. The one exception: the script of a command stage passes it with a one-time ticket in the `X-Natamux-Stage-Ticket` header
   - `PUT /tasks/:id/ci`, `PUT /tasks/:id/skip`, `PUT /tasks/:id/workflow`
   - `PUT /repos/:id/settings`
   - `GET /repos/:id/trust`, `POST /repos/:id/trust`
 
 To do these from a script, use the daemon's own token, not the one in a task terminal.
+
+`POST /tasks/:id/stage` with `report` for a stage that has a `command` answers 409 `conflict` and changes nothing: such a stage passes when its command passes.
 
 ## Main endpoints
 

@@ -34,13 +34,15 @@ Each task works in its own git worktree. Natamux never pushes, merges or deletes
 - The token travels in a header, never a cookie, so other websites cannot use your session. Terminals open with a one-time ticket that expires after 30 seconds. Only the legacy web dashboard sends `?token=` on `/events`.
 - The daemon checks the `Host` header against an allow-list (`127.0.0.1`, `localhost`, `::1`, plus `NATAMUX_ALLOWED_HOSTS`) and the `Origin` of WebSocket handshakes. A web page on another site cannot reach it, not even by DNS rebinding.
 - Do not run the daemon on a network address without TLS. Put a reverse proxy with TLS in front of it.
-- Task terminals get an [agent token](/docs/reference/http-api/#the-agent-token), not the daemon's token. It is per task and lives in memory only. An agent cannot approve, skip or pass a stage, change project settings or approve repo commands, and what it does is recorded as the agent's. The `natamux` command in a task terminal uses it too. This stops an agent that follows bad instructions, for example from a web page or an issue. It is not a sandbox: an agent runs as your user, so it can still read the daemon's token file.
+- Task terminals get an [agent token](/docs/reference/http-api/#the-agent-token), not the daemon's token. It is per task and lives in memory only. An agent cannot approve, skip or pass a stage, change project settings or approve repo commands, and what it does is recorded as the agent's. The `natamux` command in a task terminal uses it too. This stops an agent that follows bad instructions, for example from a web page or an issue. A subtask stays in its parent's project, and an agent cannot fan out a task, send the events only the daemon sends (`stage.checked`, `stage.started`, `stage.reopened`, `pr.merged`) or report a command stage done. Every send-back by an agent counts for `maxSendBacks`. It is not a sandbox: an agent runs as your user, so it can still read the daemon's token file.
 
 ## Repo trust
 
-- A repo can carry commands: stage checks, path conditions, command stages and `args` in `.natamux.json`, and the setup scripts `.natamux-setup` and `.natamux-setup.ps1`. They run with your rights.
-- Natamux runs none of them until you approve them for that repo, in the app dialog or with `natamux repo trust <repo> --approve <hash>`. A change to any of them needs a new approval. A repo with no commands needs none. Repos added before this check were approved once.
+- A repo can carry commands: stage checks, path conditions, command stages and `args` in `.natamux.json`, and the setup scripts `.natamux-setup` and `.natamux-setup.ps1`. They run with your rights. The agent config files in the project folder, such as `.claude/settings.json`, `.mcp.json`, `.codex/config.toml`, `.codex/hooks.json`, `.cursor/mcp.json` and `.gemini/settings.json`, are part of what you approve: they hold hooks and MCP servers that an agent runs. A setup script that is a link never runs.
+- Natamux runs none of them until you approve them for that repo, in the app dialog or with `natamux repo trust <repo> --approve <hash>`. A change to any of them needs a new approval. A repo with no commands, no setup script and no agent config file needs none. After an update, a project that has an agent config file asks for one new approval. Repos added before this check were approved once.
 - An untrusted repo gets no repo commands, no setup script, no stage `args`, no auto mode and no folder trust for agents.
+- **Overwrite** in the project settings asks first when the merged text has commands that came only from the changed file. Draft commit message starts no agent in an untrusted repo. `natamux statusline` runs only the `statusLine` command of your user-level settings.
+- Known limits: a file that Natamux itself writes into a workspace (for example `.claude/settings.local.json` or `.cursor/hooks.json`) is not part of the approval, also when a repo commits one. The check reads the project folder, not the branch of each task's worktree.
 - Approval does not limit what an agent does inside its worktree.
 
 ## Secrets on disk
@@ -61,11 +63,11 @@ Each task works in its own git worktree. Natamux never pushes, merges or deletes
 
 - Before it downloads an update, the app checks that signature, and that it was made for that release (`natamux <tag>`) and for a version newer than its own. A missing or wrong signature stops the update. The Linux `.deb` update checks the hash again as root before it installs. Then the app compares the SHA-256 of the download with `SHA256SUMS.txt`. On macOS it also checks the new app's signature and version before the swap.
 - If the signing key leaks, [SECURITY.md](https://github.com/lenhatthanh20/natamux/blob/main/SECURITY.md) has the plan: an advisory, a new key, and a manual reinstall for users. A second key kept offline is planned to avoid the reinstall.
-- Versions up to v0.1.23 do not check the signature, so update to a newer version. Until the app is signed with a certificate, a manual download is checked as in [Verify the download](/docs/getting-started/install/#verify-the-download).
+- Versions up to v0.1.23 do not check the signature, so update to a newer version. Until the app is signed with a Developer ID, a manual download is checked as in [Verify the download](/docs/getting-started/install/#verify-the-download).
 
 ## Hooks
 
-For each agent it starts, Natamux adds hook settings that call `natamux hook` or the daemon's local address, with the task id and the token from the terminal's environment. For Copilot, Cursor, OpenCode, Qwen Code and Droid, the hook file goes into the task's worktree and is kept out of git. For Codex, Natamux passes `--dangerously-bypass-hook-trust`. See [Agents and hooks](/docs/concepts/agents-and-hooks/).
+For each agent it starts, Natamux adds hook settings that call `natamux hook` or the daemon's local address, with the task id and the token from the terminal's environment. For most agents the hook file goes into the task's worktree and is kept out of git; the file of each agent is in the table of [Agents and hooks](/docs/concepts/agents-and-hooks/). For Codex, Natamux passes `--dangerously-bypass-hook-trust`. See [Agents and hooks](/docs/concepts/agents-and-hooks/).
 
 ## Folder trust
 
@@ -78,7 +80,7 @@ Natamux removes these entries when it removes the worktree. In an untrusted repo
 
 ## Permission prompts
 
-In an approved repo, by default Natamux starts each agent with a flag that skips most permission prompts. Only Claude Code (`--permission-mode auto`) checks each action. Codex (`--sandbox workspace-write --ask-for-approval never -c sandbox_workspace_write.network_access=true`, so it can reach the daemon), Gemini CLI (`--approval-mode yolo`), Copilot CLI (`--allow-all-tools`), Cursor CLI (`--force`) and the other built-in agents (for example `--yolo` for Kimi and Crush, `--dangerously-allow-all` for Amp) run commands without asking, in the task's worktree with your user rights. Set `"agents": { "permissionMode": "ask" }` in [`.natamux.json`](/docs/reference/configuration/#agents) to keep the prompts.
+In an approved repo, by default Natamux starts each agent with a flag that skips most permission prompts. Only Claude Code (`--permission-mode auto`) checks each action. The other built-in agents run commands without asking, in the task's worktree with your user rights. Set `"agents": { "permissionMode": "ask" }` in [`.natamux.json`](/docs/reference/configuration/#agents) to keep the prompts. The flag of every agent is listed in the [configuration reference](/docs/reference/configuration/#agents).
 
 ## The desktop app
 
@@ -86,9 +88,9 @@ In an approved repo, by default Natamux starts each agent with a flag that skips
 - The terminal ignores the clipboard escape code (OSC 52), and the Docs tab loads no images from the web or from files.
 - Before it sends its token to the daemon, the app checks a proof from `/health` that the daemon knows the token.
 
-## The desktop app is unsigned
+## The desktop app is not notarized
 
-The first releases are not signed with an Apple or Windows certificate. The macOS app has an ad hoc signature only. Download it only from the repository's Releases page.
+The apps are not signed with an Apple Developer ID or a Windows certificate, and the macOS app is not notarized, so macOS warns on first open. Release macOS apps are signed with a Natamux self-signed certificate; only dry runs are ad hoc. Windows and Linux builds are not signed. Download them only from the repository's Releases page.
 
 ## Report a vulnerability
 
