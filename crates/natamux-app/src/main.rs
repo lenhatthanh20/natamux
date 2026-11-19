@@ -93,6 +93,7 @@ mod bench {
 }
 mod components {
     pub mod agent_badge;
+    pub mod button_rows;
     pub mod button_style;
     pub mod chips;
     pub mod colors;
