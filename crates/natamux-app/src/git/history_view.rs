@@ -1,6 +1,6 @@
 //! The History tab (`GitGraph.tsx`, docs/ui-spec.md 4.19): what the task's branch has that its
-//! base has not, one 28 px row per commit with the lanes drawn at the left. The panel shows it
-//! narrow; its expand button shows it over main at full width (T-0231).
+//! base has not, one 28 px row per commit with the lanes drawn at the left. It shows over main at
+//! full width; the panel's copy was too narrow to read (T-0351).
 
 use std::rc::Rc;
 use std::sync::Arc;
@@ -35,15 +35,9 @@ pub struct HistoryView {
     pub error: Option<String>,
     /// Files that are not committed, which no commit below shows yet.
     pub uncommitted: usize,
-    /// Over main at full width; else the narrow panel's copy, with no author or hash column.
-    pub in_main: bool,
-    /// Main shows History: the panel's expand button is pressed.
-    pub main_shows: bool,
     pub on_show_changes: OnClick,
     pub on_refresh: OnClick,
-    /// The panel's expand button and main's Terminals button: main shows History, or the
-    /// terminals again.
-    pub on_toggle_main: OnClick,
+    pub on_terminals: OnClick,
 }
 
 fn element_id(prefix: &str, index: usize) -> SharedString {
@@ -68,39 +62,11 @@ fn alert(message: String, cx: &App) -> impl IntoElement {
         .child(Label::new(message).color(Color::Error))
 }
 
-/// The panel's expand button, pressed while main shows History; main's copy has Terminals.
-fn toggle_main(in_main: bool, main_shows: bool, on_toggle: OnClick) -> AnyElement {
-    let click = move |_: &ClickEvent, window: &mut Window, cx: &mut App| on_toggle(window, cx);
-    if in_main {
-        return terminals_button("history-terminals")
-            .on_click(click)
-            .into_any_element();
-    }
-    let (icon, tip) = if main_shows {
-        (IconName::Minimize, "Show terminals")
-    } else {
-        (IconName::Maximize, "Show in main")
-    };
-    IconButton::new("history-expand", icon)
-        .icon_size(IconSize::Small)
-        .toggle_state(main_shows)
-        .tooltip(Tooltip::text(tip))
-        .on_click(click)
-        .into_any_element()
-}
-
 fn summary(
     graph: &GitGraph,
     uncommitted: usize,
-    (on_show, on_refresh): (OnClick, OnClick),
-    (toggle, in_main): (AnyElement, bool),
+    (on_show, on_refresh, on_terminals): (OnClick, OnClick, OnClick),
 ) -> Div {
-    // The panel's expand button comes before Refresh; main's row ends with Terminals.
-    let (before, after) = if in_main {
-        (None, Some(toggle))
-    } else {
-        (Some(toggle), None)
-    };
     let link = (uncommitted > 0).then(|| {
         quiet_button("history-uncommitted", uncommitted_label(uncommitted))
             .label_size(LabelSize::Small)
@@ -122,14 +88,16 @@ fn summary(
         .items_center()
         .gap_2()
         .child(text)
-        .children(before)
         .child(
             IconButton::new("history-refresh", IconName::RotateCw)
                 .icon_size(IconSize::Small)
                 .tooltip(Tooltip::text("Refresh (Shift+R)"))
                 .on_click(move |_: &ClickEvent, window, cx| on_refresh(window, cx)),
         )
-        .children(after)
+        .child(
+            terminals_button("history-terminals")
+                .on_click(move |_: &ClickEvent, window, cx| on_terminals(window, cx)),
+        )
 }
 
 /// The lines are drawn on a canvas, the dot is a round div over them.
@@ -195,8 +163,7 @@ fn ref_chip(
     muted: bool,
     cx: &App,
 ) -> impl IntoElement {
-    // Shrinks with the row: in the narrow details panel (T-0183) a long name would cover the
-    // subject.
+    // Shrinks with the row: in a narrow main a long name would cover the subject.
     div()
         .id(id)
         .min_w_0()
@@ -236,7 +203,7 @@ fn commit_row(
     commit: &GraphCommit,
     lanes: &GraphRow,
     graph: &GitGraph,
-    (width, narrow, now): (f32, bool, i64),
+    (width, now): (f32, i64),
     cx: &App,
 ) -> AnyElement {
     let head = is_head(graph, index, commit);
@@ -272,18 +239,13 @@ fn commit_row(
         .id(element_id("history-subject", index))
         .debug_selector(|| format!("history-subject-{index}"))
         .min_w_0()
-        .when(!narrow, |cell| {
-            cell.tooltip(Tooltip::text(commit.subject.clone()))
-        })
+        .tooltip(Tooltip::text(commit.subject.clone()))
         .child(subject);
+    let author = Label::new(commit.author.clone())
+        .size(LabelSize::Small)
+        .color(Color::Muted);
     h_flex()
         .id(element_id("history-row", index))
-        .when(narrow, |row| {
-            row.tooltip(Tooltip::text(format!(
-                "{}\n\n{}",
-                commit.subject, commit.hash
-            )))
-        })
         .flex_none()
         // uniform_list lays a row out on its own: with no width it takes its content's width, so
         // nothing truncates and the list cuts the end off (T-0231).
@@ -301,20 +263,14 @@ fn commit_row(
                 .children(chips)
                 .child(subject),
         )
-        .when(!narrow, |this| {
-            let author = Label::new(commit.author.clone())
-                .size(LabelSize::Small)
-                .color(Color::Muted);
-            this.child(div().flex_none().max_w(px(160.)).child(author.truncate()))
-        })
-        // The narrow panel keeps the subject: the hash is in the row's tooltip there.
-        .when(!narrow, |this| this.child(hash_cell(index, commit, cx)))
+        .child(div().flex_none().max_w(px(160.)).child(author.truncate()))
+        .child(hash_cell(index, commit, cx))
         .child(
             h_flex()
                 .id(element_id("history-age", index))
                 .debug_selector(|| format!("history-age-{index}"))
                 .flex_none()
-                .w(px(if narrow { 40. } else { 80. }))
+                .w(px(80.))
                 .justify_end()
                 .tooltip(Tooltip::text(format_exact(&commit.date, OFFSET_MINUTES)))
                 .child(Label::new(age).color(Color::Muted).single_line()),
@@ -354,7 +310,6 @@ fn layout_of(id: &str, graph: &Rc<GitGraph>, window: &mut Window, cx: &mut App) 
 fn commit_list(
     id: &str,
     graph: &Rc<GitGraph>,
-    narrow: bool,
     window: &mut Window,
     cx: &mut App,
 ) -> impl IntoElement {
@@ -365,7 +320,7 @@ fn commit_list(
         SharedString::from(format!("{id}-commits")),
         count,
         move |range, _, cx| {
-            let facts = (lanes, narrow, now_ms());
+            let facts = (lanes, now_ms());
             let graph = &layout.graph;
             range
                 .map(|index| {
@@ -406,15 +361,13 @@ impl RenderOnce for HistoryView {
             );
             return frame.child(loading).into_any_element();
         };
-        let toggle = toggle_main(self.in_main, self.main_shows, self.on_toggle_main);
         frame
             .child(summary(
                 &graph,
                 self.uncommitted,
-                (self.on_show_changes, self.on_refresh),
-                (toggle, self.in_main),
+                (self.on_show_changes, self.on_refresh, self.on_terminals),
             ))
-            .child(commit_list(&self.id, &graph, !self.in_main, window, cx))
+            .child(commit_list(&self.id, &graph, window, cx))
             .into_any_element()
     }
 }

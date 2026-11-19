@@ -1,8 +1,8 @@
 //! The details dock (docs/ui-spec.md 3.2 and 4.27, `features/tasks/TaskDetail.tsx`): a 32 px
 //! header with the view's name, the task id and stage, then the "..." menu and Close; the view;
 //! the edit form over the views; "Select a task" while there is no task. Since T-0183 the views
-//! are picked on the rail (`details_rail.rs`), and Changes, History and Docs are views here: the
-//! open workspace draws them, and the picked file of Changes or Docs covers main. It keeps what
+//! are picked on the rail (`details_rail.rs`), and Changes and Docs are views here: the open
+//! workspace draws them (History covers main, T-0351), and the picked file of Changes or Docs covers main. It keeps what
 //! it read for the task it shows, and runs the clicks of the views.
 
 use std::collections::BTreeSet;
@@ -359,15 +359,11 @@ impl Render for DetailsPanel {
         if tree.is_none() {
             self.tree_shown.hide();
         }
-        // Changes, History and Docs scroll by themselves too; the open workspace draws them.
+        // Changes and Docs scroll by themselves too; the open workspace draws them.
         let workspace_view = match (&self.edit, view) {
             (None, DetailsView::Changes) => Some(
                 self.workspace
                     .update(cx, |workspace, cx| workspace.changes_panel(window, cx)),
-            ),
-            (None, DetailsView::History) => Some(
-                self.workspace
-                    .update(cx, |workspace, cx| workspace.history_panel(cx)),
             ),
             (None, DetailsView::Docs) => Some(
                 self.workspace

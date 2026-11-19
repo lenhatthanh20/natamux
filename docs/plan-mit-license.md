@@ -1415,7 +1415,7 @@ S6.2 Own diff model and view
 - Tests: T-DIFF-1, T-MOUSE-1 (diff), T-SB-1 (diff case).
 - Tag: `[ci: shots]`, then `natamux-ci/perf-mit-after` 3 times.
 - Proof:
-  - exact shots: `workspace-changes-*`, `changes-over-main`, `image-diff`, `rollback`, `workspace-history`, `history-over-main`, `changes-diff-*`;
+  - exact shots: `workspace-changes-*`, `changes-over-main`, `image-diff`, `rollback`, `workspace-history`, `changes-diff-*`;
   - `diff_open_10000` and `diff_click_p95_ms` within the 7.3 rule against the before runs (S1.4).
 - Risks: spacers, comment blocks, scroll sync, gaps; selection feel.
 

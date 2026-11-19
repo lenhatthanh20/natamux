@@ -8,7 +8,9 @@ use ui::prelude::*;
 use super::Dashboard;
 use crate::app::dock_badge::ask_for_badges;
 use crate::app::notify_rules::turned_on;
-use crate::app::tab_rules::{RailClick, main_after_view, rail_click, shown_details_view};
+use crate::app::tab_rules::{
+    RailClick, WorkspaceTab, main_after_view, rail_click, shown_details_view,
+};
 use crate::app::view_rules::{DetailsView, details_view_for};
 
 /// What a key or a command asks the panel to do once it shows the task.
@@ -93,20 +95,34 @@ impl Dashboard {
     }
 
     /// Keys 2 to 4 and the commands of a view: the panel opens on `view`; Changes and Docs also
-    /// cover the terminals in main (`main_after_view`).
+    /// cover the terminals in main (`main_after_view`). History covers main at full width and
+    /// closes the panel, which keeps its view: at 1024 px the docked panel leaves main 384 px,
+    /// too narrow for the graph (T-0351).
     pub fn show_view(&mut self, view: DetailsView, cx: &mut Context<Self>) {
-        self.set_details_view(view, cx);
-        self.set_details_open(true, cx);
+        if view == DetailsView::History {
+            self.set_details_open(false, cx);
+        } else {
+            self.set_details_view(view, cx);
+            self.set_details_open(true, cx);
+        }
         let main = main_after_view(view, self.workspace_tab);
         if main != self.workspace_tab {
             self.pick_tab(main, cx);
         }
     }
 
-    /// A click on a rail icon (`rail_click`): the picked view of an open panel closes it.
+    /// A click on a rail icon (`rail_click`): the picked view of an open panel closes it, and
+    /// History over main shows the terminals again.
     pub fn rail_pick(&mut self, view: DetailsView, cx: &mut Context<Self>) {
-        match rail_click(view, self.details_view_now(), self.details_shown()) {
+        let main_history = self.shown_workspace_tab() == WorkspaceTab::History;
+        match rail_click(
+            view,
+            self.details_view_now(),
+            self.details_shown(),
+            main_history,
+        ) {
             RailClick::Close => self.set_details_open(false, cx),
+            RailClick::Terminals => self.pick_tab(WorkspaceTab::Terminal, cx),
             RailClick::Show(view) => self.show_view(view, cx),
         }
     }

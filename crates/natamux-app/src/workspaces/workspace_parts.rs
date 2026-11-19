@@ -216,41 +216,19 @@ impl WorkspaceView {
         .render()
     }
 
-    /// The graph of the task against its base branch: narrow in the panel (T-0183), or over main
-    /// at full width (T-0231).
-    pub(super) fn history(
-        &self,
-        task_id: &str,
-        shown: &Shown,
-        in_main: bool,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
+    /// The graph of the task against its base branch, over main at full width (T-0351).
+    fn history(&self, task_id: &str, shown: &Shown, cx: &mut Context<Self>) -> AnyElement {
         let this = cx.weak_entity();
         let dashboard = self.dashboard.clone();
-        let main_shows = dashboard.read(cx).shown_workspace_tab() == WorkspaceTab::History;
-        let toggle = dashboard.clone();
+        let terminals = dashboard.clone();
         HistoryView {
-            // Both copies draw in the same frame: their lists and layouts need their own ids.
-            id: if in_main {
-                format!("{task_id}-main")
-            } else {
-                task_id.to_owned()
-            },
+            id: task_id.to_owned(),
             graph: shown.graph.clone(),
             error: shown.graph_error.clone(),
             uncommitted: shown.changes.as_ref().map(Vec::len).unwrap_or(0),
-            in_main,
-            main_shows,
-            on_toggle_main: Rc::new(move |_: &mut Window, cx: &mut App| {
-                toggle.update(cx, |dashboard, cx| {
-                    if dashboard.shown_workspace_tab() == WorkspaceTab::History {
-                        dashboard.pick_tab(WorkspaceTab::Terminal, cx);
-                    } else {
-                        dashboard.pick_tab(WorkspaceTab::History, cx);
-                        // The docked panel leaves main 384 px at 1024: too narrow for the
-                        // author and hash columns. The rail opens it again.
-                        dashboard.set_details_open(false, cx);
-                    }
+            on_terminals: Rc::new(move |_: &mut Window, cx: &mut App| {
+                terminals.update(cx, |dashboard, cx| {
+                    dashboard.pick_tab(WorkspaceTab::Terminal, cx)
                 })
             }),
             on_show_changes: Rc::new(move |_: &mut Window, cx: &mut App| {
@@ -313,7 +291,7 @@ impl WorkspaceView {
                 .clone()
                 .cached(StyleRefinement::default().size_full())
                 .into_any_element(),
-            (WorkspaceTab::History, _) => self.history(task_id, shown, true, cx),
+            (WorkspaceTab::History, _) => self.history(task_id, shown, cx),
             (WorkspaceTab::Docs, _) => self.docs_body(task_id, window, cx),
             (WorkspaceTab::Editor, _) => self.editor_body(task_id, window, cx),
             (_, Some((task, facts, actions))) if !panes_shown => WrapUp {
