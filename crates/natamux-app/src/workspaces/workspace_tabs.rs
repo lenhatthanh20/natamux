@@ -7,8 +7,10 @@ use gpui::Entity;
 use ui::prelude::*;
 
 use super::WorkspaceView;
+use crate::components::button_rows::shared_row;
 use crate::workspaces::docs_tab::DocsTab;
 use crate::workspaces::finished_banner::OnClick;
+use crate::workspaces::workspace_header::GIT_BUTTON_MIN;
 
 impl WorkspaceView {
     /// The panel's Changes view: the files and the commit box, then the git buttons under it.
@@ -25,13 +27,11 @@ impl WorkspaceView {
             .changes
             .update(cx, |changes, cx| changes.render_panel(window, cx));
         let row = (!buttons.is_empty()).then(|| {
-            h_flex()
+            // The commit box's side padding and gap: the rows share their edges.
+            shared_row(buttons, GIT_BUTTON_MIN)
                 .flex_none()
-                .flex_wrap()
-                .gap_1()
                 .px_2()
                 .pb_2()
-                .children(buttons)
         });
         v_flex()
             .size_full()
