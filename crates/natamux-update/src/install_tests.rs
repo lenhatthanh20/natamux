@@ -1,5 +1,6 @@
 use super::check::InstallKind;
-use super::install::{InstallInput, install_kind, mac_bundle};
+use super::install::{InstallInput, appimage_for, install_kind, mac_bundle};
+use std::path::Path;
 
 #[test]
 fn mac_install_requires_a_writable_app_bundle() {
@@ -202,4 +203,21 @@ mod deb_script {
             (Some(super::super::install::HASH_MISMATCH_EXIT), false)
         );
     }
+}
+
+#[test]
+fn appimage_counts_only_when_the_exe_is_under_appdir() {
+    let exe = Path::new("/tmp/.mount_abc/usr/bin/natamux-app");
+    let image = Some("/home/a/Natamux.AppImage");
+    assert_eq!(
+        appimage_for(exe, image, Some("/tmp/.mount_abc")),
+        Some("/home/a/Natamux.AppImage".to_string())
+    );
+    // A variable left over from another AppImage.
+    assert_eq!(appimage_for(exe, image, Some("/tmp/.mount_other")), None);
+    let deb = Path::new("/opt/Natamux/natamux-app");
+    assert_eq!(appimage_for(deb, image, Some("/tmp/.mount_abc")), None);
+    assert_eq!(appimage_for(exe, image, Some("")), None);
+    assert_eq!(appimage_for(exe, image, None), None);
+    assert_eq!(appimage_for(exe, None, Some("/tmp/.mount_abc")), None);
 }
