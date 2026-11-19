@@ -31,5 +31,11 @@ check "deploy job runs no repo or package code" \
 check "deploy job waits for build, skips pull requests and runs only on main" \
   "job deploy | grep -q 'needs: build' && job deploy | grep -q \"if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'\""
 
+# The repo root has no package.json, so pnpm/action-setup reads the pnpm version from site/.
+check "site/package.json pins pnpm" \
+  "grep -qE '^  \"packageManager\": \"pnpm@[0-9]+\\.[0-9]+\\.[0-9]+\",\$' site/package.json"
+check "pnpm/action-setup reads site/package.json" \
+  "job build | grep -A2 'pnpm/action-setup@' | grep -q 'package_json_file: site/package.json'"
+
 [ "$fails" = 0 ] && echo "all site deploy checks passed" || echo "$fails site deploy checks failed"
 exit "$fails"
