@@ -520,9 +520,11 @@ impl DiffView {
                     view.hover(index, event.position, window, cx)
                 }),
             )
-            .on_hover(cx.listener(move |view, hovered: &bool, _, cx| {
+            .on_hover(cx.listener(move |view, hovered: &bool, window, cx| {
+                // The change's buttons block the mouse, so the side is not hovered over them:
+                // clearing would hide them, show them again, and flicker (T-0345).
                 if !*hovered {
-                    view.set_hovered(index, None, cx);
+                    view.hover(index, window.mouse_position(), window, cx);
                 }
             }))
             .child(side.text_box())
