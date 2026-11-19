@@ -20,6 +20,14 @@ pub fn mac_bundle(executable: &str) -> Option<&str> {
     executable.get(..at + ".app".len())
 }
 
+/// The AppImage file the running program came from. `APPIMAGE` counts only when the exe is under
+/// a non-empty `APPDIR`: a variable inherited from another AppImage names a file that is not ours.
+pub fn appimage_for(exe: &Path, appimage: Option<&str>, appdir: Option<&str>) -> Option<String> {
+    let appdir = appdir.filter(|dir| !dir.is_empty())?;
+    let appimage = appimage.filter(|path| !path.is_empty())?;
+    exe.starts_with(appdir).then(|| appimage.to_string())
+}
+
 pub fn install_kind(input: InstallInput<'_>) -> InstallKind {
     match input.platform {
         "macos" => match mac_bundle(input.executable) {

@@ -59,6 +59,19 @@ fn shell_field_label(field: ShellKind) -> &'static str {
     }
 }
 
+fn command_line(field: &ShellField) -> String {
+    let shown = field
+        .name
+        .clone()
+        .unwrap_or_else(|| stage_name_of_id(&field.id));
+    format!(
+        "{shown} ({}) \u{b7} {}: {}",
+        field.id,
+        shell_field_label(field.field),
+        field.value
+    )
+}
+
 /// The import question. A file with commands lists each one in full, since they run on this
 /// computer once a task reaches the stage. `None` when there is nothing to ask.
 pub fn import_question(name: &str, dirty: bool, fields: &[ShellField]) -> Option<String> {
@@ -67,21 +80,7 @@ pub fn import_question(name: &str, dirty: bool, fields: &[ShellField]) -> Option
     if fields.is_empty() {
         return dirty.then(|| format!("{replace} {later}"));
     }
-    let list: Vec<String> = fields
-        .iter()
-        .map(|field| {
-            let shown = field
-                .name
-                .clone()
-                .unwrap_or_else(|| stage_name_of_id(&field.id));
-            format!(
-                "{shown} ({}) \u{b7} {}: {}",
-                field.id,
-                shell_field_label(field.field),
-                field.value
-            )
-        })
-        .collect();
+    let list: Vec<String> = fields.iter().map(command_line).collect();
     let intro = if dirty {
         replace
     } else {
@@ -91,6 +90,30 @@ pub fn import_question(name: &str, dirty: bool, fields: &[ShellField]) -> Option
         "{intro} It has commands that run in a shell on this computer:\n\n{}\n\n{later}",
         list.join("\n")
     ))
+}
+
+/// The commands in `merged` that `draft` does not hold, by stage or path, field and text. A
+/// command the person has in the draft (even edited) is not new.
+pub fn commands_only_in(draft: &[ShellField], merged: &[ShellField]) -> Vec<ShellField> {
+    merged
+        .iter()
+        .filter(|field| !draft.iter().any(|held| same_command(held, field)))
+        .cloned()
+        .collect()
+}
+
+fn same_command(a: &ShellField, b: &ShellField) -> bool {
+    a.id == b.id && a.field == b.field && a.value == b.value
+}
+
+/// The Overwrite question: commands of the changed file that the person never saw.
+pub fn overwrite_question(fields: &[ShellField]) -> String {
+    let list: Vec<String> = fields.iter().map(command_line).collect();
+    format!(
+        "The file on disk has commands you did not see here. They run in a shell on this \
+         computer once a task reaches the stage:\n\n{}\n\nOverwrite and keep them?",
+        list.join("\n")
+    )
 }
 
 pub fn count_label(count: usize, word: &str) -> String {

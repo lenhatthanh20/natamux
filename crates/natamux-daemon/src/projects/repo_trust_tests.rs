@@ -273,3 +273,98 @@ fn an_unknown_project_is_not_trusted() {
     let s = setup();
     assert!(!s.repos.is_trusted(Some("missing")));
 }
+
+#[test]
+fn a_repo_with_only_an_agent_config_file_is_trusted_only_after_its_approval() {
+    let s = setup();
+    create_dir_all(s.folder().join(".codex")).unwrap();
+    write(s.folder().join(".codex/config.toml"), "[mcp_servers.x]\n").unwrap();
+
+    let shown = s.view();
+    assert!(!shown.trusted);
+    assert!(!s.repos.is_trusted(None));
+    assert_eq!(
+        shown.agent_files,
+        [SetupScript {
+            file: ".codex/config.toml".into(),
+            text: "[mcp_servers.x]\n".into(),
+        }]
+    );
+
+    s.repos.approve("default", &shown.hash).unwrap();
+    assert!(s.repos.is_trusted(None));
+}
+
+#[test]
+fn a_changed_byte_in_an_agent_config_file_needs_a_new_approval() {
+    let s = setup();
+    write(s.folder().join(".mcp.json"), "{}\n").unwrap();
+    s.repos.approve("default", &s.view().hash).unwrap();
+    assert!(s.repos.is_trusted(None));
+
+    write(s.folder().join(".mcp.json"), "{ }\n").unwrap();
+
+    assert!(!s.repos.is_trusted(None));
+    // The agent files come from the project folder, also for the check of a worktree.
+    let worktree = s.base.path().join("worktree");
+    create_dir_all(&worktree).unwrap();
+    assert!(!s.repos.is_trusted_in(None, &worktree));
+}
+
+#[test]
+fn the_agent_config_files_natamux_writes_itself_need_no_approval() {
+    let s = setup();
+    for agent in ["codex", "gemini"] {
+        let file = workspace_file(agent, WorkspaceHooks::default()).unwrap();
+        let path = s.folder().join(file.path);
+        create_dir_all(path.parent().unwrap()).unwrap();
+        write(path, file.content).unwrap();
+    }
+    create_dir_all(s.folder().join(".cursor")).unwrap();
+    write(s.folder().join(".cursor/hooks.json"), "{}\n").unwrap();
+
+    assert!(s.view().trusted);
+    assert!(s.view().agent_files.is_empty());
+}
+
+#[test]
+fn a_settings_save_does_not_approve_an_unseen_agent_config_file() {
+    let s = setup();
+    let body: Value = serde_json::from_str(CHECKED).unwrap();
+    s.settings(CHECKED);
+    write(s.folder().join(".mcp.json"), "{}\n").unwrap();
+
+    s.repos.approve_saved("default", &body).unwrap();
+
+    assert!(!s.repos.is_trusted(None));
+}
+
+// Approvals stored before agent files counted must stay valid for a repo without them.
+#[test]
+fn the_hash_of_a_repo_without_agent_files_is_the_same_as_before() {
+    let commands = [RepoCommand {
+        place: "Stage test: check".into(),
+        text: "pnpm test".into(),
+    }];
+    let setup = [(SETUP_SCRIPT.to_string(), b"make\n".to_vec())];
+    // The hash as it was before agent files joined it.
+    let mut hasher = Sha256::new();
+    feed(&mut hasher, b"commands");
+    for command in &commands {
+        feed(&mut hasher, command.place.as_bytes());
+        feed(&mut hasher, command.text.as_bytes());
+    }
+    feed(&mut hasher, b"setup");
+    feed(&mut hasher, files_hash(&setup).as_bytes());
+
+    assert_eq!(hash_of(&commands, &setup, &[]), hex(hasher));
+    let agents = [(".mcp.json".to_string(), b"{}".to_vec())];
+    assert_ne!(hash_of(&commands, &setup, &agents), hash_of(&commands, &setup, &[]));
+}
+
+#[test]
+fn reads_an_approval_stored_before_agent_files_counted() {
+    let text = r#"{"path":"/p","hash":"ab","setup":"cd"}"#;
+    let approval: Approval = serde_json::from_str(text).unwrap();
+    assert_eq!(approval.agents, "");
+}

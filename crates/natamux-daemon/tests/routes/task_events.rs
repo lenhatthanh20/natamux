@@ -1,7 +1,7 @@
 //! The `task events` group and the gate-event cases of `the agent token of the task shells`.
 
 use hyper::Method;
-use natamux_core::events::schema::GATE_EVENT_TYPES;
+use natamux_core::events::schema::{DAEMON_ONLY_EVENT_TYPES, GATE_EVENT_TYPES};
 use serde_json::{Value, json};
 
 use crate::server::{TOKEN, TestDaemon, bare, eventually};
@@ -114,11 +114,8 @@ async fn checks_the_conditions_of_a_branch_before_any_event_of_a_person_or_an_ag
         )
         .await;
     assert_eq!(saved, 200, "{body}");
-    let agent = d.agent_token("T-0002");
-    for (n, (token, source)) in [(TOKEN, "human"), (agent.as_str(), "agent")]
-        .into_iter()
-        .enumerate()
-    {
+    // Only the daemon sends `stage.checked` (the agent token gets 403), so both go with its token.
+    for (n, source) in ["human", "agent"].into_iter().enumerate() {
         let created = d
             .send(
                 Method::POST,
@@ -136,9 +133,9 @@ async fn checks_the_conditions_of_a_branch_before_any_event_of_a_person_or_an_ag
 
         let (status, applied) = post(
             &d,
-            token,
+            TOKEN,
             &id,
-            json!({ "source": "human", "type": "stage.checked" }),
+            json!({ "source": source, "type": "stage.checked" }),
         )
         .await;
 
@@ -278,6 +275,29 @@ async fn the_agent_token_may_not_send_a_gate_event() {
         assert_eq!(status, 403, "{kind}");
         assert_eq!(body["error"], "forbidden", "{kind}");
         assert_eq!(logged(&d).await, before, "{kind}");
+    }
+}
+
+// Security T-0346 (F-03, F-04, F-05): a raw `stage.checked` passed an auto gate with no check,
+// `pr.merged` ended the task, `stage.reopened` skipped `maxSendBacks`.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_agent_token_may_not_send_a_daemon_only_event_and_the_daemon_token_may() {
+    for kind in DAEMON_ONLY_EVENT_TYPES {
+        let d = task().await;
+        let before = logged(&d).await;
+        let body = json!({ "source": "system", "type": kind, "payload": { "stage": "implement" } });
+        let (status, answer) = post(&d, &d.agent_token("T-0001"), "T-0001", body.clone()).await;
+        assert_eq!(status, 403, "{kind}");
+        assert_eq!(answer["error"], "forbidden", "{kind}");
+        assert_eq!(logged(&d).await, before, "{kind}");
+
+        let (status, answer) = post(&d, TOKEN, "T-0001", body).await;
+        assert_eq!(status, 200, "{kind}: {answer}");
+        assert_eq!(
+            logged(&d).await.last(),
+            Some(&entry(kind, "system")),
+            "{kind}"
+        );
     }
 }
 

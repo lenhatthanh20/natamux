@@ -37,6 +37,9 @@ pub struct RepoTrustView {
     /// `.natamux-setup` and `.natamux-setup.ps1`, the ones that exist.
     #[serde(default)]
     pub setup: Vec<SetupScript>,
+    /// Agent config files of the project folder (hooks, MCP servers), the ones that exist.
+    #[serde(default, rename = "agentFiles")]
+    pub agent_files: Vec<SetupScript>,
 }
 
 /// The body of `POST /repos/:id/trust`.
@@ -61,12 +64,23 @@ mod tests {
                 text: "pnpm test".into(),
             }],
             setup: Vec::new(),
+            agent_files: vec![SetupScript {
+                file: ".mcp.json".into(),
+                text: "{}".into(),
+            }],
         };
         let text = serde_json::to_string(&view).unwrap();
         assert_eq!(
             text,
-            r#"{"trusted":false,"hash":"ab","commands":[{"where":"Stage test: check","text":"pnpm test"}],"setup":[]}"#
+            r#"{"trusted":false,"hash":"ab","commands":[{"where":"Stage test: check","text":"pnpm test"}],"setup":[],"agentFiles":[{"file":".mcp.json","text":"{}"}]}"#
         );
         assert_eq!(serde_json::from_str::<RepoTrustView>(&text).unwrap(), view);
+    }
+
+    #[test]
+    fn reads_a_view_without_agent_files() {
+        let text = r#"{"trusted":true,"hash":"ab","commands":[],"setup":[]}"#;
+        let view: RepoTrustView = serde_json::from_str(text).unwrap();
+        assert!(view.agent_files.is_empty());
     }
 }

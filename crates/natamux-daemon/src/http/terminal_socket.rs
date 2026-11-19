@@ -2,6 +2,7 @@
 //! control messages are JSON text, see `natamux_proto::terminals::messages`.
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use async_tungstenite::tokio::TokioAdapter;
 use async_tungstenite::tungstenite::Message;
@@ -25,6 +26,7 @@ use super::edge_rules;
 use super::errors::{Answer, not_found};
 use super::routes::terminals::task_id_issues;
 use super::server::AppState;
+use crate::terminals::limits::CLIENT_HIGH_WATER;
 use crate::terminals::service::AttachOptions;
 use crate::terminals::shells::Detach;
 use crate::terminals::types::{ClientRef, Frame, Size, TerminalClient, TerminalError};
@@ -36,14 +38,49 @@ type SocketStream = WebSocketReceiver<Io>;
 
 /// What the writer of a socket does next.
 enum Out {
-    Frame(Frame),
+    /// The frame and the bytes it counts in the backlog.
+    Frame(Frame, usize),
     Close(Option<(u16, &'static str)>),
     /// Drops the connection with no close frame: a silent peer may never answer one.
     Terminate,
 }
 
+/// A client that never reads may queue this much, then it is dropped. Acks cannot raise it: an
+/// ack only moves the resend point, the queue is what the socket has not taken yet.
+const MAX_QUEUED_BYTES: usize = 4 * CLIENT_HIGH_WATER as usize;
+
+/// The bytes queued for one socket and not yet written.
+#[derive(Default)]
+struct Backlog {
+    bytes: AtomicUsize,
+    over: AtomicBool,
+}
+
+impl Backlog {
+    /// False once the queue is over the cap, for this frame and every later one.
+    fn add(&self, size: usize) -> bool {
+        if self.over.load(Ordering::Relaxed) {
+            return false;
+        }
+        if self.bytes.fetch_add(size, Ordering::Relaxed) + size > MAX_QUEUED_BYTES {
+            self.over.store(true, Ordering::Relaxed);
+            return false;
+        }
+        true
+    }
+
+    fn written(&self, size: usize) {
+        self.bytes.fetch_sub(size, Ordering::Relaxed);
+    }
+
+    fn is_over(&self) -> bool {
+        self.over.load(Ordering::Relaxed)
+    }
+}
+
 struct SocketClient {
     out: UnboundedSender<Out>,
+    backlog: Arc<Backlog>,
 }
 
 impl TerminalClient for SocketClient {
@@ -52,7 +89,15 @@ impl TerminalClient for SocketClient {
             frame,
             Frame::Message(ServerMessage::Exit { .. } | ServerMessage::Paused { .. })
         );
-        let _ = self.out.send(Out::Frame(frame));
+        let size = match &frame {
+            Frame::Bytes(bytes) => bytes.len(),
+            Frame::Message(message) => message.to_json().len(),
+        };
+        if !self.backlog.add(size) {
+            let _ = self.out.send(Out::Terminate);
+            return;
+        }
+        let _ = self.out.send(Out::Frame(frame, size));
         if exit {
             let _ = self.out.send(Out::Close(None));
         }
@@ -98,21 +143,32 @@ pub fn upgrade(
 async fn run(socket: Socket, state: Arc<AppState>, id: String, query: String) {
     let (sink, mut stream) = socket.split();
     let (out, outbox) = unbounded_channel::<Out>();
-    let writer = tokio::spawn(write_frames(sink, outbox));
-    if let Some((detach, client, terminal)) = open(&state, &id, &query, &out).await {
-        read_messages(&mut stream, &state, &id, &terminal, &client, &out).await;
+    let backlog = Arc::new(Backlog::default());
+    let writer = tokio::spawn(write_frames(sink, outbox, Arc::clone(&backlog)));
+    if let Some((detach, client, terminal)) = open(&state, &id, &query, &out, &backlog).await {
+        read_messages(&mut stream, &state, &id, &terminal, &client, &out, &backlog).await;
         tokio::task::spawn_blocking(move || detach.detach());
     }
     drop(out);
+    // A writer stuck on a peer that never reads would never see the queued Terminate.
+    if backlog.is_over() {
+        writer.abort();
+    }
     let _ = writer.await;
 }
 
 /// Sends what the shell and the socket code queue, in order, until a close or a drop.
-async fn write_frames(mut sink: SocketSink, mut outbox: UnboundedReceiver<Out>) {
+async fn write_frames(
+    mut sink: SocketSink,
+    mut outbox: UnboundedReceiver<Out>,
+    backlog: Arc<Backlog>,
+) {
     while let Some(next) = outbox.recv().await {
-        let message = match next {
-            Out::Frame(Frame::Bytes(bytes)) => Message::Binary(bytes),
-            Out::Frame(Frame::Message(message)) => Message::Text(message.to_json().into()),
+        let (message, size) = match next {
+            Out::Frame(Frame::Bytes(bytes), size) => (Message::Binary(bytes), size),
+            Out::Frame(Frame::Message(message), size) => {
+                (Message::Text(message.to_json().into()), size)
+            }
             Out::Close(code) => {
                 let frame = code.map(|(code, reason)| CloseFrame {
                     code: CloseCode::from(code),
@@ -126,6 +182,7 @@ async fn write_frames(mut sink: SocketSink, mut outbox: UnboundedReceiver<Out>) 
         if sink.send(message).await.is_err() {
             return;
         }
+        backlog.written(size);
     }
     let _ = SinkExt::flush(&mut sink).await;
 }
@@ -136,6 +193,7 @@ async fn open(
     id: &str,
     query: &str,
     out: &UnboundedSender<Out>,
+    backlog: &Arc<Backlog>,
 ) -> Option<(Detach, ClientRef, String)> {
     let query = TerminalQuery::parse(query);
     // The ticket is only spent once the query is right, as in Node.
@@ -147,7 +205,10 @@ async fn open(
         let _ = out.send(Out::Close(Some((CLOSE_UNAUTHORIZED, "unauthorized"))));
         return None;
     };
-    let client: ClientRef = Arc::new(SocketClient { out: out.clone() });
+    let client: ClientRef = Arc::new(SocketClient {
+        out: out.clone(),
+        backlog: Arc::clone(backlog),
+    });
     let (attach_client, attach_state, task) =
         (Arc::clone(&client), Arc::clone(state), id.to_string());
     let terminal = query.terminal.clone();
@@ -182,7 +243,7 @@ async fn open(
             let message = ServerMessage::Error {
                 message: error.to_string(),
             };
-            let _ = out.send(Out::Frame(Frame::Message(message)));
+            let _ = out.send(Out::Frame(Frame::Message(message), 0));
             let _ = out.send(Out::Close(Some((CLOSE_REFUSED, "refused"))));
             None
         }
@@ -200,9 +261,14 @@ async fn read_messages(
     terminal: &str,
     client: &ClientRef,
     out: &UnboundedSender<Out>,
+    backlog: &Backlog,
 ) {
     let mut deadline = tokio::time::Instant::now() + state.silent_close;
     loop {
+        if backlog.is_over() {
+            eprintln!("terminal socket {id}/{terminal} dropped: it does not read its output");
+            return;
+        }
         match tokio::time::timeout_at(deadline, stream.next()).await {
             Err(_) => {
                 let silent = state.silent_close.as_secs_f64();
@@ -248,5 +314,52 @@ fn handle_message(state: &AppState, id: &str, terminal: &str, client: &ClientRef
         }
         ClientMessage::Ack { offset } => terminals.ack(id, terminal, client, offset),
         ClientMessage::Ping => client.send(Frame::Message(ServerMessage::Pong)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use tokio::sync::mpsc::unbounded_channel;
+
+    use super::*;
+
+    fn client() -> (SocketClient, UnboundedReceiver<Out>) {
+        let (out, outbox) = unbounded_channel();
+        let backlog = Arc::default();
+        (SocketClient { out, backlog }, outbox)
+    }
+
+    fn bytes(size: usize) -> Frame {
+        Frame::Bytes(Bytes::from(vec![0; size]))
+    }
+
+    #[test]
+    fn queues_frames_while_the_backlog_is_under_the_cap() {
+        let (client, mut outbox) = client();
+        client.send(bytes(MAX_QUEUED_BYTES));
+        assert!(matches!(outbox.try_recv(), Ok(Out::Frame(_, size)) if size == MAX_QUEUED_BYTES));
+        assert!(!client.backlog.is_over());
+    }
+
+    #[test]
+    fn terminates_a_client_that_is_over_the_cap() {
+        let (client, mut outbox) = client();
+        client.send(bytes(MAX_QUEUED_BYTES));
+        client.send(bytes(1));
+        assert!(matches!(outbox.try_recv(), Ok(Out::Frame(..))));
+        assert!(matches!(outbox.try_recv(), Ok(Out::Terminate)));
+        assert!(client.backlog.is_over());
+        // Nothing more is queued for it.
+        client.send(bytes(1));
+        assert!(matches!(outbox.try_recv(), Ok(Out::Terminate)));
+        assert!(outbox.try_recv().is_err());
+    }
+
+    #[test]
+    fn written_frames_leave_the_backlog() {
+        let (client, _outbox) = client();
+        client.send(bytes(MAX_QUEUED_BYTES));
+        client.backlog.written(MAX_QUEUED_BYTES);
+        assert!(client.backlog.add(MAX_QUEUED_BYTES));
     }
 }

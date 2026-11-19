@@ -5,6 +5,7 @@ use std::fs;
 use std::io;
 use std::path::Path;
 
+use natamux_agents::trust::untrust_workspace;
 use natamux_git::branches::list_branches;
 use natamux_git::worktrees::tracks_path;
 use natamux_proto::tasks::task::Task;
@@ -79,6 +80,18 @@ impl WorkspaceService {
             return Err(error);
         }
         self.drop_rollback(task_id);
+        // The trust of the user's folder goes with the last task that works in it.
+        if let Some(paths) = &self.trust_paths {
+            let shared = match self.main_checkout_holders(task.repo.as_deref()) {
+                Ok(holders) => holders
+                    .iter()
+                    .any(|other| other.id != task.id && !other.state.is_finished()),
+                Err(_) => true,
+            };
+            if !shared {
+                untrust_workspace(workspace, paths);
+            }
+        }
         self.tasks.record_workspace(
             task_id,
             WorkspaceChange {

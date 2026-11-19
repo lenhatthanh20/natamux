@@ -66,12 +66,27 @@ pub struct StageFile {
     pub modified_at: String,
 }
 
+/// A real folder: a link is not followed, since a repo can commit `.natamux-task` as a link.
+fn is_plain_dir(dir: &Path) -> bool {
+    fs::symlink_metadata(dir).is_ok_and(|info| info.is_dir())
+}
+
 fn stage_names(dir: &Path) -> Vec<String> {
     let Ok(entries) = fs::read_dir(dir) else {
         return Vec::new();
     };
+    if !is_plain_dir(dir) {
+        return Vec::new();
+    }
     entries
-        .filter_map(|entry| entry.ok()?.file_name().into_string().ok())
+        .filter_map(|entry| {
+            let entry = entry.ok()?;
+            // `file_type` does not follow a link, so a link or a device is skipped.
+            if !entry.file_type().ok()?.is_file() {
+                return None;
+            }
+            entry.file_name().into_string().ok()
+        })
         .filter(|name| is_file_name(name))
         .collect()
 }
@@ -93,16 +108,25 @@ pub fn list_stage_files(data_dir: &Path, task_id: &str, workspace: Option<&str>)
         .collect()
 }
 
-/// The text of a file, None when it is not there.
+/// The text of a file, None when it is not there or is a link or not a regular file (a repo can
+/// commit a link to a secret as `spec.md`). A file over `MAX_STAGE_FILE_BYTES` is refused.
 pub fn read_stage_file(
     data_dir: &Path,
     task_id: &str,
     workspace: Option<&str>,
     name: &str,
 ) -> Result<Option<String>, StageFileError> {
-    let path = working_dir(data_dir, task_id, workspace).join(check_file_name(name)?);
-    if !path.exists() {
+    let dir = working_dir(data_dir, task_id, workspace);
+    let path = dir.join(check_file_name(name)?);
+    let Some(info) = is_plain_dir(&dir)
+        .then(|| fs::symlink_metadata(&path).ok())
+        .flatten()
+        .filter(|info| info.is_file())
+    else {
         return Ok(None);
+    };
+    if info.len() > MAX_STAGE_FILE_BYTES as u64 {
+        return Err(StageFileError(format!("{name} is larger than 1 MB")));
     }
     let bytes = fs::read(path).map_err(io_error)?;
     Ok(Some(String::from_utf8_lossy(&bytes).into_owned()))

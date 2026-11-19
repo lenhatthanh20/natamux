@@ -212,7 +212,8 @@ pub fn read_git_graph(
 ) -> Result<GitGraph, GitError> {
     let head = js_trim(&run(worktree, &["rev-parse", "HEAD"])?).to_string();
     let branch = current_branch(worktree);
-    let compare_to = base.filter(|base| Some(*base) != branch.as_deref());
+    let compare_to = base
+        .filter(|base| Some(*base) != branch.as_deref() && checked_ref(base).is_ok());
 
     let max_count = format!("--max-count={}", limit + 1);
     let format = format!("--format={LOG_FORMAT}");

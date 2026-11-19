@@ -17,7 +17,7 @@ It does steps 2 to 5: it asks before it makes and pushes the signed tag, waits f
 
 1. On a branch: set the version in every `crates/*/Cargo.toml`, `Cargo.lock`, `packages/{core,web}/package.json`, the macOS app bundle, and the homepage. Write `docs/releases/vX.Y.Z.md` and the changelog section (the docs skill says how). `scripts/release.test.sh` and the required Rust and web checks must pass on the pull request. Merge to `main`.
    The `main` push with the new release note warms the Intel macOS build cache. Run `gh workflow run release.yml --ref main -f tag=main -f publish=false`, then wait for that Release run to pass before tagging. The workflow reuses compiled output from the Intel and Windows caches when available. A cache miss builds from scratch; the release build still embeds its own web output and runs every platform check.
-2. Tag the merge commit with a tag signed by your SSH key (see [The tag key](#the-tag-key)) and push it:
+2. A release tag must be on `main`: the Release run fails when the tagged commit is not on `main`. Tag the merge commit with a tag signed by your SSH key (see [The tag key](#the-tag-key)) and push it:
 
    ```sh
    git tag -s vX.Y.Z -m "Natamux vX.Y.Z" <commit on main>

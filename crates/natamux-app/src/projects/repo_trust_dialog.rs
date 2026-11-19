@@ -231,25 +231,33 @@ fn command_row(command: &RepoCommand, cx: &App) -> impl IntoElement {
     command_block(command.place.clone(), code_box(&command.text, cx))
 }
 
-/// A script can be long: its box scrolls on its own.
-fn script_box(index: usize, script: &SetupScript, cx: &App) -> impl IntoElement {
+/// A script or an agent config file can be long: its box scrolls on its own. `kind` names it.
+fn script_box(
+    kind: &'static str,
+    index: usize,
+    script: &SetupScript,
+    cx: &App,
+) -> impl IntoElement {
     let code = div()
-        .id(("repo-trust-script", index))
+        .id((kind, index))
         .max_h(rems_from_px(200.0_f32))
         .overflow_y_scroll()
         .child(code_box(&script.text, cx));
-    command_block(format!("Setup script {}", script.file), code)
+    command_block(format!("{kind} {}", script.file), code)
 }
 
 impl RepoTrustDialog {
-    /// The commands, then the setup scripts, in one card.
+    /// The commands, then the setup scripts, then the agent config files, in one card.
     fn commands(&self, cx: &App) -> SettingsCard {
         let mut card = SettingsCard::new(SeparatorInset::Text);
         for command in &self.view.commands {
             card = card.child(command_row(command, cx));
         }
         for (index, script) in self.view.setup.iter().enumerate() {
-            card = card.child(script_box(index, script, cx));
+            card = card.child(script_box("Setup script", index, script, cx));
+        }
+        for (index, file) in self.view.agent_files.iter().enumerate() {
+            card = card.child(script_box("Agent config file", index, file, cx));
         }
         card
     }

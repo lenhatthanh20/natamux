@@ -306,3 +306,36 @@ fn drafts_with_goose_in_its_chat_mode_which_runs_no_tools() {
     );
     assert!(has_one_shot("goose"));
 }
+
+fn with_prompt(prompt: &str) -> LaunchOptions {
+    LaunchOptions {
+        program: "x".into(),
+        extra_args: String::new(),
+        prompt: prompt.into(),
+        session: None,
+        platform: POSIX,
+        claude_settings_path: "/data/claude.json".into(),
+        gemini_settings_path: "/data/gemini.json".into(),
+        auto: false,
+        workspace: None,
+        trust: true,
+        workspace_hooks: false,
+    }
+}
+
+#[test]
+fn puts_task_before_a_prompt_that_starts_with_a_dash_so_it_is_no_option() {
+    let title = "--allowedTools=Bash - x";
+    for agent in ["claude-code", "codex", "cursor"] {
+        let line = launch_command(agent, &with_prompt(title));
+        assert!(line.ends_with(" 'Task: --allowedTools=Bash - x'"), "{line}");
+        let line = launch_command(agent, &with_prompt("Fix it"));
+        assert!(line.ends_with(" 'Fix it'"), "{line}");
+        let line = launch_command(agent, &with_prompt(" -x"));
+        assert!(line.ends_with(" ' -x'"), "{line}");
+    }
+    for agent in ["copilot", "cursor", "goose", "kiro"] {
+        let got = one_shot_command(agent, agent, title, POSIX);
+        assert!(got.line.contains("'Task: --allowedTools=Bash - x'"), "{got:?}");
+    }
+}

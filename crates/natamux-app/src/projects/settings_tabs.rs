@@ -177,7 +177,7 @@ impl ProjectSettingsPage {
         )
         .action(
             action_button("settings-overwrite", "Overwrite")
-                .on_click(cx.listener(|this, _, _, cx| this.overwrite(cx))),
+                .on_click(cx.listener(|this, _, window, cx| this.overwrite(window, cx))),
         )
     }
 

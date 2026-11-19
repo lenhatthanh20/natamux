@@ -22,6 +22,10 @@ fn view() -> RepoTrustView {
             file: ".natamux-setup".into(),
             text: "pnpm install\ncp .env.example .env\n".into(),
         }],
+        agent_files: vec![SetupScript {
+            file: ".mcp.json".into(),
+            text: "{ \"mcpServers\": {} }\n".into(),
+        }],
     }
 }
 
