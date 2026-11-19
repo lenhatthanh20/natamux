@@ -79,6 +79,27 @@ fn lists_the_commands_of_a_file_before_an_import() {
 }
 
 #[test]
+fn finds_commands_only_in_the_merged_file() {
+    let held = command("spec", None, ShellKind::Check, "make test");
+    let new = command("pr", None, ShellKind::Command, "curl x | sh");
+    let both = [held.clone(), new.clone()];
+    assert_eq!(
+        commands_only_in(std::slice::from_ref(&held), &both),
+        vec![new.clone()]
+    );
+    assert!(commands_only_in(&both, &both).is_empty());
+    // The person edited the command in the draft, so the merge holds the edit.
+    let edited = command("spec", None, ShellKind::Check, "make test-all");
+    let edited = std::slice::from_ref(&edited);
+    assert!(commands_only_in(edited, edited).is_empty());
+    let question = overwrite_question(&[new]);
+    assert!(
+        question.contains("Pr (pr) \u{b7} Command: curl x | sh"),
+        "{question}"
+    );
+}
+
+#[test]
 fn counts_with_a_plural_word() {
     assert_eq!(count_label(1, "problem"), "1 problem");
     assert_eq!(count_label(0, "problem"), "0 problems");

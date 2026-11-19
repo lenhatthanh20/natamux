@@ -9,7 +9,7 @@ use hyper::header::{
     CACHE_CONTROL, CONTENT_DISPOSITION, CONTENT_SECURITY_POLICY, CONTENT_TYPE, HeaderValue,
 };
 use hyper::{Response, StatusCode};
-use natamux_core::events::schema::GATE_EVENT_TYPES;
+use natamux_core::events::schema::{DAEMON_ONLY_EVENT_TYPES, GATE_EVENT_TYPES};
 use natamux_core::tasks::attachments::{base64_length, preview_type_of};
 use natamux_core::tasks::inputs::{
     apply_event_input, attachment_params, attachments_body, issue_link_body, list_query,
@@ -169,7 +169,7 @@ pub async fn post_event(
     };
     if by_agent {
         let kind = input.get("type").and_then(Value::as_str).unwrap_or("");
-        if GATE_EVENT_TYPES.contains(&kind) {
+        if GATE_EVENT_TYPES.contains(&kind) || DAEMON_ONLY_EVENT_TYPES.contains(&kind) {
             return forbidden(&format!("send {kind}"));
         }
         input.insert("source".into(), json!("agent"));

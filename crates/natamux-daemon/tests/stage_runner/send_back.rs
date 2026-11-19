@@ -164,3 +164,33 @@ fn answers_with_the_task_after_its_stage_failed_to_start() {
         ["stage.reopened", "stage.started", "stage.check-failed"]
     );
 }
+
+// Security T-0346 (F-05): with the agent token and no terminal named, a send back still counts.
+#[test]
+fn counts_a_send_back_with_the_agent_token_and_no_terminal_for_the_limit() {
+    let f = Fixture::new();
+    f.set_stages(json!([{ "id": "implement", "kind": "agent", "gate": "manual" }]));
+    f.set_send_back_limit(Some(1));
+    let task = f.implementing("implement");
+    let input = StageActionInput {
+        to: Some("implement".into()),
+        by_agent: true,
+        ..Default::default()
+    };
+
+    f.runner
+        .run
+        .act(&task.id, StageAction::Reopen, &input)
+        .unwrap();
+    f.settle();
+    let reopened = f.last_of(&task.id, "stage.reopened").unwrap().payload;
+    assert_eq!(reopened.get("byAgent"), Some(&Value::Bool(true)));
+    assert_eq!(reopened.get("from"), Some(&json!("implement")));
+
+    let error = f
+        .runner
+        .run
+        .act(&task.id, StageAction::Reopen, &input)
+        .unwrap_err();
+    assert!(error.to_string().contains("waits for the user"), "{error}");
+}

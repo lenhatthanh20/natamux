@@ -104,6 +104,8 @@ async fn every_route_of_another_task_and_every_global_write_answers_403() {
         (Method::PATCH, "/tasks/T-0003"),
         (Method::DELETE, "/tasks/T-0001"),
         (Method::DELETE, "/tasks/T-0001/workspace"),
+        // Security T-0346 (F-02): fan-out makes top-level tasks.
+        (Method::POST, "/tasks/T-0001/fan-out"),
     ] {
         refused.push((method, path.to_string()));
     }

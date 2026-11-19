@@ -11,7 +11,9 @@ use ui::prelude::*;
 
 use super::project_settings_page::ProjectSettingsPage;
 use super::settings_tab_rules::reset_ask;
-use super::settings_text::{MAX_IMPORT_BYTES, base_of, import_question};
+use super::settings_text::{
+    MAX_IMPORT_BYTES, base_of, commands_only_in, import_question, overwrite_question,
+};
 use crate::app::settings_reads::SettingsReads;
 use crate::app::source::reason;
 use crate::components::confirm::Confirm;
@@ -120,7 +122,7 @@ impl ProjectSettingsPage {
 
     /// Saves the edits over the file as it is now: keys the person did not change keep the
     /// values of the new file, so the other client's edits are not lost.
-    pub(super) fn overwrite(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn overwrite(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let (Some(base), Some(stages)) = (&self.base, &self.stages) else {
             return;
         };
@@ -134,10 +136,13 @@ impl ProjectSettingsPage {
         let Some(draft) = stages.editor.read(cx).raw().cloned() else {
             return;
         };
+        let seen = parse_draft(&format_settings(&draft))
+            .map(|seen| shell_fields(&seen.steps))
+            .unwrap_or_default();
         let fresh = source.load_settings(&self.repo_id);
-        cx.spawn(async move |this, cx| {
+        cx.spawn_in(window, async move |this, cx| {
             let fresh = fresh.await.ok();
-            this.update(cx, |this, cx| {
+            this.update_in(cx, |this, window, cx| {
                 // A file that cannot be read keeps none of its keys: the edits replace it.
                 let now = fresh
                     .as_ref()
@@ -149,7 +154,28 @@ impl ProjectSettingsPage {
                     _ => draft,
                 };
                 let version = fresh.and_then(|loaded| loaded.version);
-                this.send(raw, version, cx);
+                // Keys from the new file may hold commands the person never saw, and the save
+                // approves them: ask first.
+                let new = match parse_draft(&format_settings(&raw)) {
+                    Ok(merged) => commands_only_in(&seen, &shell_fields(&merged.steps)),
+                    Err(_) => Vec::new(),
+                };
+                if new.is_empty() {
+                    this.send(raw, version, cx);
+                    return;
+                }
+                let page = cx.weak_entity();
+                Confirm::new(
+                    "Overwrite the file?",
+                    overwrite_question(&new),
+                    "Overwrite",
+                    move |_, cx| {
+                        page.update(cx, |page, cx| page.send(raw.clone(), version.clone(), cx))
+                            .ok();
+                    },
+                )
+                .sheet()
+                .open_over(window, cx);
             })
             .ok();
         })
