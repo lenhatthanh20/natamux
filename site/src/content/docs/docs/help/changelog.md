@@ -7,6 +7,16 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v1.0.28 (2026-11-19)
+
+- Natamux is now under the MIT license, with its own views and new icons in place of the GPL crates of Zed.
+- A project with an agent config file, such as `.claude/settings.json` or `.mcp.json`, asks for one new approval after the update. See [Repo trust](/docs/help/security-and-privacy/#repo-trust).
+- A subtask stays in the project of its parent, and the agent token cannot send daemon-only events; imported issue text is marked as data; a task has at most 32 terminals.
+- The web dashboard is gone; the native app is the only UI.
+- The app is faster, uses less memory, and its programs are about 20% smaller.
+- Fix: the Comment and **Revert this change** buttons of a diff no longer flicker. See [Revert one change](/docs/guides/changes-and-history/#revert-one-change).
+- Fix: input method text and wrapped links in the terminal, CRLF line ends on save, a crash on a comment toggle, lines lost on revert, `^` in find, and colours of files such as `tsconfig.json`.
+
 ## v1.0.27 (2026-11-18)
 
 - Natamux starts 16 coding agents, was 5: OpenCode, Qwen Code and Factory Droid with hooks, and Amp, Kimi, Goose, Aider, Crush, Cline, Kiro and Muse Code by their terminal, with the first prompt pasted. See [Agents](/docs/agents/).
