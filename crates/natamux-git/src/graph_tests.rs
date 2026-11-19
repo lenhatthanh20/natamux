@@ -236,6 +236,40 @@ fn shows_the_branch_and_its_base_newest_first_and_counts_ahead_and_behind() {
 }
 
 #[test]
+fn graph_inputs_stay_while_no_ref_moves_and_change_when_one_does() {
+    let f = fixture();
+    diverged_worktree(&f);
+    let inputs = || graph_inputs(&f.worktree, Some("main")).unwrap();
+    let mut seen = vec![inputs()];
+    // A file edit moves no ref.
+    std::fs::write(f.worktree.join("notes.txt"), "draft\n").unwrap();
+    assert_eq!(inputs(), seen[0]);
+    assert_ne!(graph_inputs(&f.worktree, None), Some(seen[0]));
+
+    let moves: [&dyn Fn(); 6] = [
+        &|| {
+            run_git(&f.dir, &["tag", "v1"]);
+        },
+        &|| {
+            run_git(&f.dir, &["pack-refs", "--all"]);
+        },
+        // The branch is packed now: the commit writes it as a loose ref again.
+        &|| commit_empty(&f.worktree, "three"),
+        &|| commit_empty(&f.dir, "main again"),
+        &|| origin_with_main(&f),
+        &|| {
+            run_git(&f.worktree, &["checkout", "-q", "--detach"]);
+        },
+    ];
+    for step in moves {
+        step();
+        let now = inputs();
+        assert!(!seen.contains(&now));
+        seen.push(now);
+    }
+}
+
+#[test]
 fn cuts_the_list_at_the_limit_and_says_so() {
     let f = fixture();
     diverged_worktree(&f);

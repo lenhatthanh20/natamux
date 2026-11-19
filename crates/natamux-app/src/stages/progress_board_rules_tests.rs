@@ -70,7 +70,8 @@ fn takes_the_tasks_made_with_the_stages_that_are_on_as_the_current_pipeline() {
 
 #[test]
 fn shows_nothing_when_there_are_no_projects_and_no_tasks() {
-    assert!(board_sections(&[], &[], &BTreeMap::new(), NOW).is_empty());
+    let none: [Task; 0] = [];
+    assert!(board_sections(&none, &[], &BTreeMap::new(), NOW).is_empty());
 }
 
 fn branched() -> Task {
@@ -210,6 +211,27 @@ fn keys_the_sets_by_the_stages_a_task_carries() {
 }
 
 #[test]
+fn groups_many_tasks_by_their_stages_in_the_order_the_sets_first_show() {
+    let with = |id: &str, extra: &str| {
+        let mut made = task(id, "x");
+        made.stages.push(json!(extra));
+        made
+    };
+    let tasks = [
+        with("a", "plan"),
+        with("b", "release"),
+        with("c", "plan"),
+        with("d", "release"),
+        with("e", "plan"),
+    ];
+    let sections = board_sections(&tasks, &[], &BTreeMap::new(), NOW);
+    assert_eq!(sections.len(), 2);
+    assert_eq!(ids(&sections[0].open), ["a", "c", "e"]);
+    assert_eq!(ids(&sections[1].open), ["b", "d"]);
+    assert_eq!(sections[1].title, "default, earlier pipeline");
+}
+
+#[test]
 fn labels_the_next_button_by_state() {
     assert_eq!(next_label(TaskState::NeedsInput), Some("Answer"));
     assert_eq!(next_label(TaskState::Review), Some("Review"));
@@ -249,4 +271,15 @@ fn draws_no_line_between_the_stages_of_a_group_or_of_two_paths() {
     assert!(testing.is_some() && review.is_some());
     assert_eq!(links[testing.unwrap_or(0)].1, LinkKind::Hidden);
     assert_eq!(links[review.unwrap_or(0)].0, LinkKind::Hidden);
+}
+
+#[test]
+fn a_section_of_shared_tasks_holds_the_tasks_it_was_given_not_copies() {
+    let mut done = task("done", "2026-10-09T09:00:00Z");
+    done.state = TaskState::Done;
+    let shared = [task("open", "2026-10-09T09:00:00Z"), done].map(Arc::new);
+    let sections = board_sections(&shared, &[], &BTreeMap::new(), NOW);
+    assert_eq!(sections.len(), 1);
+    assert!(Arc::ptr_eq(&sections[0].open[0], &shared[0]));
+    assert!(Arc::ptr_eq(&sections[0].done[0], &shared[1]));
 }

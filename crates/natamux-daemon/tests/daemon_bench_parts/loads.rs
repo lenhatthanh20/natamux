@@ -24,8 +24,10 @@ const BUSY_BYTES: usize = 20 * 1024 * 1024;
 pub const AGENTS_AT_ONCE: usize = 30;
 const HOOKS_PER_AGENT: usize = 40;
 
-/// The daemon's RSS in MiB once 30 shells each printed 20 MB, from 30 threads at once.
-pub fn busy_shells() -> f64 {
+/// The daemon's RSS in MiB once 30 shells each printed 20 MB, from 30 threads at once, how much
+/// it grew over the RSS before the shells, and that growth for one shell.
+pub fn busy_shells() -> (f64, f64, f64) {
+    let before = rss_kib().unwrap_or(0);
     let (service, sinks) = setup();
     let shells = BUSY_SHELLS.min(MAX_SESSIONS);
     let names: Vec<String> = (1..=shells).map(|index| format!("busy-{index}")).collect();
@@ -54,7 +56,9 @@ pub fn busy_shells() -> f64 {
     }
     let rss = rss_kib().unwrap_or(0);
     service.close_all();
-    (rss as f64 / 1024.0 * 10.0).round() / 10.0
+    let mib = |kib: u64| (kib as f64 / 1024.0 * 10.0).round() / 10.0;
+    let grown = rss.saturating_sub(before);
+    (mib(rss), mib(grown), mib(grown / shells as u64))
 }
 
 /// `TaskSync::init` with `count` task files, in ms: cold (a new index, every file read) and
@@ -81,7 +85,7 @@ fn init_time(dir: &Path, count: usize) -> f64 {
     fine_ms(took)
 }
 
-fn bench_task(number: usize) -> Task {
+pub fn bench_task(number: usize) -> Task {
     Task {
         id: format!("T-{number:04}"),
         title: format!("Bench task {number} with a title of a usual length"),
@@ -101,8 +105,21 @@ fn bench_task(number: usize) -> Task {
     }
 }
 
-/// A hook service over `agents` tasks, each with its own workspace; the folders of the tasks.
-fn hook_setup(agents: usize) -> (Arc<HookService>, Vec<String>, PathBuf) {
+/// What a hook bench sends its hooks to.
+pub struct HookBench {
+    pub service: Arc<HookService>,
+    /// The folder of each agent's task.
+    pub workspaces: Vec<String>,
+    /// The home folder when hooks name a session and its usage file there, as Claude Code's do.
+    pub sessions: Option<PathBuf>,
+}
+
+/// One agent sends 50 hooks a second, far more than a real agent: start delay, pause.
+pub const PACE: (Duration, Duration) = (Duration::from_micros(700), Duration::from_millis(20));
+
+/// A hook service over `agents` tasks, each with its own workspace, with no stages and nothing
+/// told of a hook; the folder of the bench.
+fn hook_setup(agents: usize) -> (Arc<HookBench>, PathBuf) {
     let dir = temp_dir("hooks");
     let tasks = TaskService::new(TaskServiceOptions {
         data_dir: dir.clone(),
@@ -133,16 +150,28 @@ fn hook_setup(agents: usize) -> (Arc<HookService>, Vec<String>, PathBuf) {
         home: dir.join("home"),
     };
     let service = Arc::new(HookService::new(tasks, Arc::new(NoStages), options));
-    (service, workspaces, dir)
+    let bench = HookBench {
+        service,
+        workspaces,
+        sessions: None,
+    };
+    (Arc::new(bench), dir)
 }
 
-/// One agent's hooks: `HOOKS_PER_AGENT` hooks of its folder, `pause` between two of them.
-fn send_hooks(service: &HookService, cwd: &str, pause: Option<Duration>) -> Vec<Duration> {
+/// The hooks of agent `agent`: `HOOKS_PER_AGENT` hooks of its folder, `pause` between two.
+fn send_hooks(bench: &HookBench, agent: usize, pause: Option<Duration>) -> Vec<Duration> {
+    let cwd = &bench.workspaces[agent];
     (0..HOOKS_PER_AGENT)
         .map(|step| {
-            let raw = agent_hook(step, cwd);
+            let mut raw = agent_hook(step, cwd);
+            if let Some(home) = &bench.sessions {
+                raw["session_id"] = json!(format!("bench-session-{agent}"));
+                let file = home.join(format!(".claude/projects/bench/{agent}.jsonl"));
+                raw["transcript_path"] = json!(file);
+            }
             let sent = Instant::now();
-            service
+            bench
+                .service
                 .handle("claude-code", &raw, None, Some("1"))
                 .unwrap();
             let took = sent.elapsed();
@@ -177,20 +206,18 @@ fn hook_times(times: Vec<Duration>) -> HookTimes {
 
 /// One thread per agent. `pace`: the start of agent `i` is delayed by `i * stagger` and each
 /// agent waits `pause` after each hook; None: all start at once and send back to back.
-fn hooks_from_threads(agents: usize, pace: Option<(Duration, Duration)>) -> HookTimes {
-    let (service, workspaces, dir) = hook_setup(agents);
+pub fn times_from_threads(bench: &Arc<HookBench>, pace: Option<(Duration, Duration)>) -> HookTimes {
+    let agents = bench.workspaces.len();
     let start = Arc::new(Barrier::new(agents));
-    let senders: Vec<_> = workspaces
-        .into_iter()
-        .enumerate()
-        .map(|(index, cwd)| {
-            let (service, start) = (Arc::clone(&service), Arc::clone(&start));
+    let senders: Vec<_> = (0..agents)
+        .map(|agent| {
+            let (bench, start) = (Arc::clone(bench), Arc::clone(&start));
             std::thread::spawn(move || {
                 start.wait();
                 if let Some((stagger, _)) = pace {
-                    std::thread::sleep(stagger * index as u32);
+                    std::thread::sleep(stagger * agent as u32);
                 }
-                send_hooks(&service, &cwd, pace.map(|(_, pause)| pause))
+                send_hooks(&bench, agent, pace.map(|(_, pause)| pause))
             })
         })
         .collect();
@@ -198,33 +225,41 @@ fn hooks_from_threads(agents: usize, pace: Option<(Duration, Duration)>) -> Hook
         .into_iter()
         .flat_map(|sender| sender.join().unwrap())
         .collect();
-    std::fs::remove_dir_all(&dir).ok();
     hook_times(times)
+}
+
+/// The hooks from one thread, one agent after the other: the work of a hook, no queue.
+pub fn times_single(bench: &HookBench) -> HookTimes {
+    let agents = bench.workspaces.len();
+    let times = (0..agents)
+        .flat_map(|agent| send_hooks(bench, agent, None))
+        .collect();
+    hook_times(times)
+}
+
+/// `run` on a new bench of `agents` agents with nothing wired, then its folder goes.
+fn bare(agents: usize, run: impl FnOnce(&Arc<HookBench>) -> HookTimes) -> HookTimes {
+    let (bench, dir) = hook_setup(agents);
+    let times = run(&bench);
+    std::fs::remove_dir_all(&dir).ok();
+    times
 }
 
 /// `HookService::handle` while `agents` agents each send hooks from their own thread, all at
 /// once: p50 and p95 in ms. The task is found by the hook's working directory. The time of a hook
 /// here holds the wait for a core and for the store lock: 30 threads on 4 cores, no pause.
 pub fn hooks_at_once(agents: usize) -> HookTimes {
-    hooks_from_threads(agents, None)
+    bare(agents, |bench| times_from_threads(bench, None))
 }
 
 /// The same hooks from one thread, one agent after the other: the work of a hook, no queue.
 pub fn hooks_single(agents: usize) -> HookTimes {
-    let (service, workspaces, dir) = hook_setup(agents);
-    let times = workspaces
-        .iter()
-        .flat_map(|cwd| send_hooks(&service, cwd, None))
-        .collect();
-    std::fs::remove_dir_all(&dir).ok();
-    hook_times(times)
+    bare(agents, |bench| times_single(bench))
 }
 
-/// As `hooks_at_once`, but each agent starts 0.7 ms after the one before and waits 20 ms after
-/// each hook (50 hooks a second each, far more than a real agent sends): what an agent waits.
+/// As `hooks_at_once`, but paced as `PACE`: what an agent waits.
 pub fn hooks_paced(agents: usize) -> HookTimes {
-    let pace = (Duration::from_micros(700), Duration::from_millis(20));
-    hooks_from_threads(agents, Some(pace))
+    bare(agents, |bench| times_from_threads(bench, Some(PACE)))
 }
 
 /// A turn of a Claude Code agent: prompt, tool start, tool end, turn end.
@@ -243,7 +278,7 @@ fn fine_ms(duration: Duration) -> f64 {
     (duration.as_secs_f64() * 1_000_000.0).round() / 1000.0
 }
 
-fn temp_dir(name: &str) -> PathBuf {
+pub fn temp_dir(name: &str) -> PathBuf {
     let path = std::env::temp_dir().join(format!("natamux-bench-{}-{name}", std::process::id()));
     std::fs::remove_dir_all(&path).ok();
     std::fs::create_dir_all(&path).unwrap();

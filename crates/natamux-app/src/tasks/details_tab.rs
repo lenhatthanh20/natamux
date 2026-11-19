@@ -20,7 +20,6 @@ use crate::tasks::details_rules::{
     pull_request_label, pull_request_summary, quiet_banner, waits_for_text,
 };
 use crate::tasks::edit_rules::label_text;
-use crate::tasks::table_rules::waits_for;
 use crate::tasks::task_attention::is_quiet;
 use crate::tasks::task_rules::{actions_for, agent_action, context_text};
 use crate::workspaces::no_workspace::DETACHED;
@@ -63,7 +62,7 @@ impl DetailsPanel {
         cx: &mut Context<Self>,
     ) -> Vec<AnyElement> {
         let on = self.on_command(cx);
-        let waiting = waits_for(task, &self.dashboard.read(cx).data.tasks);
+        let waiting = self.dashboard.read(cx).data.waits_for(task);
         let mut parts = vec![
             self.title_block(task, &waiting, &on, cx).into_any_element(),
             self.notes(task, cx).into_any_element(),

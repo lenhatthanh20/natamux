@@ -3,6 +3,7 @@
 //! terminal lists the jump palette asked for change them while it is open.
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use gpui::{
     ClickEvent, Entity, EventEmitter, FocusHandle, Focusable, Keystroke, ListAlignment, ListState,
@@ -12,13 +13,12 @@ use natamux_proto::tasks::task::Task;
 use ui::{IconButton, ListItem, ListItemSpacing, Tooltip, prelude::*};
 
 use super::jump_rows::{JumpInput, jump_sections};
-use super::palette_list::{Item, content_height, flatten, item_of};
+use super::palette_list::{Item, active_at, content_height, flatten, into_rows, item_of};
 use super::palette_pick::{PaletteKey, classify};
 use super::palette_row::{digit_hint, row_body, row_height};
 use super::palette_rows::{
-    AllInput, PaletteCommand, PaletteMode, PaletteRow, PaletteScope, PaletteSection, RepoItem,
-    all_sections, cap_rows, digit_of, empty_text, flat_rows, next_scope, repos_with_tasks,
-    scope_name,
+    AllInput, PaletteCommand, PaletteMode, PaletteRow, PaletteScope, RepoItem, all_sections,
+    cap_rows, digit_of, empty_text, next_scope, repos_with_tasks, scope_name,
 };
 use crate::app::clock::now_ms;
 use crate::app::command_types::palette_title;
@@ -48,7 +48,7 @@ impl EventEmitter<PaletteEvent> for PaletteView {}
 
 /// Everything read from the dashboard when the palette opens.
 struct Snapshot {
-    tasks: Vec<Task>,
+    tasks: Vec<Arc<Task>>,
     now_ms: i64,
     recent: Vec<String>,
     repos: Vec<RepoItem>,
@@ -120,10 +120,11 @@ pub struct PaletteView {
     scope: Option<PaletteScope>,
     query: TextBox,
     snapshot: Snapshot,
-    sections: Vec<PaletteSection>,
     rows: Vec<PaletteRow>,
     /// The key of the active row; none or a row that is gone means the first row.
     active: Option<String>,
+    /// The index of that row, kept with the key (`set_active`) so a draw only reads it.
+    active_at: usize,
     items: Vec<Item>,
     list: ListState,
     _edits: Subscription,
@@ -157,7 +158,7 @@ impl PaletteView {
         // The terminal lists the layer asked for come after the palette opens.
         let terminals = (mode == PaletteMode::Jump).then(|| {
             let mut seen = Seen::default();
-            cx.observe(dashboard, move |this: &mut Self, dashboard, cx| {
+            Dashboard::observe(dashboard, cx, move |this: &mut Self, dashboard, cx| {
                 let gens = dashboard.read(cx).data.gens;
                 if !seen.changed(&gens, &[Part::Terminals]) {
                     return;
@@ -174,9 +175,9 @@ impl PaletteView {
             scope,
             query,
             snapshot: take_snapshot(dashboard.read(cx)),
-            sections: Vec::new(),
             rows: Vec::new(),
             active: None,
+            active_at: 0,
             items: Vec::new(),
             list: ListState::new(0, ListAlignment::Top, px(OVERDRAW)),
             _edits: edits,
@@ -213,9 +214,10 @@ impl PaletteView {
                 scope,
             }),
         };
-        self.sections = cap_rows(sections);
-        self.rows = flat_rows(&self.sections);
-        let items = flatten(&self.sections);
+        let sections = cap_rows(sections);
+        let items = flatten(&sections);
+        self.rows = into_rows(sections);
+        self.active_at = active_at(&self.rows, self.active.as_deref());
         if items == self.items {
             // New data under the same rows: the list keeps its place.
             self.list.remeasure_items(0..items.len());
@@ -233,17 +235,19 @@ impl PaletteView {
     }
 
     fn active_index(&self) -> usize {
-        self.active
-            .as_ref()
-            .and_then(|key| self.rows.iter().position(|row| &row.key() == key))
-            .unwrap_or(0)
+        self.active_at
+    }
+
+    fn set_active(&mut self, key: Option<String>) {
+        self.active = key;
+        self.active_at = active_at(&self.rows, self.active.as_deref());
     }
 
     fn activate(&mut self, index: usize, cx: &mut Context<Self>) {
         let Some(row) = self.rows.get(index) else {
             return;
         };
-        self.active = Some(row.key());
+        self.set_active(Some(row.key()));
         if let Some(item) = item_of(&self.items, index) {
             self.list.scroll_to_reveal_item(item);
         }
@@ -384,7 +388,7 @@ impl PaletteView {
             .toggle_state(active)
             .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
                 if *hovered && (this.active_index() != index || this.active.is_none()) {
-                    this.active = this.rows.get(index).map(PaletteRow::key);
+                    this.set_active(this.rows.get(index).map(PaletteRow::key));
                     cx.notify();
                 }
             }))
@@ -490,3 +494,7 @@ impl Render for PaletteView {
             .child(Self::footer(cx))
     }
 }
+
+#[cfg(test)]
+#[path = "palette_view_tests.rs"]
+mod tests;

@@ -5,6 +5,7 @@
 use std::collections::BTreeSet;
 use std::rc::Rc;
 
+use gpui::StyleRefinement;
 use natamux_proto::tasks::task::Task;
 use ui::prelude::*;
 
@@ -13,7 +14,6 @@ use crate::agents::agent_choices::{DEFAULT_AGENT, is_startable};
 use crate::app::view_rules::{DetailsView, WorkspaceTab};
 use crate::git::history_view::HistoryView;
 use crate::tasks::state_filter::width_probe;
-use crate::tasks::table_rules::waits_for;
 use crate::terminals::terminal_cache::{Owner, TerminalCache};
 use crate::workspaces::finished_banner::{FinishedActions, FinishedBanner, OnClick};
 use crate::workspaces::finished_summary::{FinishedSummary, follow_up_title};
@@ -59,7 +59,7 @@ impl WorkspaceView {
             .as_deref()
             .and_then(|id| dashboard.data.task(id))
             .and_then(|parent| parent.branch.clone());
-        let waiting_for = waits_for(&task, &dashboard.data.tasks);
+        let waiting_for = dashboard.data.waits_for(&task);
         let preparing = dashboard.data.preparing.get(&task.id).copied();
         let agent = task
             .agent
@@ -198,7 +198,7 @@ impl WorkspaceView {
         let this = cx.weak_entity();
         GitButtons::new(
             task.clone(),
-            shown.graph.clone(),
+            shown.graph.as_deref().cloned(),
             uncommitted,
             shown.pending,
         )
@@ -220,7 +220,7 @@ impl WorkspaceView {
     /// at full width (T-0231).
     pub(super) fn history(
         &self,
-        task: &Task,
+        task_id: &str,
         shown: &Shown,
         in_main: bool,
         cx: &mut Context<Self>,
@@ -232,9 +232,9 @@ impl WorkspaceView {
         HistoryView {
             // Both copies draw in the same frame: their lists and layouts need their own ids.
             id: if in_main {
-                format!("{}-main", task.id)
+                format!("{task_id}-main")
             } else {
-                task.id.clone()
+                task_id.to_owned()
             },
             graph: shown.graph.clone(),
             error: shown.graph_error.clone(),
@@ -266,67 +266,74 @@ impl WorkspaceView {
     }
 
     /// A task with a workspace: finished banner, then what main shows: the panes or the wrap-up,
-    /// or Changes, Docs or the open file over them. No tab row (T-0183).
+    /// or Changes, Docs or the open file over them. No tab row (T-0183). `finished` is the task
+    /// once it is finished: this draws on every frame of the window, and a running task needs
+    /// no copy of its record, its graph or its changed paths.
     pub(super) fn render_workspace(
         &mut self,
-        task: Task,
+        finished: Option<Task>,
         shown: &Shown,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let finished = is_finished_state(task.state);
-        let panes_shown = !finished || shown.shells_wanted;
+        let task_id = shown.task_id.as_str();
+        let panes_shown = finished.is_none() || shown.shells_wanted;
         if !panes_shown {
             // The panes do not draw now, so their claim would keep an ended Terminal 1 cached
             // and Reopen agent would show it again (T-0185).
             TerminalCache::claim(Owner::Workspace, BTreeSet::new(), cx);
         }
-        let facts = GitFacts {
-            uncommitted: shown.changes.as_ref().map(|changes| changes.len() as u64),
-            graph: shown.graph.clone(),
-        };
-        let paths: Vec<String> = shown
-            .changes
-            .iter()
-            .flatten()
-            .map(|change| change.path.clone())
-            .collect();
-        let (banner_actions, wrap_up_actions) = self.finished_actions(&task, cx);
         // A finished task's terminals, shown in place of its wrap-up: each header goes back.
-        let back = (finished && shown.shells_wanted).then(|| self.back_to_wrap_up(cx));
+        let back = (finished.is_some() && shown.shells_wanted).then(|| self.back_to_wrap_up(cx));
         self.panes
             .update(cx, |panes, cx| panes.set_back_to_wrap_up(back, cx));
-        let banner = finished.then(|| {
-            FinishedBanner::new(task.clone(), facts.clone(), shown.pending, banner_actions)
-        });
+        let (banner, wrap_up) = match finished {
+            Some(task) => {
+                let facts = GitFacts {
+                    uncommitted: shown.changes.as_ref().map(|changes| changes.len() as u64),
+                    graph: shown.graph.as_deref().cloned(),
+                };
+                let (banner_actions, wrap_up_actions) = self.finished_actions(&task, cx);
+                let banner =
+                    FinishedBanner::new(task.clone(), facts.clone(), shown.pending, banner_actions);
+                (Some(banner), Some((task, facts, wrap_up_actions)))
+            }
+            None => (None, None),
+        };
         let tab = self.dashboard.read(cx).shown_workspace_tab();
         if !matches!(tab, WorkspaceTab::Docs | WorkspaceTab::Editor) {
             self.file_tab_shown = None;
         }
-        let body: AnyElement = match tab {
-            WorkspaceTab::Changes => self.changes.clone().into_any_element(),
-            WorkspaceTab::History => self.history(&task, shown, true, cx),
-            WorkspaceTab::Docs => self.docs_body(&task.id, window, cx),
-            WorkspaceTab::Editor => self.editor_body(&task.id, window, cx),
-            _ if panes_shown => self.panes.clone().into_any_element(),
-            _ => WrapUp {
-                task: task.clone(),
+        // This view draws with Root, so the heavy bodies that are views keep their own draw:
+        // each draws again only when it changed. The panes are not cached here: a cached view
+        // that draws again also draws every cached terminal inside it.
+        let body: AnyElement = match (tab, wrap_up) {
+            (WorkspaceTab::Changes, _) => self
+                .changes
+                .clone()
+                .cached(StyleRefinement::default().size_full())
+                .into_any_element(),
+            (WorkspaceTab::History, _) => self.history(task_id, shown, true, cx),
+            (WorkspaceTab::Docs, _) => self.docs_body(task_id, window, cx),
+            (WorkspaceTab::Editor, _) => self.editor_body(task_id, window, cx),
+            (_, Some((task, facts, actions))) if !panes_shown => WrapUp {
+                task,
                 facts,
-                paths,
-                list: self
-                    .dashboard
-                    .read(cx)
-                    .data
-                    .terminals
-                    .get(&task.id)
-                    .cloned(),
+                paths: shown
+                    .changes
+                    .iter()
+                    .flatten()
+                    .map(|change| change.path.clone())
+                    .collect(),
+                list: self.dashboard.read(cx).data.terminals.get(task_id).cloned(),
                 ended: shown.ended.clone(),
                 shown: shown.shown_screen.clone(),
                 reopening: shown.reopening,
                 pending: shown.pending,
-                actions: wrap_up_actions,
+                actions,
             }
             .into_any_element(),
+            _ => self.panes.clone().into_any_element(),
         };
         v_flex()
             .relative()

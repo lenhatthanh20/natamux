@@ -1,6 +1,8 @@
 //! The cells of a task table row (`TableRow` in `TaskTable.tsx`): what each column shows for a
 //! task, with the web's tooltips. The board's cards use the same row data.
 
+use std::sync::Arc;
+
 use gpui::FontWeight;
 use natamux_proto::agents::activity::{TaskUsage, latest_line};
 use natamux_proto::tasks::task::{Task, TaskState};
@@ -10,7 +12,6 @@ use ui::{Chip, Tooltip, prelude::*};
 use super::table_columns::ColumnKey;
 use super::table_rules::{
     ChecksTone, diff_size, format_tokens, format_usd, pull_request_cell, pull_request_number,
-    waits_for,
 };
 use super::task_attention::is_quiet;
 use super::task_rules::{lane_summary, stage_state_label};
@@ -24,9 +25,10 @@ use crate::components::colors::signal;
 use crate::components::text_size::row_text;
 use crate::sidebar::workspace_groups::short_branch;
 
-/// What a row shows besides the task, read once per frame.
+/// What a row shows besides the task, read once per frame. The task is shared with the
+/// dashboard: a row costs no copy of it.
 pub struct RowData {
-    pub task: Task,
+    pub task: Arc<Task>,
     pub quiet: bool,
     pub stat: Option<DiffStat>,
     pub usage: Option<TaskUsage>,
@@ -39,19 +41,19 @@ pub struct RowData {
 }
 
 impl RowData {
-    pub fn of(task: &Task, data: &DashboardData, now: i64) -> Self {
+    pub fn of(task: &Arc<Task>, data: &DashboardData, now: i64) -> Self {
         let note = (task.state == TaskState::Running)
             .then(|| data.activity.get(&task.id))
             .flatten()
             .and_then(|lines| latest_line(lines))
             .map(str::to_owned);
         RowData {
-            task: task.clone(),
+            task: Arc::clone(task),
             quiet: is_quiet(task, now),
             stat: data.diff_stats.get(&task.id).cloned(),
             usage: data.usage.get(&task.id).cloned(),
             note,
-            waits: waits_for(task, &data.tasks).join(", "),
+            waits: data.waits_for(task).join(", "),
             show_repo: data.repos.len() > 1,
             now,
         }

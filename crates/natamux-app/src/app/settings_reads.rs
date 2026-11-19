@@ -66,7 +66,7 @@ impl SettingsReads {
             }
         });
         let mut seen = Seen::default();
-        let repos = cx.observe(&dashboard, move |this, dashboard, cx| {
+        let repos = Dashboard::observe(&dashboard, cx, move |this, dashboard, cx| {
             let gens = dashboard.read(cx).data.gens;
             if !seen.changed(&gens, &[Part::Repos]) {
                 return;

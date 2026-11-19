@@ -8,11 +8,11 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, Weak};
 
-use natamux_agents::custom::{agent_kind, has_adapter};
+use natamux_agents::custom::has_adapter;
 
 use super::limits::SHELL_PROGRAMS;
 use super::screen_files::keep_screens;
-use super::shell_files::{OpenShell, delete_open_shells, note_ended_session, save_open_shells};
+use super::shell_files::{OpenShell, delete_open_shells, save_open_shells};
 use crate::shared::event_bus::{DaemonMessage, EventBus};
 use crate::shared::scheduler::{Scheduler, TimerId};
 
@@ -341,32 +341,6 @@ impl OpenShells {
         })
     }
 
-    /// An agent was started in a shell, on `session` when it went on with one.
-    pub fn note_launch(&self, task_id: &str, terminal: &str, agent: &str, session: Option<&str>) {
-        self.note(
-            task_id,
-            terminal,
-            Entry {
-                agent: Some(agent.into()),
-                session: session.map(String::from),
-            },
-        );
-    }
-
-    /// A hook named the session of the agent in a shell. Hooks name the base of a custom agent
-    /// (`claude-code` for `claude-qwen`); the shell keeps the custom one, so it comes back as it.
-    pub fn note_session(&self, task_id: &str, terminal: &str, agent: &str, session: &str) {
-        let current = self
-            .lock()
-            .entries
-            .get(task_id)
-            .and_then(|shells| shells.get(terminal))
-            .and_then(|entry| entry.agent.clone())
-            .filter(|current| agent_kind(current) == agent);
-        let agent = current.unwrap_or_else(|| agent.to_string());
-        self.note_launch(task_id, terminal, &agent, Some(session));
-    }
-
     /// The agent of a shell is starting again: its pane shows a spinner until it runs.
     pub fn mark_starting(&self, task_id: &str, terminal: &str, agent: &str) {
         {
@@ -436,26 +410,6 @@ impl OpenShells {
         if let Some(id) = state.subscription.take() {
             self.options.bus.unsubscribe(id);
         }
-    }
-
-    fn note(&self, task_id: &str, terminal: &str, entry: Entry) {
-        if self.lock().stopped || !self.options.terminals.is_open(task_id, terminal) {
-            return;
-        }
-        // A finished task keeps no open shells. The session of an agent reopened in it is kept.
-        if (self.options.is_ended)(task_id) {
-            let _ = note_ended_session(
-                &self.options.data_dir,
-                task_id,
-                terminal,
-                entry.agent.as_deref(),
-                entry.session.as_deref(),
-            );
-            return;
-        }
-        self.lock().active.insert(key_of(task_id, terminal));
-        self.set(task_id, terminal, entry);
-        self.watch_exit(task_id, terminal);
     }
 
     pub(super) fn set(&self, task_id: &str, terminal: &str, entry: Entry) {

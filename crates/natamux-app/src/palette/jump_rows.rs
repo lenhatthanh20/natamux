@@ -1,7 +1,9 @@
 //! The rows of the jump palette (`jumpSections` of `features/palette/palette.ts`): workspaces and
 //! their terminals.
 
+use std::borrow::Borrow;
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use natamux_proto::tasks::task::{Task, TaskState};
 
@@ -10,11 +12,12 @@ use super::palette_rows::{
 };
 use super::task_match::ranked_tasks;
 use crate::tasks::task_attention::is_quiet;
+use crate::tasks::task_changes::task_of;
 use crate::tasks::task_sort::{state_rank, task_number};
 
 pub struct JumpInput<'a> {
     pub query: &'a str,
-    pub tasks: &'a [Task],
+    pub tasks: &'a [Arc<Task>],
     pub recent: &'a [String],
     pub now_ms: i64,
     pub scope: Option<&'a PaletteScope>,
@@ -28,9 +31,10 @@ const MAX_TERMINAL_READS: usize = 20;
 /// The tasks whose terminals the palette asks for while it is open (the `enabled` of the web's
 /// shell queries): in the jump palette, every task with a workspace, unless there are more
 /// than 20; the command palette lists no terminals.
-pub fn terminal_reads(mode: PaletteMode, tasks: &[Task]) -> Vec<String> {
+pub fn terminal_reads<T: Borrow<Task>>(mode: PaletteMode, tasks: &[T]) -> Vec<String> {
     let workspaces: Vec<String> = tasks
         .iter()
+        .map(task_of)
         .filter(|task| task.workspace.is_some())
         .map(|task| task.id.clone())
         .collect();
@@ -127,6 +131,7 @@ pub fn jump_sections(input: &JumpInput) -> Vec<PaletteSection> {
         input
             .tasks
             .iter()
+            .map(task_of)
             .filter(|task| all_tasks || task.workspace.is_some()),
         input.scope,
         now_ms,

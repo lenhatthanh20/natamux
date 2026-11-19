@@ -93,9 +93,9 @@ impl Source {
     pub fn open_terminal(&self, options: SessionOptions) -> TerminalHandle {
         match self {
             Source::Daemon(client) => client.open_terminal(options),
-            Source::FakeDaemon => TerminalHandle::detached(
-                fake_daemon::shared().terminal(&options.task_id, &options.terminal),
-            ),
+            Source::FakeDaemon => {
+                fake_daemon::shared().open_terminal(&options.task_id, &options.terminal)
+            }
         }
     }
 

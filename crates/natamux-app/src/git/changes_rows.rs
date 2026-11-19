@@ -2,6 +2,8 @@
 //! handle, a file row, the `+12 −3` counts, and the buttons with Zed's icons. Also the two
 //! screens of the split in the details panel: the panel's part and main's diff-only part.
 
+use std::collections::HashMap;
+
 use gpui::{ClickEvent, KeyContext};
 use natamux_proto::workspaces::changes::ChangeStatus;
 use natamux_proto::workspaces::workspace::ChangeEntry;
@@ -102,28 +104,18 @@ impl ChangesView {
 
     /// The narrow layout's "Changed file" picker, with Rollback… and Refresh beside it.
     pub(super) fn render_picker(&mut self, cx: &mut Context<Self>) -> AnyElement {
-        let list = self.list.clone().unwrap_or_default();
-        let order = self.order(cx);
-        let shown = self.shown_path(cx);
-        let label = shown.clone().unwrap_or_default();
+        let label = self.shown_path(cx).unwrap_or_default();
         let this = cx.weak_entity();
-        let entries: Vec<(String, String)> = order
-            .iter()
-            .filter_map(|path| list.iter().find(|entry| &entry.path == path))
-            .map(|entry| {
-                (
-                    format!("{} {}", entry.status.letter(), entry.path),
-                    entry.path.clone(),
-                )
-            })
-            .collect();
         let picker = Button::new("changed-file-picker", label)
             .label_size(LabelSize::Small)
             .truncate(true)
             .end_icon(Icon::new(IconName::ChevronDown).size(IconSize::Small))
             .tooltip(Tooltip::text("Changed file"))
             .on_click(move |event: &ClickEvent, window, cx| {
-                let entries = entries.clone();
+                // Built on click, not on each draw: a list can hold thousands of files.
+                let Ok(entries) = this.update(cx, |view, cx| view.picker_entries(cx)) else {
+                    return;
+                };
                 let this = this.clone();
                 let menu = ContextMenu::build(window, cx, move |mut menu, _, _| {
                     for (text, path) in entries {
@@ -136,7 +128,6 @@ impl ChangesView {
                 });
                 MenuLayer::open(menu, event.position(), window, cx);
             });
-        let all = list.clone();
         h_flex()
             .h(rems_from_px(36.0_f32))
             .flex_none()
@@ -149,7 +140,7 @@ impl ChangesView {
                 icon_button("changes-rollback-narrow", "undo-2")
                     .tooltip(Tooltip::text("Rollback…"))
                     .on_click(cx.listener(move |view, _: &ClickEvent, window, cx| {
-                        view.open_rollback(all.clone(), window, cx)
+                        view.open_rollback(view.list.clone().unwrap_or_default(), window, cx)
                     })),
             )
             .child(
@@ -158,6 +149,27 @@ impl ChangesView {
                     .on_click(cx.listener(|view, _: &ClickEvent, _, cx| view.refresh(cx))),
             )
             .into_any_element()
+    }
+
+    /// The picker's menu: each file in the panel's order, with its status letter.
+    fn picker_entries(&self, cx: &App) -> Vec<(String, String)> {
+        let list = self.list.as_deref().unwrap_or_default();
+        // Reversed, so the first entry of a path wins, as a search from the start finds it.
+        let by_path: HashMap<&str, &ChangeEntry> = list
+            .iter()
+            .rev()
+            .map(|entry| (entry.path.as_str(), entry))
+            .collect();
+        self.order(cx)
+            .iter()
+            .filter_map(|path| by_path.get(path.as_str()))
+            .map(|entry| {
+                (
+                    format!("{} {}", entry.status.letter(), entry.path),
+                    entry.path.clone(),
+                )
+            })
+            .collect()
     }
 }
 

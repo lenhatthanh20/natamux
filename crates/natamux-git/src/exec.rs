@@ -2,14 +2,14 @@
 //! and the error text of a git that is missing.
 
 use std::io::{BufRead, BufReader, Read, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use natamux_core::js::js_trim;
 
-use crate::process::{CapturedBytes, capture_bytes};
+use crate::process::{CapturedBytes, capture_bytes, text_of};
 
 /// `MAX_OUTPUT_BYTES` of `git/exec.ts`.
 pub const MAX_OUTPUT_BYTES: usize = 10 * 1024 * 1024;
@@ -161,7 +161,7 @@ pub fn git(
     timeout: Option<Duration>,
     env: &[(String, String)],
 ) -> Result<String, GitError> {
-    run(cwd, args, timeout, env).map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
+    run(cwd, args, timeout, env).map(text_of)
 }
 
 /// `gitBuffer`: the stdout of git as bytes, for a file that may not be text.
@@ -242,12 +242,31 @@ fn read_blob(child: &mut Child, spec: &str, max: u64) -> std::io::Result<Option<
     Ok(Some(BlobRead::Content(content)))
 }
 
+/// The git folder of a checkout or linked worktree, and the folder its worktrees share. None
+/// when `worktree` has no `.git` of its own (a subfolder) or it is not one this knows.
+pub(crate) fn git_dirs(worktree: &Path) -> Option<(PathBuf, PathBuf)> {
+    let dot_git = worktree.join(".git");
+    let meta = std::fs::metadata(&dot_git).ok()?;
+    if meta.is_dir() {
+        return Some((dot_git.clone(), dot_git));
+    }
+    // A linked worktree: `.git` is a file with `gitdir: <path>`, and that folder names the
+    // shared one in `commondir`.
+    let text = std::fs::read_to_string(&dot_git).ok()?;
+    let target = text.trim_end().strip_prefix("gitdir: ")?;
+    let git_dir = worktree.join(target);
+    let common = match std::fs::read_to_string(git_dir.join("commondir")) {
+        Ok(text) => git_dir.join(text.trim_end()),
+        Err(_) => git_dir.clone(),
+    };
+    Some((git_dir, common))
+}
+
 /// The branch a checkout is on, or None when HEAD is detached.
 pub fn current_branch(cwd: &Path) -> Option<String> {
-    // Diff stats ask this on every read: at the top of a plain repository, `.git/HEAD` says it
-    // without a git process. Anything else (a worktree, a subfolder) asks git.
-    let git_dir = cwd.join(".git");
-    if git_dir.is_dir()
+    // Diff stats and graphs ask this on every read: at the top of a checkout or a task
+    // worktree, its HEAD file says it without a git process. Anything else (a subfolder) asks git.
+    if let Some((git_dir, _)) = git_dirs(cwd)
         && let Ok(head) = std::fs::read_to_string(git_dir.join("HEAD"))
     {
         let head = head.trim_end();

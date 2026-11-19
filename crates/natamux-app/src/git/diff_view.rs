@@ -78,9 +78,6 @@ pub struct DiffView {
     pub(super) movable: bool,
     pub(super) moving: bool,
     options: Option<DiffOptions>,
-    /// The texts of the shown read: the last commit's (None for a new file) and the working
-    /// tree's.
-    texts: Option<(Option<String>, String)>,
     pub(super) diff: Option<FileDiff>,
     pub(super) hunks: Vec<HunkRows>,
     path: Option<String>,
@@ -103,7 +100,6 @@ impl DiffView {
             movable: false,
             moving: false,
             options: None,
-            texts: None,
             diff: None,
             hunks: Vec::new(),
             path: None,
@@ -139,8 +135,7 @@ impl DiffView {
             DiffRefresh::Keep => {}
             DiffRefresh::Update if self.sides.is_some() => {
                 self.version = version;
-                self.texts = Some((original.map(str::to_owned), modified.to_owned()));
-                self.work_out();
+                self.work_out(original, modified);
                 // The changes come back open, as Zed's editor opened them all again.
                 self.closed.clear();
                 self.refresh_rows(cx);
@@ -184,21 +179,20 @@ impl DiffView {
         self.path = Some(path.to_owned());
         self.version = version;
         self.options = Some(options);
-        self.texts = Some((original.map(str::to_owned), modified.to_owned()));
-        self.work_out();
+        self.work_out(original, modified);
         self.build(window, cx);
         if let (Some(scroll), Some(sides)) = (scroll, self.sides.as_ref()) {
             sides.right.set_scroll(scroll, cx);
         }
     }
 
-    /// The hunks and the changed words of the shown texts.
-    fn work_out(&mut self) {
-        let (Some((original, modified)), Some(options)) = (&self.texts, self.options) else {
+    /// The hunks and the changed words of `original` (None: a new file) and `modified`.
+    fn work_out(&mut self, original: Option<&str>, modified: &str) {
+        let Some(options) = self.options else {
             return;
         };
         let path = self.path.as_deref().unwrap_or_default();
-        let base = diff_base(original.as_deref(), modified, options.ignore_whitespace);
+        let base = diff_base(original, modified, options.ignore_whitespace);
         let diff = diff_model::diff(base.as_deref(), modified, word_chars(path));
         self.hunks = diff.hunk_rows();
         self.diff = Some(diff);

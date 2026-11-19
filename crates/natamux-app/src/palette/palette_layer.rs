@@ -56,6 +56,11 @@ impl PaletteLayer {
         });
     }
 
+    /// The palette shows.
+    pub fn is_open(cx: &App) -> bool {
+        layer(cx).is_some_and(|layer| layer.read(cx).open.is_some())
+    }
+
     /// Types `text` in the open palette's input; the rows follow.
     pub fn set_query(text: &str, window: &mut Window, cx: &mut App) {
         let Some(layer) = layer(cx) else {

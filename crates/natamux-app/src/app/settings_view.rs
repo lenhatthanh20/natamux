@@ -69,7 +69,7 @@ impl SettingsView {
         // A project that is gone takes its page and draft with it. The pages show the projects
         // and the app settings of the view state.
         let mut seen = Seen::default();
-        let follow = cx.observe(&dashboard, move |view, dashboard, cx| {
+        let follow = Dashboard::observe(&dashboard, cx, move |view, dashboard, cx| {
             let gens = dashboard.read(cx).data.gens;
             let changed = seen.take(&gens);
             if !changed.any(&[Part::Repos, Part::View]) {

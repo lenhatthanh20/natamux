@@ -22,6 +22,7 @@ use crate::app::update::{self, UpdateChanged};
 use crate::app::update_state::UpdateState;
 use crate::components::motion;
 use crate::tasks::task_attention::{needs_me_count, next_quiet_ms};
+use crate::tasks::task_changes::task_of;
 
 /// A running task turns quiet by the clock alone, so the counts are made again this often.
 const COUNTS_FRESH_MS: i64 = 1000;
@@ -110,7 +111,7 @@ impl StatusBarView {
     ) -> Self {
         // The counts, the link, the jobs and the plan limits.
         let mut seen = Seen::default();
-        let observe = cx.observe(&dashboard, move |bar, dashboard, cx| {
+        let observe = Dashboard::observe(&dashboard, cx, move |bar, dashboard, cx| {
             let parts = [Part::Tasks, Part::Link, Part::Jobs, Part::Limits];
             let gens = dashboard.read(cx).data.gens;
             if seen.changed(&gens, &parts) {
@@ -156,7 +157,8 @@ impl StatusBarView {
         if self.clock.is_some() {
             return;
         }
-        let Some(wait) = next_quiet_ms(&self.dashboard.read(cx).data.tasks, now) else {
+        let tasks = self.dashboard.read(cx).data.tasks.iter().map(task_of);
+        let Some(wait) = next_quiet_ms(tasks, now) else {
             return;
         };
         self.clock = Some(cx.spawn(async move |bar, cx| {

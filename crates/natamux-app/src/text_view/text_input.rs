@@ -474,13 +474,15 @@ impl TextInput {
     }
 
     /// One run of the text style, or the syntax colours of a code view, kept in contrast with
-    /// the backgrounds of `marks`; the marked text of an input method is underlined.
+    /// the backgrounds of `marks`; the marked text of an input method is underlined. `query` is
+    /// the lines and the sticky heads coloured (`query_lines`, `sticky_heads`).
     pub(super) fn runs(
         &self,
         style: &TextStyle,
         len: usize,
         placeholder: bool,
         marks: &[(Range<usize>, Hsla)],
+        (lines, heads): (Option<Range<usize>>, &[usize]),
         cx: &App,
     ) -> Vec<TextRun> {
         let color = if placeholder {
@@ -501,9 +503,8 @@ impl TextInput {
         let runs = if placeholder {
             None
         } else {
-            let lines = self.query_lines();
             self.diff_runs(&run, text_len, lines.clone(), cx)
-                .or_else(|| self.code_runs(&run, text_len, lines, &self.sticky_heads(), cx))
+                .or_else(|| self.code_runs(&run, text_len, lines, heads, cx))
         };
         let label = labels.map(|_| self.label_run(&run, cx));
         let mut runs = runs.unwrap_or_else(|| vec![run]);
@@ -593,12 +594,19 @@ impl TextInput {
             }
         };
         let shows_placeholder = self.model.text().is_empty() && !self.placeholder.is_empty();
+        let line_height = style.line_height_in_pixels(rem);
+        let lines = match self.query_lines() {
+            Some(_) if self.laid.is_none() => {
+                Some(self.first_query_lines(line_height, width.is_some()))
+            }
+            lines => lines,
+        };
         let key = LayoutKey {
             version: self.model.version(),
             width,
             font,
             font_size,
-            line_height: style.line_height_in_pixels(rem),
+            line_height,
             color: style.color,
             masked: self.masked,
             marked: self.model.marked(),
@@ -608,7 +616,7 @@ impl TextInput {
             gutter,
             gutter_pad,
             view,
-            lines: self.query_lines(),
+            lines,
             heads: self.sticky_heads(),
             marks: self.contrast_marks(self.focus.is_focused(window), cx),
             blocks: diff.map(|diff| diff.rows.above.clone()),
@@ -619,7 +627,8 @@ impl TextInput {
             return laid.clone();
         }
         let (shown, is_placeholder) = self.display();
-        let runs = self.runs(&style, shown.len(), is_placeholder, &key.marks, cx);
+        let query = (key.lines.clone(), key.heads.as_slice());
+        let runs = self.runs(&style, shown.len(), is_placeholder, &key.marks, query, cx);
         let laid = Rc::new(Layout::build(
             key,
             &shown,

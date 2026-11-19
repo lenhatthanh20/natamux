@@ -277,6 +277,72 @@ fn a_reader_of_events_on_another_thread_waits_for_a_pending_write() {
     assert_eq!(reader.join().unwrap(), 1);
 }
 
+fn started(id: &str, stage: &str, terminal: &str) -> LoggedEvent {
+    let mut logged = created(id, "2026-10-08T09:00:00.000Z");
+    logged.event.kind = "stage.started".into();
+    logged.event.payload = json!({ "stage": stage, "terminal": terminal })
+        .as_object()
+        .cloned()
+        .unwrap();
+    logged
+}
+
+#[test]
+fn a_read_of_stage_starts_made_under_the_lock_waits_for_a_pending_write_after_it() {
+    let dir = folder();
+    let sync = Arc::new(std::sync::Mutex::new(sync_in(&dir)));
+    let events = [started("T-0001", "spec", "5")];
+    let (writes, read) = {
+        let mut sync = sync.lock().unwrap();
+        sync.defer_writes();
+        sync.store(make_task("T-0001", "One"), &events, true)
+            .unwrap();
+        let writes = sync.take_writes().unwrap();
+        (writes, sync.stage_starts_later("T-0001"))
+    };
+    // The reader holds no lock of the store while it waits.
+    let reader = std::thread::spawn(move || read.read().unwrap());
+
+    std::thread::sleep(Duration::from_millis(50));
+    assert!(!reader.is_finished());
+    assert!(sync.try_lock().is_ok());
+    assert!(writes.run().result.is_ok());
+
+    let starts = reader.join().unwrap();
+    assert_eq!(starts.len(), 1);
+    assert_eq!(starts, sync.lock().unwrap().list_events("T-0001").unwrap());
+}
+
+#[test]
+fn the_stage_starts_are_those_of_the_event_list_also_with_a_write_of_this_call_left() {
+    let dir = folder();
+    let mut sync = sync_in(&dir);
+    let first = [
+        created("T-0001", "2026-10-08T09:00:00.000Z"),
+        started("T-0001", "spec", "1"),
+    ];
+    sync.store(make_task("T-0001", "One"), &first, true)
+        .unwrap();
+    // A task with no write so far has nothing to wait for.
+    let none = sync.stage_starts_later("T-0002").read().unwrap();
+    assert!(none.is_empty());
+
+    sync.defer_writes();
+    let second = [started("T-0001", "build", "2")];
+    sync.store(make_task("T-0001", "Two"), &second, true)
+        .unwrap();
+    // The write this call left would never run while the read waits: it runs first.
+    let later = sync.stage_starts_later("T-0001").read().unwrap();
+    assert!(sync.take_writes().is_none());
+    let now = sync.stage_starts("T-0001").unwrap();
+
+    let mut wanted = sync.list_events("T-0001").unwrap();
+    wanted.retain(|stored| stored.event.kind == "stage.started");
+    assert_eq!(wanted.len(), 2);
+    assert_eq!(later, wanted);
+    assert_eq!(now, wanted);
+}
+
 #[test]
 fn a_check_during_a_pending_write_neither_waits_nor_reads_the_file_back() {
     let dir = folder();

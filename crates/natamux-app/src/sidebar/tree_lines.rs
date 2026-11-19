@@ -1,6 +1,35 @@
-//! Which lines of the sidebar list changed, so the list measures only those again.
+//! Which lines of the sidebar list changed, so the list measures only those again, and what a
+//! change of the dashboard asks of the tree.
 
+use crate::app::dashboard_data::{Changed, Part};
 use crate::sidebar::tree_model::Line;
+
+/// What the tree builds from: the lines and the terminals each row reads.
+const MODEL_PARTS: &[Part] = &[Part::Tasks, Part::Repos, Part::Terminals, Part::View];
+
+/// What a change of the dashboard asks of the tree.
+pub(super) struct TreeNews {
+    /// The lines are built again.
+    pub(super) build: bool,
+    /// The rows read the dashboard again and the tree draws.
+    pub(super) draw: bool,
+    /// Every row is measured again.
+    pub(super) measure: bool,
+}
+
+/// The tree shows neither the selection nor a panel width, so a key move in the table and a
+/// drag of a panel edge ask nothing of it. The list measures its rows again by itself when its
+/// width changes.
+pub(super) fn tree_news(changed: &Changed) -> TreeNews {
+    let build = changed.any_exact(MODEL_PARTS);
+    TreeNews {
+        build,
+        // Cards also show the activity, the waiting boxes and the diff stat.
+        draw: build || changed.any_exact(&[Part::Activity, Part::Events, Part::DiffStats]),
+        // The waiting box and the blur change a card's height, not the lines.
+        measure: changed.any_exact(&[Part::Events, Part::View]),
+    }
+}
 
 #[derive(Debug, PartialEq)]
 pub(super) enum LinesChange {

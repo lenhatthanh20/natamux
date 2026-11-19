@@ -30,7 +30,7 @@ fn a_column_of_two_hundred_tasks_builds_few_cards_and_keeps_its_scroll_top(
     let dashboard = cx.new(|cx| Dashboard::new(Ok(source), Default::default(), cx));
     cx.run_until_parked();
     let (board, cx) = cx.add_window_view(move |_, cx| TaskBoard::new(dashboard, cx));
-    let mut tasks: Vec<Task> = (0..200).map(running).collect();
+    let mut tasks: Vec<Arc<Task>> = (0..200).map(running).map(Arc::new).collect();
     board.update(cx, |board, cx| board.set_rows(tasks.clone(), cx));
     cx.run_until_parked();
     let built = board.read_with(cx, |board, _| board.built.get());
@@ -44,7 +44,7 @@ fn a_column_of_two_hundred_tasks_builds_few_cards_and_keeps_its_scroll_top(
         offset_in_item: px(0.),
     });
     cx.run_until_parked();
-    tasks.push(running(200));
+    tasks.push(Arc::new(running(200)));
     board.update(cx, |board, cx| board.set_rows(tasks, cx));
     cx.run_until_parked();
     assert_eq!(list.item_count(), 201);

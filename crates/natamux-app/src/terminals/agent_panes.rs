@@ -3,6 +3,7 @@
 //! work or wait; once the user adds or closes a pane, their own list (kept in `view.json`).
 //! Closing a pane leaves its agent running.
 
+use std::borrow::Borrow;
 use std::collections::BTreeSet;
 use std::rc::Rc;
 
@@ -30,14 +31,16 @@ use crate::components::empty_state::EmptyState;
 use crate::components::menu::MenuLayer;
 use crate::sidebar::shell_rows::terminal_state;
 use crate::tasks::state_filter::width_probe;
+use crate::tasks::task_changes::task_of;
 use crate::workspaces::wrap_up_rules::is_finished_state;
 
 type OnClick = Rc<dyn Fn(&mut Window, &mut App)>;
 
 /// The tasks "Add a pane" offers: a workspace, not finished, not shown yet.
-pub fn pane_candidates<'a>(tasks: &'a [Task], shown: &[String]) -> Vec<&'a Task> {
+pub fn pane_candidates<'a, T: Borrow<Task>>(tasks: &'a [T], shown: &[String]) -> Vec<&'a Task> {
     tasks
         .iter()
+        .map(task_of)
         .filter(|task| task.workspace.is_some() && !is_finished_state(task.state))
         .filter(|task| !shown.contains(&task.id))
         .collect()
@@ -84,8 +87,8 @@ impl AgentPanes {
     pub fn new(dashboard: Entity<Dashboard>, cx: &mut Context<Self>) -> Self {
         let width = cx.new(|_| None);
         let observe = cx.observe(&width, |_, _, cx| cx.notify());
-        // Root caches the grid: its tasks, their terminals and the agents' lines come from the
-        // dashboard.
+        // The grid's tasks, their terminals and the agents' lines come from the dashboard. Root
+        // does not draw for those, so the grid asks for its own draw.
         let parts = &[Part::Tasks, Part::Terminals, Part::Activity, Part::View];
         let follow = Dashboard::redraw_on(&dashboard, parts, cx);
         AgentPanes {

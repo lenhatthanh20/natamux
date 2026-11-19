@@ -186,7 +186,7 @@ fn counts_every_subtask_of_the_task_and_the_done_ones() {
     assert_eq!(counts.get("T-0002"), None);
 }
 
-fn ids(tasks: &[Task]) -> Vec<&str> {
+fn ids<'a>(tasks: &[&'a Task]) -> Vec<&'a str> {
     tasks.iter().map(|task| task.id.as_str()).collect()
 }
 
@@ -196,25 +196,52 @@ fn brings_back_the_parent_of_a_subtask_that_the_filter_matched() {
     let child = make_task(json!({"id": "T-0002", "title": "Child", "parentId": "T-0001"}));
     let other = make_task(json!({"id": "T-0003", "title": "Other"}));
     let all = [parent.clone(), child.clone(), other.clone()];
+    assert_eq!(ids(&with_parents(&[&child], &all)), ["T-0002", "T-0001"]);
     assert_eq!(
-        ids(&with_parents(std::slice::from_ref(&child), &all)),
-        ["T-0002", "T-0001"]
-    );
-    assert_eq!(
-        ids(&with_parents(&[parent, child], &all)),
+        ids(&with_parents(&[&parent, &child], &all)),
         ["T-0001", "T-0002"]
     );
-    assert_eq!(with_parents(std::slice::from_ref(&other), &all), [other]);
+    assert_eq!(with_parents(&[&other], &all), [&other]);
 }
 
 #[test]
 fn does_not_bring_back_a_parent_without_a_workspace() {
     let parent = make_task(json!({"id": "T-0001", "workspace": null}));
     let child = make_task(json!({"id": "T-0002", "parentId": "T-0001"}));
+    let all = [parent, child.clone()];
+    assert_eq!(with_parents(&[&child], &all), [&child]);
+}
+
+#[test]
+fn adds_each_filtered_out_parent_once_after_the_matches_in_first_need_order() {
+    let task = |id: &str, parent: Option<&str>| make_task(json!({"id": id, "parentId": parent}));
+    let no_workspace = make_task(json!({"id": "n", "workspace": null}));
+    let all = [
+        task("p1", None),
+        task("c1", Some("p1")),
+        task("x", None),
+        task("c2", Some("p2")),
+        task("p2", None),
+        task("c3", Some("p1")),
+        no_workspace,
+        task("c4", Some("n")),
+        task("c5", Some("gone")),
+    ];
+    let pick = |wanted: &[&str]| {
+        wanted
+            .iter()
+            .filter_map(|id| all.iter().find(|task| task.id == *id))
+            .collect::<Vec<&Task>>()
+    };
+
+    let shown = pick(&["c1", "x", "c2", "c3", "c4", "c5"]);
     assert_eq!(
-        with_parents(std::slice::from_ref(&child), &[parent, child.clone()]),
-        [child]
+        ids(&with_parents(&shown, &all)),
+        ["c1", "x", "c2", "c3", "c4", "c5", "p1", "p2"]
     );
+    // A parent the filter matched itself keeps its own place.
+    let shown = pick(&["c2", "p2", "c1"]);
+    assert_eq!(ids(&with_parents(&shown, &all)), ["c2", "p2", "c1", "p1"]);
 }
 
 #[test]

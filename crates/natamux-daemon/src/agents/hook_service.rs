@@ -16,7 +16,7 @@ use super::errors::HookError;
 use super::hook_activity::{Activities, changes_files, is_before_tool};
 use super::hook_paths::{is_inside_parts, parts_of};
 use super::hook_usage::{TurnStage, UsageStages};
-use super::hook_waits::wait_of;
+use super::hook_waits::wait_at_end;
 use crate::shared::event_bus::{DaemonMessage, EventBus};
 use crate::stages::runner::StageRunner;
 use crate::tasks::errors::TaskError;
@@ -411,12 +411,10 @@ impl HookService {
             states.remove(shell);
         }
         let wait = if state == TaskState::NeedsInput {
-            wait_of(
-                &self.tasks.list_events(&task.id)?,
-                &stage,
-                &task.stage,
-                shell,
-            )
+            // Only the end of the log: a long task has thousands of events.
+            let read = self.tasks.last_events(&task.id)?;
+            let tail = |limit| read.read(limit).map_err(TaskError::Failed);
+            wait_at_end(tail, &stage, &task.stage, shell)?
         } else {
             Wait::Answer
         };

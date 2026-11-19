@@ -150,6 +150,21 @@ fn tells_whether_origin_has_the_branch_from_the_refs_a_push_left() {
 }
 
 #[test]
+fn lists_the_branches_of_origin_for_every_worktree_in_one_call() {
+    let f = fixture();
+    assert_eq!(remote_branches(&f.dir), Ok(HashSet::new()));
+    origin_with_main(&f);
+    add_worktree(&f, None);
+    let main_only = HashSet::from(["main".to_string()]);
+    assert_eq!(remote_branches(&f.worktree), Ok(main_only));
+
+    run_git(&f.worktree, &["push", "origin", BRANCH]);
+    let both = HashSet::from(["main".to_string(), BRANCH.to_string()]);
+    // The main checkout sees the branch its worktree pushed.
+    assert_eq!(remote_branches(&f.dir), Ok(both));
+}
+
+#[test]
 fn counts_the_commits_of_the_local_base_that_origin_does_not_have() {
     let f = fixture();
     origin_with_main(&f);

@@ -4,6 +4,8 @@
 // Ported with their tests (spec D11). Only the upsert is used: the feed sends one task per event.
 #![cfg_attr(not(test), allow(dead_code))]
 
+use std::borrow::Borrow;
+
 use natamux_proto::tasks::task::Task;
 
 fn by_recent(a: &Task, b: &Task) -> std::cmp::Ordering {
@@ -28,20 +30,28 @@ pub fn upsert_task(tasks: &[Task], task: Task) -> Vec<Task> {
 }
 
 /// `upsert_task` in place: the feed applies one task per event, and a copy of the whole list
-/// each time cost more than the rest of the event (T-0223).
-pub fn upsert_task_in(tasks: &mut Vec<Task>, task: Task) {
-    let held = tasks.iter().position(|known| known.id == task.id);
+/// each time cost more than the rest of the event (T-0223). The list holds its tasks by value
+/// or shared. False: the task held is newer, and the list stays as it is.
+pub fn upsert_task_in<T: Borrow<Task>>(tasks: &mut Vec<T>, task: T) -> bool {
+    let new = task_of(&task);
+    let held = tasks.iter().position(|known| task_of(known).id == new.id);
     if let Some(at) = held {
-        if tasks[at].updated_at > task.updated_at {
-            return;
+        if task_of(&tasks[at]).updated_at > new.updated_at {
+            return false;
         }
         tasks.remove(at);
     }
     let at = tasks
         .iter()
-        .position(|existing| by_recent(&task, existing).is_lt())
+        .position(|existing| by_recent(new, task_of(existing)).is_lt())
         .unwrap_or(tasks.len());
     tasks.insert(at, task);
+    true
+}
+
+/// The task of a list that holds its tasks by value, borrowed or shared.
+pub fn task_of<T: Borrow<Task>>(held: &T) -> &Task {
+    <T as Borrow<Task>>::borrow(held)
 }
 
 /// A change from the live feed: a task that changed, or the id of one that was deleted.

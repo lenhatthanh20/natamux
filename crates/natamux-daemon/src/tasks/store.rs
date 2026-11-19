@@ -86,6 +86,16 @@ pub fn parse_task(fields: Map<String, Value>) -> TaskResult<Task> {
     Ok(validate_task(&Value::Object(fields))?)
 }
 
+/// The steps of a task from `stages`, the settings of its repository.
+pub fn steps_in(task: &Task, stages: &[Step]) -> Vec<Step> {
+    let refs: Vec<StepRef> = task
+        .stages
+        .iter()
+        .filter_map(|each| serde_json::from_value(each.clone()).ok())
+        .collect();
+    resolve_steps(&refs, stages)
+}
+
 impl Store {
     pub fn data_dir(&self) -> PathBuf {
         self.sync.data_dir().to_path_buf()
@@ -106,17 +116,7 @@ impl Store {
 
     /// The steps of a task, with each stage's settings from its repository.
     pub fn steps_of(&self, task: &Task) -> Vec<Step> {
-        self.steps_in(task, &(self.settings_of)(task.repo.as_deref()))
-    }
-
-    /// The steps of a task from `stages`, the settings of its repository.
-    fn steps_in(&self, task: &Task, stages: &[Step]) -> Vec<Step> {
-        let refs: Vec<StepRef> = task
-            .stages
-            .iter()
-            .filter_map(|each| serde_json::from_value(each.clone()).ok())
-            .collect();
-        resolve_steps(&refs, stages)
+        steps_in(task, &(self.settings_of)(task.repo.as_deref()))
     }
 
     pub fn get_task(&mut self, task_id: &str) -> TaskResult<Task> {
@@ -448,7 +448,7 @@ impl Store {
         let task = self.get_task(task_id)?;
         let mut input = apply_event_input(raw)?;
         let steps = match catalog {
-            Some((repo, stages)) if *repo == task.repo => self.steps_in(&task, stages),
+            Some((repo, stages)) if *repo == task.repo => steps_in(&task, stages),
             _ => self.steps_of(&task),
         };
         // Read only when needed: an event that names its terminal and no stage, such as a bell.
@@ -460,7 +460,8 @@ impl Store {
         let by_terminal =
             payload.get("terminal").is_some_and(Value::is_string) && !payload.contains_key("stage");
         let pinned = if by_terminal {
-            let events = self.list_events(task_id)?;
+            self.get_task(task_id)?;
+            let events = self.sync.stage_starts(task_id).map_err(TaskError::Failed)?;
             pinned_terminals_of(events.iter().map(|stored| (stored.accepted, &stored.event)))
         } else {
             Vec::new()

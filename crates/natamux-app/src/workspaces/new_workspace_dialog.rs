@@ -174,7 +174,7 @@ impl NewWorkspaceDialog {
         set_mono(&model, cx);
         let ids = repo_ids(&dashboard, cx);
         let mut seen = Seen::default();
-        let follow = cx.observe(&dashboard, move |this, dashboard, cx| {
+        let follow = Dashboard::observe(&dashboard, cx, move |this, dashboard, cx| {
             let gens = dashboard.read(cx).data.gens;
             if seen.changed(&gens, &[Part::Repos]) {
                 this.read_repo(cx);

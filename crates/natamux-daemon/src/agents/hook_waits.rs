@@ -5,7 +5,33 @@ use natamux_core::events::moves::move_of;
 use natamux_proto::events::task_event::StoredEvent;
 use serde_json::Value;
 
-pub(super) fn wait_of(events: &[StoredEvent], stage: &str, step: &str, terminal: &str) -> Wait {
+/// How many events the first read of the log's end asks for. The wait of a lane is nearly always
+/// in the last few events; the whole log of a long task has thousands.
+const TAIL: usize = 64;
+
+/// The current wait of a lane, read from the end of the task's events: `tail(limit)` gives the
+/// last `limit` of them, oldest first. Reads further back only when those do not decide it.
+pub(super) fn wait_at_end<E>(
+    mut tail: impl FnMut(usize) -> Result<Vec<StoredEvent>, E>,
+    stage: &str,
+    step: &str,
+    terminal: &str,
+) -> Result<Wait, E> {
+    let mut limit = TAIL;
+    loop {
+        let events = tail(limit)?;
+        match wait_in(&events, stage, step, terminal) {
+            Ok(wait) => return Ok(wait),
+            // Fewer events than asked for: this is the whole log.
+            Err(whole) if events.len() < limit => return Ok(whole),
+            Err(_) => limit = limit.saturating_mul(8),
+        }
+    }
+}
+
+/// The wait when `events`, the end of a log, decide it. Else, as an error, the wait in case
+/// they are the whole log: an older event may still change it.
+fn wait_in(events: &[StoredEvent], stage: &str, step: &str, terminal: &str) -> Result<Wait, Wait> {
     let mut resumed_session = None;
     for (index, stored) in events.iter().enumerate().rev() {
         let event = &stored.event;
@@ -18,7 +44,7 @@ pub(super) fn wait_of(events: &[StoredEvent], stage: &str, step: &str, terminal:
         let overrides_lane = event.kind == "state.overridden"
             && text("stage").is_none_or(|named| named == stage || named == step);
         if stored.accepted && (resets_step || overrides_lane) {
-            return Wait::Answer;
+            return Ok(Wait::Answer);
         }
         let belongs = match text("stage") {
             Some(named) => named == stage,
@@ -31,10 +57,10 @@ pub(super) fn wait_of(events: &[StoredEvent], stage: &str, step: &str, terminal:
             // Restoring a named session keeps its pending permission. A fresh or unknown
             // session must not inherit a wait from the previous run in this terminal.
             let Some(session) = text("resumeSessionId").filter(|id| !id.is_empty()) else {
-                return Wait::Answer;
+                return Ok(Wait::Answer);
             };
             if resumed_session.is_some_and(|known| known != session) {
-                return Wait::Answer;
+                return Ok(Wait::Answer);
             }
             resumed_session = Some(session);
             continue;
@@ -50,26 +76,34 @@ pub(super) fn wait_of(events: &[StoredEvent], stage: &str, step: &str, terminal:
                         Some("PermissionRequest" | "Notification" | "notification" | "PreToolUse")
                     ));
             if !hook_wait {
-                return Wait::Answer;
+                return Ok(Wait::Answer);
             }
             if stored.accepted {
-                if let (Some(resumed), Some(previous)) = (
-                    resumed_session,
-                    session_of_wait(&events[..=index], stage, terminal),
-                ) && resumed != previous
-                {
-                    return Wait::Answer;
-                }
-                return Wait::Hook;
+                let Some(resumed) = resumed_session else {
+                    return Ok(Wait::Hook);
+                };
+                return match session_of_wait(&events[..=index], stage, terminal) {
+                    Session::Named(previous) if previous != resumed => Ok(Wait::Answer),
+                    Session::Older => Err(Wait::Hook),
+                    _ => Ok(Wait::Hook),
+                };
             }
         } else if stored.accepted && move_of(event).is_some() {
-            return Wait::Answer;
+            return Ok(Wait::Answer);
         }
     }
-    Wait::Answer
+    Err(Wait::Answer)
 }
 
-fn session_of_wait<'a>(events: &'a [StoredEvent], stage: &str, terminal: &str) -> Option<&'a str> {
+/// The session of a wait, as far as the events given tell.
+enum Session<'a> {
+    Named(&'a str),
+    Unknown,
+    /// No event given tells: an older one may.
+    Older,
+}
+
+fn session_of_wait<'a>(events: &'a [StoredEvent], stage: &str, terminal: &str) -> Session<'a> {
     for stored in events.iter().rev().filter(|stored| stored.accepted) {
         let event = &stored.event;
         let text = |key| event.payload.get(key).and_then(Value::as_str);
@@ -83,15 +117,15 @@ fn session_of_wait<'a>(events: &'a [StoredEvent], stage: &str, terminal: &str) -
         if event.source == "agent"
             && let Some(session) = text("sessionId")
         {
-            return Some(session);
+            return Session::Named(session);
         }
         if (event.kind != "agent.asked" && move_of(event).is_some())
             || event.kind == "agent.launched"
         {
-            return None;
+            return Session::Unknown;
         }
     }
-    None
+    Session::Older
 }
 
 #[cfg(test)]

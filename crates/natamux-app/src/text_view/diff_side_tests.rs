@@ -255,7 +255,8 @@ fn colours_of(side: &DiffSide, cx: &mut VisualTestContext) -> (String, Vec<Hsla>
     input.update_in(cx, |input, _, cx| {
         let style = input.text_style(cx);
         let text = input.model.text().to_owned();
-        let runs = input.runs(&style, text.len(), false, &[], cx);
+        let query = (input.query_lines(), input.sticky_heads());
+        let runs = input.runs(&style, text.len(), false, &[], (query.0, &query.1), cx);
         let colours = runs
             .iter()
             .flat_map(|run| std::iter::repeat_n(run.color, run.len))

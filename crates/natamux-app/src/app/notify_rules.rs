@@ -5,6 +5,7 @@
 // Ported with their tests (spec D14); the notifier and the app shell call them.
 #![cfg_attr(not(test), allow(dead_code))]
 
+use std::borrow::Borrow;
 use std::collections::{BTreeSet, HashMap, HashSet};
 
 use gpui::SystemNotification;
@@ -13,6 +14,7 @@ use natamux_proto::stages::capabilities::stage_name_of_id;
 use natamux_proto::tasks::task::{Task, TaskState};
 
 use crate::app::view_rules::is_unseen;
+use crate::tasks::task_changes::task_of;
 use crate::tasks::task_rules::needs_me;
 
 /// What the last look saw of a task: its state, the stages whose lane waited for the user, and
@@ -27,11 +29,36 @@ pub struct Seen {
 /// Each task at the last look.
 pub type States = HashMap<String, Seen>;
 
+const KNOWN_STATES: [TaskState; 10] = [
+    TaskState::Draft,
+    TaskState::Ready,
+    TaskState::Running,
+    TaskState::Idle,
+    TaskState::NeedsInput,
+    TaskState::Review,
+    TaskState::Blocked,
+    TaskState::Failed,
+    TaskState::Done,
+    TaskState::Cancelled,
+];
+
+/// The state a lane holds, read without cloning the value: as serde reads it, a name this build
+/// does not know is `Unknown`, and a value that is no string is none.
+fn lane_state(lane: &serde_json::Value) -> Option<TaskState> {
+    let name = lane.as_str()?;
+    Some(
+        KNOWN_STATES
+            .into_iter()
+            .find(|state| state.name() == name)
+            .unwrap_or(TaskState::Unknown),
+    )
+}
+
 /// The stages whose lane is in a state `keep` takes.
 fn stages_where(task: &Task, keep: impl Fn(TaskState) -> bool) -> BTreeSet<String> {
     task.lanes
         .iter()
-        .filter(|(_, state)| serde_json::from_value::<TaskState>((*state).clone()).is_ok_and(&keep))
+        .filter(|(_, state)| lane_state(state).is_some_and(&keep))
         .map(|(stage, _)| stage.clone())
         .collect()
 }
@@ -49,9 +76,13 @@ fn idle_stages(task: &Task) -> BTreeSet<String> {
 
 /// Tasks that moved into a state that needs the user since the last look. A task seen for the
 /// first time does not count, so opening the app does not ring for every waiting task.
-pub fn tasks_that_started_waiting<'a>(previous: &States, tasks: &'a [Task]) -> Vec<&'a Task> {
+pub fn tasks_that_started_waiting<'a, T: Borrow<Task>>(
+    previous: &States,
+    tasks: &'a [T],
+) -> Vec<&'a Task> {
     tasks
         .iter()
+        .map(task_of)
         .filter(|task| {
             previous
                 .get(&task.id)
@@ -60,18 +91,35 @@ pub fn tasks_that_started_waiting<'a>(previous: &States, tasks: &'a [Task]) -> V
         .collect()
 }
 
-pub fn states_by_id(tasks: &[Task]) -> States {
+/// What a look sees of one task.
+fn seen_of(task: &Task) -> Seen {
+    Seen {
+        state: task.state,
+        waits: waiting_stages(task),
+        idle: idle_stages(task),
+    }
+}
+
+pub fn states_by_id<T: Borrow<Task>>(tasks: &[T]) -> States {
     tasks
         .iter()
-        .map(|task| {
-            let seen = Seen {
-                state: task.state,
-                waits: waiting_stages(task),
-                idle: idle_stages(task),
-            };
-            (task.id.clone(), seen)
-        })
+        .map(task_of)
+        .map(|task| (task.id.clone(), seen_of(task)))
         .collect()
+}
+
+/// A look at the one task that changed since the last look: `previous` then holds the task as it
+/// is now, with no look at the other tasks. What comes back holds only how the task was, so
+/// `rings` of it and this one task gives what `rings` of both whole lists would.
+pub fn look_at_one(previous: &mut States, task: &Task) -> States {
+    let now = seen_of(task);
+    match previous.get_mut(&task.id) {
+        Some(held) => States::from([(task.id.clone(), std::mem::replace(held, now))]),
+        None => {
+            previous.insert(task.id.clone(), now);
+            States::new()
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -150,20 +198,20 @@ fn newly_idle(before: &Seen, task: &Task) -> Vec<(String, TaskState)> {
 /// What rings after a new task list: the stages that started to wait (a task that waits already
 /// rings again when another of its terminals starts to wait), the stages whose agent ended its
 /// turn, then the tasks that became done.
-pub fn rings(previous: &States, tasks: &[Task], repos: &[Repo]) -> Vec<Ring> {
+pub fn rings<T: Borrow<Task>>(previous: &States, tasks: &[T], repos: &[Repo]) -> Vec<Ring> {
     let started: HashSet<&str> = tasks_that_started_waiting(previous, tasks)
         .iter()
         .map(|task| task.id.as_str())
         .collect();
     let mut ring = Vec::new();
-    for task in tasks {
+    for task in tasks.iter().map(task_of) {
         let Some(before) = previous.get(&task.id) else {
             continue;
         };
         let mut new: Vec<(String, TaskState)> = waiting_stages(task)
             .difference(&before.waits)
             .filter_map(|stage| {
-                let state = serde_json::from_value(task.lanes.get(stage)?.clone()).ok()?;
+                let state = lane_state(task.lanes.get(stage)?)?;
                 Some((stage.clone(), state))
             })
             .collect();
@@ -227,9 +275,10 @@ pub fn plays_sound<T>(ring: &[T]) -> bool {
 
 /// Idle tasks the user has not looked at since their agent ended its turn: the report still
 /// waits to be read, so the Dock counts them until the task is opened.
-pub fn unread_turn_ends(tasks: &[Task], seen: &[(String, TaskState)]) -> usize {
+pub fn unread_turn_ends<T: Borrow<Task>>(tasks: &[T], seen: &[(String, TaskState)]) -> usize {
     tasks
         .iter()
+        .map(task_of)
         .filter(|task| task.state == TaskState::Idle && is_unseen(seen, &task.id, task.state))
         .count()
 }
@@ -252,9 +301,13 @@ pub fn turned_on() -> SystemNotification {
 
 /// Tasks that became done since the last look. A cancel is always someone's own act, so it does
 /// not ring.
-pub fn tasks_that_finished<'a>(previous: &States, tasks: &'a [Task]) -> Vec<&'a Task> {
+pub fn tasks_that_finished<'a, T: Borrow<Task>>(
+    previous: &States,
+    tasks: &'a [T],
+) -> Vec<&'a Task> {
     tasks
         .iter()
+        .map(task_of)
         .filter(|task| {
             previous.get(&task.id).is_some_and(|before| {
                 before.state != TaskState::Done && task.state == TaskState::Done
@@ -272,9 +325,9 @@ pub struct NeedsYouAnnouncer {
 }
 
 impl NeedsYouAnnouncer {
-    /// `waiting` is `needs_me_tasks`. `loaded` is false until the task list has loaded: an empty
+    /// `waiting` is `needs_me_refs`. `loaded` is false until the task list has loaded: an empty
     /// list before that is not "nothing waits".
-    pub fn update(&mut self, waiting: &[Task], loaded: bool) {
+    pub fn update<T: Borrow<Task>>(&mut self, waiting: &[T], loaded: bool) {
         if !loaded {
             return;
         }
@@ -282,10 +335,12 @@ impl NeedsYouAnnouncer {
             None => Vec::new(),
             Some(known) => waiting
                 .iter()
+                .map(task_of)
                 .filter(|task| !known.contains(&task.id))
                 .collect(),
         };
-        self.known = Some(waiting.iter().map(|task| task.id.clone()).collect());
+        let ids = waiting.iter().map(|task| task_of(task).id.clone());
+        self.known = Some(ids.collect());
         if !fresh.is_empty() {
             let lines: Vec<String> = fresh
                 .iter()

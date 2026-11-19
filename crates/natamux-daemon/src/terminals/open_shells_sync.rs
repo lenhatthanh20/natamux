@@ -3,7 +3,10 @@
 
 use std::collections::BTreeMap;
 
+use natamux_agents::custom::agent_kind;
+
 use super::open_shells::{EXIT_CONFIRM_MS, Entry, OpenShells, PLAIN, RESTORE_POLL_MS, key_of};
+use super::shell_files::note_ended_session;
 use crate::shared::scheduler::TimerId;
 
 impl OpenShells {
@@ -170,6 +173,67 @@ impl OpenShells {
             this.write(&state, &task);
         });
         state.closing.insert(key, timer);
+    }
+
+    /// An agent was started in a shell, on `session` when it went on with one.
+    pub fn note_launch(&self, task_id: &str, terminal: &str, agent: &str, session: Option<&str>) {
+        self.note(
+            task_id,
+            terminal,
+            Entry {
+                agent: Some(agent.into()),
+                session: session.map(String::from),
+            },
+        );
+    }
+
+    /// A hook named the session of the agent in a shell. Hooks name the base of a custom agent
+    /// (`claude-code` for `claude-qwen`); the shell keeps the custom one, so it comes back as it.
+    pub fn note_session(&self, task_id: &str, terminal: &str, agent: &str, session: &str) {
+        let current = self
+            .lock()
+            .entries
+            .get(task_id)
+            .and_then(|shells| shells.get(terminal))
+            .and_then(|entry| entry.agent.clone())
+            .filter(|current| agent_kind(current) == agent);
+        let agent = current.unwrap_or_else(|| agent.to_string());
+        self.note_launch(task_id, terminal, &agent, Some(session));
+    }
+
+    fn note(&self, task_id: &str, terminal: &str, entry: Entry) {
+        if self.lock().stopped || !self.options.terminals.is_open(task_id, terminal) {
+            return;
+        }
+        // Most hooks name the session the shell has already. Such a shell is of a task that was
+        // not ended when it was noted, and the shells of a task go when it ends (`forget`): the
+        // task store is not asked again. The rest is what a note that changes nothing does.
+        if self.is_noted(task_id, terminal, &entry) {
+            self.watch_exit(task_id, terminal);
+            return;
+        }
+        // A finished task keeps no open shells. The session of an agent reopened in it is kept.
+        if (self.options.is_ended)(task_id) {
+            let _ = note_ended_session(
+                &self.options.data_dir,
+                task_id,
+                terminal,
+                entry.agent.as_deref(),
+                entry.session.as_deref(),
+            );
+            return;
+        }
+        self.lock().active.insert(key_of(task_id, terminal));
+        self.set(task_id, terminal, entry);
+        self.watch_exit(task_id, terminal);
+    }
+
+    /// Whether the shell is written down with this agent and session, as one where an agent runs.
+    fn is_noted(&self, task_id: &str, terminal: &str, entry: &Entry) -> bool {
+        let state = self.lock();
+        let shells = state.entries.get(task_id);
+        shells.and_then(|shells| shells.get(terminal)) == Some(entry)
+            && state.active.contains(&key_of(task_id, terminal))
     }
 
     /// An agent that left the foreground counts as quit once it stayed gone for EXIT_CONFIRM_MS.

@@ -67,8 +67,9 @@ pub struct Line {
     pub len: usize,
     /// The row of the whole text its first row is.
     pub first_row: usize,
-    /// The offsets in the line where its rows start; the first is 0.
-    pub row_starts: Vec<usize>,
+    /// The offsets in the line where its rows start; the first is 0. Shared with the line of the
+    /// last layout it was kept from.
+    pub row_starts: Rc<[usize]>,
     /// The line with its tabs as spaces, in rows.
     rows: Rc<Rows>,
     tabs: Vec<Tab>,
@@ -353,7 +354,9 @@ fn shape_rows(text: String, runs: &[TextRun], key: &LayoutKey, window: &Window) 
 
 /// The part of `runs` that covers `range` of the text.
 fn runs_in(runs: &[TextRun], range: Range<usize>) -> Vec<TextRun> {
-    RunCursor::new(runs).take(range)
+    let mut out = Vec::new();
+    RunCursor::new(runs).take_into(range, &mut out);
+    out
 }
 
 /// Gives the parts of `runs` for ranges of the text that come one after the other, without
@@ -374,15 +377,16 @@ impl<'a> RunCursor<'a> {
         }
     }
 
-    /// The part of the runs that covers `range`, which starts at or after the last one's start.
-    fn take(&mut self, range: Range<usize>) -> Vec<TextRun> {
+    /// Puts in `out` (cleared, so a layout reuses one buffer for all its lines) the part of the
+    /// runs that covers `range`, which starts at or after the last one's start.
+    fn take_into(&mut self, range: Range<usize>, out: &mut Vec<TextRun>) {
         while let Some(run) = self.runs.get(self.index)
             && self.at + run.len <= range.start
         {
             self.at += run.len;
             self.index += 1;
         }
-        let mut out = Vec::new();
+        out.clear();
         let mut at = self.at;
         for run in &self.runs[self.index.min(self.runs.len())..] {
             if at >= range.end {
@@ -397,7 +401,6 @@ impl<'a> RunCursor<'a> {
                 });
             }
         }
-        out
     }
 }
 
@@ -425,13 +428,13 @@ impl Layout {
         let mut ready: Option<HashMap<&str, Vec<&Rc<Rows>>>> = None;
         let mut lines = Vec::new();
         let (mut start, mut row) = (0, 0);
-        let mut cursor = RunCursor::new(runs);
+        let (mut cursor, mut line_runs) = (RunCursor::new(runs), Vec::new());
         let blocks = key.blocks.clone();
         let above = |index: usize| blocks.as_ref().and_then(|b| b.get(index).copied());
         for (index, source) in text.split('\n').enumerate() {
             let len = source.len();
             row += above(index).unwrap_or(0);
-            let line_runs = cursor.take(start..start + len);
+            cursor.take_into(start..start + len, &mut line_runs);
             let same = |old: &&Line| *old.rows.text == *source && old.rows.runs == line_runs;
             // A line with no tab shows as it is: compare it with the old line at its place.
             let kept = if source.contains('\t') {
@@ -471,20 +474,17 @@ impl Layout {
                 });
                 let rows =
                     cached.unwrap_or_else(|| Rc::new(shape_rows(shown, &line_runs, &key, window)));
-                let shown_starts: Vec<usize> = rows.rows.iter().map(|row| row.shown).collect();
                 let mut line = Line {
                     start,
                     len,
                     first_row: row,
-                    row_starts: Vec::new(),
+                    row_starts: Rc::from([]),
                     rows,
                     tabs,
                 };
                 // A row that starts inside a tab's spaces keeps the tab on the row above.
-                line.row_starts = shown_starts
-                    .iter()
-                    .map(|&at| line.local(at, true))
-                    .collect();
+                let starts = line.rows.rows.iter().map(|at| line.local(at.shown, true));
+                line.row_starts = starts.collect();
                 line
             };
             let count = line.row_starts.len();
@@ -1236,13 +1236,11 @@ mod tests {
             run(4, 0.5),
         ];
         let lines = [0..2, 3..3, 4..9, 10..10, 11..14, 15..15];
-        let mut cursor = RunCursor::new(&runs);
+        // One buffer for every line, as a layout uses it: no run of a line before may stay in it.
+        let (mut cursor, mut out) = (RunCursor::new(&runs), Vec::new());
         for range in lines {
-            let cut: Vec<(usize, f32)> = cursor
-                .take(range.clone())
-                .iter()
-                .map(|run| (run.len, run.color.h))
-                .collect();
+            cursor.take_into(range.clone(), &mut out);
+            let cut: Vec<(usize, f32)> = out.iter().map(|run| (run.len, run.color.h)).collect();
             assert_eq!(cut, from_the_start(&runs, range.clone()), "{range:?}");
         }
     }
@@ -1285,8 +1283,10 @@ mod tests {
             let old = Layout::build(key(1), &before, &[run(before.len())], None, window);
             let after = SharedString::from("a\nx\nb\nc");
             let new = Layout::build(key(2), &after, &[run(after.len())], Some(&old), window);
+            // A kept line shares its row starts too, not a copy of them.
             let kept = |old_line: usize, new_line: usize| {
-                Rc::ptr_eq(&old.lines[old_line].rows, &new.lines[new_line].rows)
+                let (old, new) = (&old.lines[old_line], &new.lines[new_line]);
+                Rc::ptr_eq(&old.rows, &new.rows) && Rc::ptr_eq(&old.row_starts, &new.row_starts)
             };
             assert!(kept(0, 0) && kept(1, 2) && kept(2, 3));
             assert_eq!(new.lines[1].rows.text, "x");
