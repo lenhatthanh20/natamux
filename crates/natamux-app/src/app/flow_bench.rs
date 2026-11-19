@@ -1,6 +1,6 @@
-//! `--bench-flows`: times the user flows of T-0221's "Targets" on the fake daemon, 5 runs each,
-//! saves one perf report (its `flows` part) and prints one `flow_bench: {...}` line of numbers
-//! for `scripts/perf-check.py`. Then it quits. A flow that cannot run says why and the next one
+//! `--bench-flows`: times the user flows of T-0221's "Targets" on the fake daemon, 5 runs each
+//! (20 for diff_click), saves one perf report (its `flows` part) and prints one
+//! `flow_bench: {...}` line of numbers for `scripts/perf-check.py`. Then it quits. A flow that cannot run says why and the next one
 //! runs. How each number is measured: docs/perf.md.
 //!
 //! Most flows time from the action to the end of the first frame drawn once the change is in
@@ -23,8 +23,10 @@ use crate::perf::overlay::Perf;
 use crate::perf::report::process_usage;
 use crate::perf::stats::{PerfStats, percentile};
 
-/// Runs of each flow.
+/// Runs of each flow. With 5 runs the p95 is just the slowest run.
 const RUNS: usize = 5;
+/// Runs of a cheap flow, so its p95 is not the maximum of the runs.
+const MANY_RUNS: usize = 20;
 /// The fake's feed sends the seed at once; this is only a guard.
 const WAIT_FOR_TASKS: Duration = Duration::from_secs(15);
 const POLL: Duration = Duration::from_millis(50);
@@ -66,11 +68,20 @@ pub fn event_applied(took: Duration, cx: &mut App) {
     }
 }
 
+const APP_RSS: &str = "app_rss_mb";
+
+/// The app's memory now. Read before the terminal flood, so the number stays the one of the
+/// rounds before that flow was added.
+fn note_rss(extra: &mut BTreeMap<String, f64>) {
+    if let Some(usage) = process_usage() {
+        extra.insert(APP_RSS.into(), usage.rss_bytes as f64 / 1024.0 / 1024.0);
+    }
+}
+
 /// Saves the report and prints the numbers.
 fn finish(handle: WindowHandle<Root>, extra: &mut BTreeMap<String, f64>, cx: &mut AsyncApp) {
-    if let Some(usage) = process_usage() {
-        let mib = usage.rss_bytes as f64 / 1024.0 / 1024.0;
-        extra.insert("app_rss_mb".into(), mib);
+    if !extra.contains_key(APP_RSS) {
+        note_rss(extra);
     }
     match handle.update(cx, |root, _, cx| root.save_report(cx)) {
         Ok(Ok(path)) => println!("flow_bench: report {}", path.display()),
@@ -180,10 +191,22 @@ async fn time_runs(
     flow: &str,
     handle: WindowHandle<Root>,
     cx: &mut AsyncApp,
+    action: impl FnMut(usize, &mut Root, &mut Window, &mut gpui::Context<Root>),
+    ready: impl Fn(usize) -> Ready,
+) -> Result<()> {
+    time_runs_n(RUNS, flow, handle, cx, action, ready).await
+}
+
+/// As `time_runs`, `runs` times.
+async fn time_runs_n(
+    runs: usize,
+    flow: &str,
+    handle: WindowHandle<Root>,
+    cx: &mut AsyncApp,
     mut action: impl FnMut(usize, &mut Root, &mut Window, &mut gpui::Context<Root>),
     ready: impl Fn(usize) -> Ready,
 ) -> Result<()> {
-    for index in 0..RUNS {
+    for index in 0..runs {
         let started = Instant::now();
         handle.update(cx, |root, window, cx| action(index, root, window, cx))?;
         let (start, drawn) = drawn_when(handle, cx, ready(index)).await?;

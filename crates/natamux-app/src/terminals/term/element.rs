@@ -6,6 +6,7 @@
 
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
+use std::rc::Rc;
 
 use alacritty_terminal::index::Point as GridPoint;
 use alacritty_terminal::term::TermMode;
@@ -22,9 +23,7 @@ use gpui::{
 use theme::ActiveTheme;
 use ui::Tooltip;
 
-use super::cell_layout::{
-    self, BLOCK_COLUMNS, BLOCK_LINES, BackgroundRect, CellLayout, MINIMUM_CONTRAST,
-};
+use super::cell_layout::BackgroundRect;
 use super::grid_layout::grid;
 use super::ime::TermInput;
 use super::model::{TermBounds, TermModel};
@@ -33,6 +32,12 @@ use super::scrollbar::{
 };
 use super::view::{Laid, TermView};
 use crate::app::appearance::Appearance;
+
+#[path = "cell_frame.rs"]
+mod cell_frame;
+
+use cell_frame::CellFrame;
+pub(super) use cell_frame::FrameMemo;
 
 /// The line height of the terminal, a factor of its font size.
 const LINE_HEIGHT: f32 = 1.3;
@@ -167,10 +172,9 @@ pub struct Frame {
     /// The scrollbar's track, which the grid leaves free.
     track: Bounds<Pixels>,
     background: Hsla,
-    rects: Vec<(Bounds<Pixels>, Hsla)>,
+    /// The cell backgrounds, the text and the block elements; often those of the last frame.
+    cells: Rc<CellFrame>,
     highlights: Vec<(Path<Pixels>, Hsla)>,
-    runs: Vec<(Point<Pixels>, ShapedLine)>,
-    blocks: Vec<(Bounds<Pixels>, Hsla)>,
     marked: Option<(Bounds<Pixels>, Hsla, ShapedLine)>,
     cursor: Option<Cursor>,
     scrollbar: Option<Scrollbar>,
@@ -257,6 +261,8 @@ impl Element for TermElement {
             model.set_size(term_bounds);
             model.sync(cx);
         });
+        // Taken out for this frame, so the screen and the theme can be read beside it.
+        let mut memo = self.view.update(cx, |view, _| view.frame_memo.take());
         let hitbox = window.insert_hitbox(bounds, HitboxBehavior::Normal);
         let focused = self.focus.is_focused(window);
         let origin = laid.origin;
@@ -293,91 +299,11 @@ impl Element for TermElement {
             text_system.shape_line(text.into(), metrics.font_size, &[run], Some(cell_width))
         };
 
-        let hovered = content.last_hovered_word.as_ref().map(|word| &word.range);
         let cells = if clipped_out {
-            CellLayout::default()
+            Rc::default()
         } else {
-            #[cfg(test)]
-            LAYOUTS.with(|count| count.set(count.get() + 1));
-            cell_layout::layout(
-                &content.cells,
-                content.display_offset,
-                theme,
-                hovered,
-                MINIMUM_CONTRAST,
-            )
+            cell_frame::cells(&mut memo, content, theme, &metrics, origin, &text_system)
         };
-        let at = |line: usize, column: usize| {
-            point(
-                origin.x + cell_width * column as f32,
-                origin.y + line_height * line as f32,
-            )
-        };
-        let rects = merged_rects(&cells.rects)
-            .into_iter()
-            .map(|(rect, lines)| {
-                let start = at(rect.line, rect.column);
-                let bounds = Bounds {
-                    origin: point(start.x.floor(), start.y),
-                    size: size(
-                        (cell_width * rect.cells as f32).ceil(),
-                        line_height * lines as f32,
-                    ),
-                };
-                (bounds, rect.color)
-            })
-            .collect();
-        let runs = cells
-            .runs
-            .into_iter()
-            .map(|run| {
-                let font = Font {
-                    weight: run.style.weight,
-                    style: if run.style.italic {
-                        FontStyle::Italic
-                    } else {
-                        FontStyle::Normal
-                    },
-                    ..metrics.font.clone()
-                };
-                let text_run = TextRun {
-                    len: run.text.len(),
-                    font,
-                    color: run.style.color,
-                    background_color: None,
-                    underline: run.style.underline,
-                    strikethrough: run.style.strikethrough,
-                };
-                let line = text_system.shape_line(
-                    run.text.into(),
-                    metrics.font_size,
-                    &[text_run],
-                    Some(cell_width),
-                );
-                (at(run.line, run.column), line)
-            })
-            .collect();
-        let (part_width, part_height) = (
-            cell_width / BLOCK_COLUMNS as f32,
-            line_height / BLOCK_LINES as f32,
-        );
-        let blocks = cells
-            .blocks
-            .iter()
-            .map(|block| {
-                let bounds = Bounds {
-                    origin: point(
-                        origin.x + part_width * block.column as f32,
-                        origin.y + part_height * block.line as f32,
-                    ),
-                    size: size(
-                        part_width * block.columns as f32,
-                        part_height * block.lines as f32,
-                    ),
-                };
-                (bounds, block.color)
-            })
-            .collect();
 
         // Find matches, then the selection over them.
         let shown = Shown {
@@ -529,6 +455,7 @@ impl Element for TermElement {
         };
         self.view.update(cx, |view, cx| {
             view.laid = Some(laid);
+            view.frame_memo = memo;
             if view.bar.seen != seen {
                 view.bar.seen = seen;
                 view.show_bar(cx);
@@ -551,10 +478,8 @@ impl Element for TermElement {
             rows,
             track,
             background,
-            rects,
+            cells,
             highlights,
-            runs,
-            blocks,
             marked,
             cursor,
             scrollbar,
@@ -596,13 +521,13 @@ impl Element for TermElement {
                     view.modifiers_changed(event, over, window, cx)
                 });
             });
-            for (bounds, colour) in &frame.rects {
+            for (bounds, colour) in &frame.cells.rects {
                 window.paint_quad(fill(*bounds, *colour));
             }
             for (path, colour) in frame.highlights.drain(..) {
                 window.paint_path(path, colour);
             }
-            for (origin, line) in &frame.runs {
+            for (origin, line) in &frame.cells.runs {
                 line.paint(
                     *origin,
                     frame.line_height,
@@ -613,7 +538,7 @@ impl Element for TermElement {
                 )
                 .ok();
             }
-            for (bounds, colour) in &frame.blocks {
+            for (bounds, colour) in &frame.cells.blocks {
                 window.paint_quad(fill(*bounds, *colour));
             }
             if let Some((bounds, background, line)) = &frame.marked {

@@ -83,10 +83,15 @@ pub(super) fn base() -> Base {
 }
 
 impl Base {
+    /// The tasks as the dashboard holds them.
+    fn shared(&self) -> Vec<Arc<Task>> {
+        self.tasks.iter().cloned().map(Arc::new).collect()
+    }
+
     pub(super) fn all(&self, query: &str) -> Vec<PaletteSection> {
         all_sections(&AllInput {
             query,
-            tasks: &self.tasks,
+            tasks: &self.shared(),
             commands: &self.commands,
             repos: &self.repos,
             recent: &self.recent,
@@ -106,7 +111,7 @@ impl Base {
     ) -> Vec<PaletteSection> {
         jump_sections(&JumpInput {
             query,
-            tasks: &self.tasks,
+            tasks: &self.shared(),
             recent: &self.recent,
             now_ms: now(),
             scope: self.scope.as_ref(),

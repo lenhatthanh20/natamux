@@ -1,7 +1,9 @@
 //! The dashboard data as the live feed brings it, with no gpui: each part is replaced whole. The
 //! entity that holds it is `app/dashboard.rs`.
 
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::cell::OnceCell;
+use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
+use std::sync::Arc;
 use std::time::Instant;
 
 use natamux_client::{ClientError, DashboardEvent, LinkStatus};
@@ -18,11 +20,12 @@ use natamux_proto::workspaces::workspace::{DiffStat, PreparingStep};
 use crate::agents::limits_rules::{new_warning, warned_already};
 use crate::components::toast_rules::ToastTone;
 use crate::sidebar::sidebar_tree::{RowTier, row_tier};
+use crate::tasks::table_rules::{OpenSubtasks, open_subtasks, waits_for_in};
 use crate::tasks::task_changes::upsert_task_in;
 
 #[path = "dashboard_parts.rs"]
 mod parts;
-pub use parts::{Generations, Part, Seen};
+pub use parts::{Changed, Generations, Part, Seen};
 
 /// What the app knows of the daemon.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -88,10 +91,18 @@ pub struct DashboardData {
     pub refused: bool,
     /// The task list came at least once: before that the views show skeletons.
     pub loaded: bool,
-    pub tasks: Vec<Task>,
+    /// Shared: a view that keeps a task keeps the Arc, and a task that did not change keeps its
+    /// Arc, so an equal task is found equal by its address. Changed only by the methods here,
+    /// which keep `by_id` in step.
+    pub tasks: Vec<Arc<Task>>,
+    /// The tasks of `tasks` by id, so `task` is one lookup and not a scan of the list.
+    by_id: HashMap<String, Arc<Task>>,
+    /// The open subtasks of each parent, made on the first ask after the list changed: a row
+    /// asks what its task waits for on each draw.
+    open_subtasks: OnceCell<OpenSubtasks>,
     /// Tasks hidden while their delete runs, with their newest state. The daemon writes a task
     /// while it deletes it, and the feed must not show it again.
-    deleting: BTreeMap<String, Task>,
+    deleting: BTreeMap<String, Arc<Task>>,
     pub repos: Vec<Repo>,
     pub worktrees_dir: Option<String>,
     pub jobs: Vec<Job>,
@@ -114,6 +125,9 @@ pub struct DashboardData {
     ended_early: VecDeque<(String, Option<String>)>,
     /// What changed: views that follow the dashboard skip a notify of parts they do not read.
     pub gens: Generations,
+    /// The Tasks generation after the last task event that changed the list: the followers of
+    /// the list were told up to it (`tasks_news`).
+    pub(super) tasks_told: u64,
 }
 
 /// A POST /workspaces answer comes within a few workspaces' ends, so this many is plenty.
@@ -127,6 +141,8 @@ impl Default for DashboardData {
             refused: false,
             loaded: false,
             tasks: Vec::new(),
+            by_id: HashMap::new(),
+            open_subtasks: OnceCell::new(),
             deleting: BTreeMap::new(),
             repos: Vec::new(),
             worktrees_dir: None,
@@ -142,41 +158,59 @@ impl Default for DashboardData {
             announced: BTreeSet::new(),
             ended_early: VecDeque::new(),
             gens: Generations::default(),
+            tasks_told: 0,
         }
     }
 }
 
 impl DashboardData {
     pub fn task(&self, id: &str) -> Option<&Task> {
-        self.tasks.iter().find(|task| task.id == id)
+        self.by_id.get(id).map(|task| &**task)
+    }
+
+    /// `task`, shared.
+    #[cfg(test)]
+    pub fn shared_task(&self, id: &str) -> Option<&Arc<Task>> {
+        self.by_id.get(id)
+    }
+
+    /// The tasks `task` waits for (`table_rules::waits_for`), with no read of the whole list.
+    pub fn waits_for(&self, task: &Task) -> Vec<String> {
+        let open = &self.open_subtasks;
+        let open = open.get_or_init(|| open_subtasks(&self.tasks));
+        waits_for_in(task, |id| self.task(id).map(|other| other.state), open)
     }
 
     /// Takes one event of the feed. Gives a toast when a new workspace of this app ended.
     pub fn apply(&mut self, event: DashboardEvent) -> Option<Notice> {
-        if self.changes(&event) {
+        let changes = self.changes(&event);
+        if changes {
             self.bump_parts(&event);
         }
         match event {
-            DashboardEvent::Tasks(mut tasks) => {
-                let deleting = &mut self.deleting;
-                tasks.retain(|task| match deleting.get_mut(&task.id) {
-                    Some(copy) => {
-                        *copy = task.clone();
-                        false
-                    }
-                    None => true,
-                });
-                self.tasks = tasks;
+            DashboardEvent::Tasks(tasks) => {
+                // An equal list has no task that is being deleted, and the tasks held stay.
+                if changes {
+                    self.set_tasks(tasks);
+                    self.tasks_told = self.gens.get(Part::Tasks);
+                }
                 self.loaded = true;
                 self.link = Link::Live;
-                let known: BTreeSet<&str> =
-                    self.tasks.iter().map(|task| task.id.as_str()).collect();
-                self.events.retain(|id, _| known.contains(id.as_str()));
-                self.terminals.retain(|id, _| known.contains(id.as_str()));
+                let known = &self.by_id;
+                self.events.retain(|id, _| known.contains_key(id.as_str()));
+                self.terminals
+                    .retain(|id, _| known.contains_key(id.as_str()));
                 crate::perf::report::mark_first_data();
             }
             // No task goes, so nothing tied to one is dropped; one task is not the loaded list.
-            DashboardEvent::TaskChanged(task) => self.merge_task(*task),
+            DashboardEvent::TaskChanged(task) => {
+                let before = self.gens.get(Part::Tasks);
+                self.merge_task(*task);
+                // Only a change is told: an equal task leaves an untold answer untold.
+                if self.gens.get(Part::Tasks) != before {
+                    self.tasks_told = self.gens.get(Part::Tasks);
+                }
+            }
             DashboardEvent::Repos {
                 repos,
                 worktrees_dir,
@@ -186,7 +220,18 @@ impl DashboardData {
             }
             DashboardEvent::Jobs(jobs) => self.jobs = jobs,
             DashboardEvent::Activity(activity) => self.activity = activity,
+            // As `GET /activity` gives it: a task with no line is left out.
+            DashboardEvent::ActivityOf { task_id, activity } => {
+                if activity.is_empty() {
+                    self.activity.remove(&task_id);
+                } else {
+                    self.activity.insert(task_id, activity);
+                }
+            }
             DashboardEvent::Usage(usage) => self.usage = usage,
+            DashboardEvent::UsageOf { task_id, usage } => {
+                self.usage.insert(task_id, usage);
+            }
             DashboardEvent::Limits(limits) => return self.set_limits(limits),
             DashboardEvent::DiffStats(stats) => self.diff_stats = stats,
             DashboardEvent::Terminals { task_id, terminals } => {
@@ -202,6 +247,34 @@ impl DashboardData {
             | DashboardEvent::TaskLogged { .. } => {}
         }
         None
+    }
+
+    /// Takes a whole list. A task equal to the one held keeps the Arc held, so the rows that
+    /// show it are found unchanged without a look inside.
+    fn set_tasks(&mut self, tasks: Vec<Task>) {
+        let mut held = std::mem::take(&mut self.by_id);
+        let mut by_id = HashMap::with_capacity(tasks.len());
+        let mut list = Vec::with_capacity(tasks.len());
+        for task in tasks {
+            if let Some(copy) = self.deleting.get_mut(&task.id) {
+                *copy = Arc::new(task);
+                continue;
+            }
+            let (id, before) = match held.remove_entry(&task.id) {
+                Some((id, before)) => (id, Some(before)),
+                None => (task.id.clone(), None),
+            };
+            let task = match before {
+                Some(before) if *before == task => before,
+                _ => Arc::new(task),
+            };
+            // The first task with an id wins, as a search from the start would find it.
+            by_id.entry(id).or_insert_with(|| task.clone());
+            list.push(task);
+        }
+        self.tasks = list;
+        self.by_id = by_id;
+        self.open_subtasks = OnceCell::new();
     }
 
     fn link_status(&mut self, status: LinkStatus) {
@@ -323,14 +396,33 @@ impl DashboardData {
     pub fn merge_task(&mut self, task: Task) {
         if let Some(copy) = self.deleting.get_mut(&task.id) {
             if copy.updated_at <= task.updated_at {
-                *copy = task;
+                *copy = Arc::new(task);
             }
             return;
         }
         if self.task_changes(&task) {
             self.gens.bump(Part::Tasks);
         }
-        upsert_task_in(&mut self.tasks, task);
+        // An equal task keeps the Arc held: only its place in the list is checked again.
+        let task = match self.by_id.get(&task.id) {
+            Some(held) if **held == task => held.clone(),
+            _ => Arc::new(task),
+        };
+        self.put(task);
+    }
+
+    /// The task into its place in the list, unless the one held is newer.
+    fn put(&mut self, task: Arc<Task>) {
+        if !upsert_task_in(&mut self.tasks, task.clone()) {
+            return;
+        }
+        self.open_subtasks = OnceCell::new();
+        match self.by_id.get_mut(&task.id) {
+            Some(held) => *held = task,
+            None => {
+                self.by_id.insert(task.id.clone(), task);
+            }
+        }
     }
 
     pub fn is_deleting(&self, id: &str) -> bool {
@@ -343,6 +435,8 @@ impl DashboardData {
             return;
         };
         let task = self.tasks.remove(at);
+        self.by_id.remove(id);
+        self.open_subtasks = OnceCell::new();
         self.deleting.insert(task.id.clone(), task);
         self.drop_parts_of(id);
     }
@@ -350,13 +444,15 @@ impl DashboardData {
     /// The delete failed: the task shows again, as the feed last brought it.
     pub fn restore_task(&mut self, id: &str) {
         if let Some(task) = self.deleting.remove(id) {
-            upsert_task_in(&mut self.tasks, task);
+            self.put(task);
             self.gens.bump(Part::Tasks);
         }
     }
 
     pub fn forget_task(&mut self, id: &str) {
         self.deleting.remove(id);
+        self.by_id.remove(id);
+        self.open_subtasks = OnceCell::new();
         self.tasks.retain(|task| task.id != id);
         self.drop_parts_of(id);
     }

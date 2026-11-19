@@ -181,6 +181,9 @@ pub struct HoveredWord {
 #[derive(Clone)]
 pub struct Content {
     pub cells: Vec<IndexedCell>,
+    /// Another number each time a copy changed `cells`: what was laid out from the cells of one
+    /// number holds for as long as the number does.
+    pub cells_version: u64,
     pub mode: TermMode,
     pub total_lines: usize,
     pub display_offset: usize,
@@ -272,9 +275,10 @@ impl TermModel {
         let (events, queued) = unbounded();
         let generation = Arc::new(AtomicU64::new(0));
         let term = Term::new(config.clone(), &bounds, Listener::new(events.clone(), 0));
-        let mut last_content = copy_content(&term, bounds, None);
+        let mut last_content = copy_content(&term, bounds, None, Vec::new(), 0);
         // No cells until the first sync: an empty copy means the screen was never drawn.
         last_content.cells.clear();
+        last_content.cells_version += 1;
         let pace = Arc::new(AtomicU64::new(nanos(DEFAULT_PACE)));
         let executor = cx.background_executor().clone();
         let loop_pace = pace.clone();
@@ -351,7 +355,9 @@ impl TermModel {
         self.bell = false;
         let mut term = self.term.lock_unfair();
         self.processor.advance(&mut *term, bytes);
-        self.last_content = copy_content(&term, bounds, None);
+        let cells = std::mem::take(&mut self.last_content.cells);
+        let version = self.last_content.cells_version;
+        self.last_content = copy_content(&term, bounds, None, cells, version);
         drop(term);
         cx.emit(TermEvent::OutputReplaced);
         // The new screen may blink another way, and its view draws it.
@@ -595,7 +601,10 @@ impl TermModel {
         let before = &self.last_content;
         let grid = (before.columns, before.screen_lines);
         let (lines, offset) = (before.total_lines as i64, before.display_offset as i64);
-        let mut content = copy_content(&term, self.bounds, None);
+        let version = before.cells_version;
+        // The copy goes into the buffer of the one before: no new buffer per frame.
+        let cells = std::mem::take(&mut self.last_content.cells);
+        let mut content = copy_content(&term, self.bounds, None, cells, version);
         drop(term);
         let added = content.total_lines as i64 - lines;
         let scrolled = content.display_offset as i64 - offset;
@@ -800,19 +809,41 @@ fn simple(range: RangeInclusive<Point>) -> Selection {
     selection
 }
 
+/// Copies the shown screen over `cells`, the cells of the copy before, whose version was
+/// `version`. Each cell is compared as it is copied, so the version changes exactly when a cell
+/// does.
 fn copy_content(
     term: &Term<Listener>,
     bounds: TermBounds,
     hovered: Option<HoveredWord>,
+    mut cells: Vec<IndexedCell>,
+    version: u64,
 ) -> Content {
     let content = term.renderable_content();
-    let cells = content
-        .display_iter
-        .map(|indexed| IndexedCell {
-            point: indexed.point,
-            cell: indexed.cell.clone(),
-        })
-        .collect();
+    let mut changed = false;
+    let mut count = 0;
+    for (index, indexed) in content.display_iter.enumerate() {
+        count = index + 1;
+        match cells.get_mut(index) {
+            Some(kept) if kept.point == indexed.point && kept.cell == *indexed.cell => {}
+            Some(kept) => {
+                kept.point = indexed.point;
+                kept.cell = indexed.cell.clone();
+                changed = true;
+            }
+            None => {
+                cells.push(IndexedCell {
+                    point: indexed.point,
+                    cell: indexed.cell.clone(),
+                });
+                changed = true;
+            }
+        }
+    }
+    if cells.len() > count {
+        cells.truncate(count);
+        changed = true;
+    }
     let screen_lines = term.screen_lines();
     let last = Line(i32::try_from(screen_lines).unwrap_or(i32::MAX) - 1);
     let grid = term.grid();
@@ -820,6 +851,7 @@ fn copy_content(
         || (0..term.columns()).any(|column| grid[last][Column(column)].c != ' ');
     Content {
         cells,
+        cells_version: version + u64::from(changed),
         mode: content.mode,
         total_lines: term.total_lines(),
         display_offset: content.display_offset,

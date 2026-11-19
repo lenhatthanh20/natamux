@@ -1,6 +1,7 @@
 //! The part of the watcher that looks for pull requests and reads their status. Runs on the
 //! worker thread, or on the thread of `check_all` and `check`.
 
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use natamux_git::gh::{
@@ -10,12 +11,29 @@ use natamux_git::gh::{
 use serde_json::json;
 
 use super::{Inner, WatchError, candidate, is_watched, locked};
+use crate::tasks::helpers::compare_text;
 
 /// The watched tasks of one GitHub repository. `folder`: the Natamux repository of the first one.
 struct RepoBatch {
     folder: Option<String>,
     repo: PullRequestRef,
     tasks: Vec<(String, u64)>,
+}
+
+/// The fields of a watched task that `read_all` needs.
+struct Watched {
+    updated_at: String,
+    id: String,
+    pr: String,
+    repo: Option<String>,
+}
+
+/// The order of `list_tasks`: the first task of a group picks where gh runs.
+fn newest_first<T>(items: &mut [T], key: impl Fn(&T) -> (&str, &str)) {
+    items.sort_by(|a, b| {
+        let ((a_at, a_id), (b_at, b_id)) = (key(a), key(b));
+        compare_text(b_at, a_at).then_with(|| compare_text(a_id, b_id))
+    });
 }
 
 /// The candidates of one project: the workspace gh runs in, and the (task, branch) pairs.
@@ -55,7 +73,8 @@ impl Inner {
 
     fn look(&self, task_id: &str, workspace: &str, branch: &str) -> Result<(), WatchError> {
         let worktree = Path::new(workspace);
-        if !(self.has_remote_branch)(worktree, branch).map_err(WatchError::Git)? {
+        let on_origin = (self.remote_branches)(worktree).map_err(WatchError::Git)?;
+        if !on_origin.contains(branch) {
             locked(&self.state).on_origin.remove(task_id);
             return Ok(());
         }
@@ -70,16 +89,25 @@ impl Inner {
     /// would use up the GitHub limit that gh shares with the user. Runs gh in the workspace of the
     /// first task of the project.
     pub(super) fn find_all(&self, failed: &mut bool) {
-        let tasks = match self.options.tasks.list_tasks(None) {
-            Ok(tasks) => tasks,
+        let scanned = self
+            .options
+            .tasks
+            .scan(|task| candidate(task).map(|_| (task.updated_at.clone(), task.id.clone())));
+        let mut ids = match scanned {
+            Ok(ids) => ids,
             Err(error) => return self.fail(failed, &error.into()),
         };
+        newest_first(&mut ids, |(updated_at, id)| {
+            (updated_at.as_str(), id.as_str())
+        });
+        // The branches of origin, by project: its worktrees share the refs, so git runs once.
+        let mut remote: HashMap<String, Result<HashSet<String>, String>> = HashMap::new();
         let mut by_repo: Vec<Candidates> = Vec::new();
-        for listed in &tasks {
-            if candidate(listed).is_none() || locked(&self.state).finding.contains(&listed.id) {
+        for (_, id) in &ids {
+            if locked(&self.state).finding.contains(id) {
                 continue;
             }
-            let task = match (self.options.sync_branch)(&listed.id) {
+            let task = match (self.options.sync_branch)(id) {
                 Ok(task) => task,
                 Err(error) => {
                     self.fail(failed, &error.into());
@@ -89,8 +117,15 @@ impl Inner {
             let Some((workspace, branch)) = candidate(&task) else {
                 continue;
             };
-            match (self.has_remote_branch)(Path::new(workspace), branch) {
-                Err(error) => self.fail(failed, &WatchError::Git(error)),
+            // A task without a project has its own refs, for all this code knows.
+            let key = task.repo.clone().unwrap_or_else(|| workspace.to_string());
+            let on_origin = remote
+                .entry(key)
+                .or_insert_with(|| (self.remote_branches)(Path::new(workspace)))
+                .as_ref()
+                .map(|branches| branches.contains(branch));
+            match on_origin {
+                Err(error) => self.fail(failed, &WatchError::Git(error.clone())),
                 Ok(false) => {
                     locked(&self.state).on_origin.remove(&task.id);
                 }
@@ -127,13 +162,24 @@ impl Inner {
 
     /// Reads the status of every watched task, with one gh call per GitHub repository.
     pub(super) fn read_all(&self, failed: &mut bool) {
-        let tasks = match self.options.tasks.list_tasks(None) {
+        let scanned = self.options.tasks.scan(|task| {
+            is_watched(task).then(|| Watched {
+                updated_at: task.updated_at.clone(),
+                id: task.id.clone(),
+                pr: task.pr.clone().unwrap_or_default(),
+                repo: task.repo.clone(),
+            })
+        });
+        let mut tasks = match scanned {
             Ok(tasks) => tasks,
             Err(error) => return self.fail(failed, &error.into()),
         };
+        newest_first(&mut tasks, |task| {
+            (task.updated_at.as_str(), task.id.as_str())
+        });
         let mut batches: Vec<RepoBatch> = Vec::new();
-        for task in tasks.iter().filter(|task| is_watched(task)) {
-            let Some(repo) = parse_pull_request_ref(task.pr.as_deref().unwrap_or("")) else {
+        for task in &tasks {
+            let Some(repo) = parse_pull_request_ref(&task.pr) else {
                 // Not an address gh gives; it is asked about alone.
                 if let Err(error) = self.check(&task.id) {
                     self.fail(failed, &error);

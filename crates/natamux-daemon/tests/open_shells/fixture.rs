@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use natamux_daemon::shared::event_bus::{DaemonMessage, EventBus};
@@ -148,6 +148,8 @@ pub struct Setup {
     pub writes: Arc<Mutex<Vec<Vec<OpenShell>>>>,
     pub messages: Arc<Mutex<Vec<DaemonMessage>>>,
     pub ended: Arc<Mutex<Vec<String>>>,
+    /// How often the shells asked whether a task ended.
+    pub ended_asks: Arc<AtomicUsize>,
 }
 
 impl Setup {
@@ -203,12 +205,17 @@ pub fn setup_with(dir: &Path, ended_tasks: &[&str], agent_in: Option<Arc<AgentIn
     });
     let running = Arc::clone(&terminals);
     let ended_check = Arc::clone(&ended);
+    let ended_asks: Arc<AtomicUsize> = Arc::default();
+    let asks = Arc::clone(&ended_asks);
     let shells = OpenShells::new(OpenShellsOptions {
         data_dir: dir.to_path_buf(),
         terminals: Arc::clone(&terminals) as Arc<dyn ShellsView>,
         bus: Arc::clone(&bus),
         scheduler: Arc::clone(&scheduler),
-        is_ended: Arc::new(move |task| ended_check.lock().unwrap().iter().any(|t| t == task)),
+        is_ended: Arc::new(move |task| {
+            asks.fetch_add(1, Ordering::SeqCst);
+            ended_check.lock().unwrap().iter().any(|t| t == task)
+        }),
         // An agent runs where a program other than the shell is in the foreground.
         agent_runs: Some(Arc::new(move |task, terminal| {
             running
@@ -233,6 +240,7 @@ pub fn setup_with(dir: &Path, ended_tasks: &[&str], agent_in: Option<Arc<AgentIn
         writes,
         messages,
         ended,
+        ended_asks,
     }
 }
 

@@ -11,7 +11,8 @@ impl DashboardData {
     pub fn changes(&self, event: &DashboardEvent) -> bool {
         match event {
             DashboardEvent::Tasks(tasks) => {
-                !self.loaded || self.link != Link::Live || self.tasks != *tasks
+                let held = self.tasks.iter().map(|task| &**task);
+                !self.loaded || self.link != Link::Live || !held.eq(tasks)
             }
             DashboardEvent::TaskChanged(task) => self.task_changes(task),
             DashboardEvent::Repos {
@@ -20,7 +21,12 @@ impl DashboardData {
             } => self.repos != *repos || self.worktrees_dir != *worktrees_dir,
             DashboardEvent::Jobs(jobs) => self.jobs != *jobs,
             DashboardEvent::Activity(activity) => self.activity != *activity,
+            DashboardEvent::ActivityOf { task_id, activity } => match self.activity.get(task_id) {
+                Some(held) => held != activity,
+                None => !activity.is_empty(),
+            },
             DashboardEvent::Usage(usage) => self.usage != *usage,
+            DashboardEvent::UsageOf { task_id, usage } => self.usage.get(task_id) != Some(usage),
             DashboardEvent::Limits(limits) => self.limits != *limits,
             DashboardEvent::DiffStats(stats) => self.diff_stats != *stats,
             DashboardEvent::Terminals { task_id, terminals } => {
@@ -48,8 +54,8 @@ impl DashboardData {
             }
             DashboardEvent::Repos { .. } => &[Part::Repos],
             DashboardEvent::Jobs(_) => &[Part::Jobs],
-            DashboardEvent::Activity(_) => &[Part::Activity],
-            DashboardEvent::Usage(_) => &[Part::Usage],
+            DashboardEvent::Activity(_) | DashboardEvent::ActivityOf { .. } => &[Part::Activity],
+            DashboardEvent::Usage(_) | DashboardEvent::UsageOf { .. } => &[Part::Usage],
             DashboardEvent::Limits(_) => &[Part::Limits],
             DashboardEvent::DiffStats(_) => &[Part::DiffStats],
             DashboardEvent::Terminals { .. } => &[Part::Terminals],
@@ -79,18 +85,27 @@ impl DashboardData {
         }
     }
 
-    /// The events after which `Dashboard::after_tasks` runs: the whole list, or one task.
-    pub fn brings_tasks(event: &DashboardEvent) -> bool {
-        matches!(
-            event,
-            DashboardEvent::Tasks(_) | DashboardEvent::TaskChanged(_)
-        )
+    /// What the event brings of the task list, asked before `apply`; `Dashboard::after_tasks`
+    /// runs after the events that bring some. None: no task. Some(None): the whole list, so any
+    /// task may differ. Some(id): one task, and only it differs from what the followers of the
+    /// list last saw. An answer of the daemon changes a task with no event: the next task of
+    /// the feed then counts as the whole list, so the followers look at every task again.
+    pub fn tasks_news(&self, event: &DashboardEvent) -> Option<Option<String>> {
+        match event {
+            DashboardEvent::Tasks(_) => Some(None),
+            DashboardEvent::TaskChanged(task) => {
+                let told = self.gens.get(Part::Tasks) == self.tasks_told;
+                Some(told.then(|| task.id.clone()))
+            }
+            _ => None,
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use natamux_client::LinkStatus;
+    use natamux_proto::agents::activity::{AgentActivity, TaskActivity, TaskUsage};
     use natamux_proto::events::kind::PreparingMessage;
     use natamux_proto::tasks::task::{Task, TaskState};
     use natamux_proto::terminals::list::TerminalList;
@@ -151,7 +166,41 @@ mod tests {
         assert!(!data.changes(&one(TaskState::Review, "a")));
         let other = DashboardEvent::TaskChanged(Box::new(task("T-2", TaskState::Draft, "a")));
         assert!(data.changes(&other));
-        assert!(DashboardData::brings_tasks(&other));
+        assert_eq!(data.tasks_news(&other), Some(Some("T-2".into())));
+    }
+
+    #[test]
+    fn one_task_of_the_feed_is_the_only_news_unless_an_answer_changed_a_task_since() {
+        let mut data = DashboardData::default();
+        let one = |id: &str, updated_at: &str| {
+            DashboardEvent::TaskChanged(Box::new(task(id, TaskState::Running, updated_at)))
+        };
+        let list = DashboardEvent::Tasks(vec![task("T-1", TaskState::Draft, "a")]);
+        assert_eq!(data.tasks_news(&list), Some(None));
+        assert_eq!(data.tasks_news(&step("T-1")), None);
+        data.apply(list.clone());
+        assert_eq!(data.tasks_news(&one("T-1", "b")), Some(Some("T-1".into())));
+        data.apply(one("T-1", "b"));
+        // An event that changes nothing leaves the followers where they were.
+        data.apply(one("T-1", "b"));
+        data.apply(list.clone());
+        assert_eq!(data.tasks_news(&one("T-2", "b")), Some(Some("T-2".into())));
+
+        // An answer, a hidden, a shown or a forgotten task: no follower was told.
+        data.merge_task(task("T-3", TaskState::Ready, "c"));
+        assert_eq!(data.tasks_news(&one("T-2", "b")), Some(None));
+        // The same task from the feed changes nothing and tells nobody: the answer stays untold.
+        let same = task("T-3", TaskState::Ready, "c");
+        data.apply(DashboardEvent::TaskChanged(Box::new(same)));
+        assert_eq!(data.tasks_news(&one("T-2", "b")), Some(None));
+        data.apply(one("T-2", "b"));
+        assert_eq!(data.tasks_news(&one("T-2", "c")), Some(Some("T-2".into())));
+        data.hide_task("T-3");
+        assert_eq!(data.tasks_news(&one("T-2", "c")), Some(None));
+        data.apply(list);
+        assert_eq!(data.tasks_news(&one("T-2", "c")), Some(Some("T-2".into())));
+        data.forget_task("T-3");
+        assert_eq!(data.tasks_news(&one("T-2", "c")), Some(None));
     }
 
     #[test]
@@ -190,6 +239,62 @@ mod tests {
         let asks = task("T-1", TaskState::NeedsInput, "b");
         data.apply(DashboardEvent::TaskChanged(Box::new(asks)));
         assert_eq!(data.events_to_read(), [("T-1".into(), "b".into())]);
+    }
+
+    #[test]
+    fn one_task_of_activity_or_usage_ends_as_the_whole_part_would() {
+        let lines = |text: &str| -> TaskActivity {
+            let line = AgentActivity {
+                text: text.into(),
+                at: "t".into(),
+            };
+            [("1".to_string(), line)].into()
+        };
+        let activity_of = |id: &str, activity: TaskActivity| DashboardEvent::ActivityOf {
+            task_id: id.into(),
+            activity,
+        };
+        let mut data = DashboardData::default();
+        data.apply(DashboardEvent::Activity(
+            [
+                ("T-1".to_string(), lines("a")),
+                ("T-2".to_string(), lines("b")),
+            ]
+            .into(),
+        ));
+        let before = data.gens;
+        let same = activity_of("T-1", lines("a"));
+        assert!(!data.changes(&same));
+        data.apply(same);
+        // A task with no line that holds none: nothing to draw.
+        let none = activity_of("T-3", TaskActivity::new());
+        assert!(!data.changes(&none));
+        data.apply(none);
+        assert_eq!(data.gens, before);
+
+        data.apply(activity_of("T-1", lines("c")));
+        data.apply(activity_of("T-2", TaskActivity::new()));
+        let whole = DashboardEvent::Activity([("T-1".to_string(), lines("c"))].into());
+        assert!(!data.changes(&whole));
+        assert_eq!(
+            data.gens.get(Part::Activity),
+            before.get(Part::Activity) + 2
+        );
+
+        let usage = TaskUsage {
+            tokens: 3,
+            ..TaskUsage::default()
+        };
+        let one = DashboardEvent::UsageOf {
+            task_id: "T-1".into(),
+            usage: usage.clone(),
+        };
+        assert!(data.changes(&one));
+        data.apply(one.clone());
+        assert!(!data.changes(&one));
+        let whole = DashboardEvent::Usage([("T-1".to_string(), usage)].into());
+        assert!(!data.changes(&whole));
+        assert_eq!(data.gens.get(Part::Usage), before.get(Part::Usage) + 1);
     }
 
     #[test]

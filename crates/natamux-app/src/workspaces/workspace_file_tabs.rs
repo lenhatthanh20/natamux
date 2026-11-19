@@ -3,6 +3,7 @@
 //! its file) is open. Only the one that shows (in main, or the Docs list in the panel) reads
 //! again when the workspace changes (`dirty_reads`); a hidden one reads again when it shows.
 
+use gpui::StyleRefinement;
 use ui::prelude::*;
 
 use super::WorkspaceView;
@@ -34,7 +35,9 @@ impl WorkspaceView {
         if let Some(name) = picked {
             docs.update(cx, |docs, cx| docs.pick(name, cx));
         }
-        docs.into_any_element()
+        // Drawn again only when the Docs view changed, not on each frame of the workspace.
+        docs.cached(StyleRefinement::default().size_full())
+            .into_any_element()
     }
 
     /// The tabs of the open files over the active one's editor (T-0220).
@@ -79,7 +82,14 @@ impl WorkspaceView {
         v_flex()
             .size_full()
             .child(file_tab_strip(&self.dashboard, task_id, cx))
-            .child(v_flex().flex_1().min_h_0().child(editor))
+            // The editor draws again only when it changed. The strip reads the dashboard, so it
+            // stays outside.
+            .child(
+                v_flex()
+                    .flex_1()
+                    .min_h_0()
+                    .child(editor.cached(StyleRefinement::default().size_full())),
+            )
             .into_any_element()
     }
 

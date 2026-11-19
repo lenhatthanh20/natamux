@@ -1,6 +1,8 @@
 //! The Delete task and Cancel task confirms of the row menus (`TaskTable.tsx`, `WorkspaceRow.tsx`),
 //! and the board's Delete all done or cancelled (`TaskBoard.tsx`).
 
+use std::borrow::Borrow;
+
 use gpui::Entity;
 use natamux_proto::tasks::task::{Task, TaskState};
 use ui::prelude::*;
@@ -118,9 +120,9 @@ pub fn confirm_cancel_task(
 /// Reads the files that are not committed of the `tasks` with a worktree, then calls `open`
 /// with (task id, file count) of those that have any. A bulk confirm names them, and only those
 /// are then forced.
-pub fn with_uncommitted(
+pub fn with_uncommitted<T: Borrow<Task>>(
     dashboard: &Entity<Dashboard>,
-    tasks: &[Task],
+    tasks: &[T],
     window: &mut Window,
     cx: &mut App,
     open: impl FnOnce(Vec<(String, usize)>, &mut Window, &mut App) + 'static,

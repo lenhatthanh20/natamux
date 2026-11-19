@@ -97,21 +97,62 @@ fn labels_go_before_their_rows_and_map_offsets_both_ways() {
 }
 
 #[test]
+fn labels_map_offsets_like_a_walk_over_every_label() {
+    let text = "ab\n".repeat(40);
+    let rows: Vec<(u32, String)> = (0..40u32)
+        .filter(|row| row % 3 != 1)
+        .map(|row| (row, "x".repeat(1 + row as usize % 4)))
+        .collect();
+    let mut labels = Labels::default();
+    labels.set(rows, &text);
+    for at in 0..=text.len() {
+        let walked: usize = labels
+            .spots
+            .iter()
+            .take_while(|(spot, _)| *spot <= at)
+            .map(|(_, label)| label.len())
+            .sum();
+        assert_eq!(labels.shown(at), at + walked, "shown {at}");
+    }
+    let shown_len = text.len() + labels.total();
+    for shown in 0..=shown_len {
+        let mut extra = 0;
+        let mut want = None;
+        for (spot, label) in &labels.spots {
+            let start = spot + extra;
+            if shown < start {
+                break;
+            }
+            if shown < start + label.len() {
+                want = Some(*spot);
+                break;
+            }
+            extra += label.len();
+        }
+        assert_eq!(
+            labels.text_at(shown),
+            want.unwrap_or(shown - extra),
+            "text_at {shown}"
+        );
+    }
+}
+
+#[test]
 fn labels_move_with_their_lines_when_the_text_changes() {
     let mut labels = Labels::default();
     labels.set(vec![(0, "L0 ".into()), (1, "L1 ".into())], "ab\ncd\n");
     // A line typed at the top: the labels stay with their lines.
-    labels.follow("x\nab\ncd\n", None);
+    labels.follow("x\nab\ncd\n", None, 1);
     assert_eq!(labels.insert("x\nab\ncd\n"), "x\nL0 ab\nL1 cd\n");
     // A typed letter inside a line moves the next line's label only.
-    labels.follow("x\naYb\ncd\n", None);
+    labels.follow("x\naYb\ncd\n", None, 2);
     assert_eq!(labels.insert("x\naYb\ncd\n"), "x\nL0 aYb\nL1 cd\n");
     // The labelled first line deleted: its label goes where the line was.
-    labels.follow("x\ncd\n", None);
+    labels.follow("x\ncd\n", None, 3);
     assert_eq!(labels.insert("x\ncd\n"), "x\nL0 L1 cd\n");
     // A delete in the middle of a line before a label.
     labels.set(vec![(1, "L1 ".into())], "abc\nde\n");
-    labels.follow("ac\nde\n", None);
+    labels.follow("ac\nde\n", None, 4);
     assert_eq!(labels.insert("ac\nde\n"), "ac\nL1 de\n");
 }
 
@@ -129,21 +170,40 @@ fn labels_follow_each_edit_of_a_change_with_many() {
     };
     model.edit_all(&[indent(0), indent(3)], 0, 14, start);
     let edits = model.take_edits();
-    labels.follow(model.text(), edits.as_deref());
+    labels.follow(model.text(), edits.as_deref(), model.version());
     assert_eq!(labels.insert(model.text()), "    L0 ab\n    L1 cd\n");
     // Undo takes both inserts out again.
     model.track_edits();
     assert!(model.undo());
     let edits = model.take_edits();
-    labels.follow(model.text(), edits.as_deref());
+    labels.follow(model.text(), edits.as_deref(), model.version());
     assert_eq!(labels.insert(model.text()), "L0 ab\nL1 cd\n");
     // A whole new text: no edits are known, so one is guessed.
     model.track_edits();
     model.set_text("x\nab\ncd\n", start);
     let edits = model.take_edits();
     assert_eq!(edits, None);
-    labels.follow(model.text(), edits.as_deref());
+    labels.follow(model.text(), edits.as_deref(), model.version());
     assert_eq!(labels.insert(model.text()), "x\nL0 ab\nL1 cd\n");
+}
+
+#[test]
+fn labels_skip_a_sync_with_the_text_version_unchanged() {
+    let mut labels = Labels::default();
+    labels.set(vec![(1, "L1 ".into())], "ab\ncd\n");
+    labels.follow("ab\ncd\n", None, 7);
+    // The same version is the same text: nothing is guessed or copied, so a different text given
+    // with it changes nothing.
+    labels.follow("x\nab\ncd\n", None, 7);
+    assert_eq!(labels.text, "ab\ncd\n");
+    assert_eq!(labels.insert("ab\ncd\n"), "ab\nL1 cd\n");
+    // A new version follows the text.
+    labels.follow("x\nab\ncd\n", None, 8);
+    assert_eq!(labels.insert("x\nab\ncd\n"), "x\nab\nL1 cd\n");
+    // New labels are of a text of no known version.
+    labels.set(vec![(0, "L0 ".into())], "ab\n");
+    labels.follow("x\nab\n", None, 8);
+    assert_eq!(labels.insert("x\nab\n"), "x\nL0 ab\n");
 }
 
 #[test]
@@ -152,7 +212,7 @@ fn a_guessed_edit_keeps_labels_on_whole_chars() {
     let mut labels = Labels::default();
     let rows = vec![(0, "L0 ".into()), (1, "L1 ".into()), (2, "L2 ".into())];
     labels.set(rows, "ab\nlá\n");
-    labels.follow("aạ\n", None);
+    labels.follow("aạ\n", None, 1);
     assert_eq!(labels.insert("aạ\n"), "L0 aạL1 \nL2 ");
     let edit = input_edit("ab\nlá\n", "aạ\n");
     assert_eq!(

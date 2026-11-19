@@ -6,6 +6,7 @@
 //! for it with `block_on`, the one that started it runs git.
 
 use std::collections::{HashMap, HashSet};
+use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::SystemTime;
 
@@ -15,7 +16,7 @@ use natamux_git::changes::list_changes;
 use natamux_git::commit_push::snapshot_commit;
 use natamux_git::exec::{GitError, current_branch};
 use natamux_git::file_diff::{read_file_diff, read_file_image, read_inside};
-use natamux_git::graph::{DEFAULT_LIMIT, read_git_graph};
+use natamux_git::graph::{DEFAULT_LIMIT, graph_inputs, read_git_graph};
 use natamux_git::rollback::{has_commit, restore_from_snapshot, rollback_files, rollback_paths};
 use natamux_proto::workspaces::changes::{
     BlameAnswer, ChangeStatus, FileDiff, ImageSide, MAX_FILE_BYTES,
@@ -54,10 +55,19 @@ struct KeptDiff {
 /// older than the list.
 type DiffCache = Arc<Mutex<HashMap<String, HashMap<String, KeptDiff>>>>;
 
+/// A graph and the hash of what it was read from (`graph_inputs`).
+struct KeptGraph {
+    inputs: u64,
+    graph: GitGraph,
+}
+
+type KeptGraphs = Arc<Mutex<HashMap<String, KeptGraph>>>;
+
 pub struct WorkspaceChanges {
     changes: TtlCache<Vec<ChangeEntry>, GitError>,
     diffs: DiffCache,
     graphs: TtlCache<GitGraph, GitError>,
+    kept_graphs: KeptGraphs,
     /// Only the last rollback of each task can be undone. A daemon restart forgets it.
     rollbacks: Mutex<HashMap<String, LastRollback>>,
 }
@@ -68,6 +78,7 @@ impl WorkspaceChanges {
             changes: TtlCache::new(GIT_READ_MS, Arc::clone(&now)),
             diffs: DiffCache::default(),
             graphs: TtlCache::new(GIT_READ_MS, now),
+            kept_graphs: KeptGraphs::default(),
             rollbacks: Mutex::default(),
         }
     }
@@ -269,12 +280,10 @@ impl WorkspaceService {
         if fresh {
             self.reads.graphs.forget(Some(task_id));
         }
+        let kept = Arc::clone(&self.reads.kept_graphs);
+        let key = task_id.to_string();
         let read = self.reads.graphs.get(task_id, move || async move {
-            read_git_graph(
-                &workspace,
-                current_branch(&repo_dir).as_deref(),
-                DEFAULT_LIMIT,
-            )
+            read_graph(&kept, &key, &workspace, &repo_dir, fresh)
         });
         Ok(block_on(read)?)
     }
@@ -293,6 +302,48 @@ impl WorkspaceService {
         find(self.changes(task_id, true)?)
             .ok_or_else(|| WorkspaceError::NotChanged(path.to_string()))
     }
+}
+
+// A touch forgets the shared read, but most touches are file edits that move no ref: the kept
+// graph is used again while the inputs of the graph are the same, and git runs only when one
+// moved. `fresh` always runs git.
+fn read_graph(
+    kept: &KeptGraphs,
+    key: &str,
+    workspace: &Path,
+    repo_dir: &Path,
+    fresh: bool,
+) -> Result<GitGraph, GitError> {
+    let base = current_branch(repo_dir);
+    let inputs = graph_inputs(workspace, base.as_deref());
+    if !fresh
+        && let Some(inputs) = inputs
+        && let Some(graph) = lock(kept)
+            .get(key)
+            .filter(|graph| graph.inputs == inputs)
+            .map(|graph| graph.graph.clone())
+    {
+        return Ok(graph);
+    }
+    let read = read_git_graph(workspace, base.as_deref(), DEFAULT_LIMIT);
+    // A ref that moved while git read may not be in the graph, so that graph is not kept.
+    let after = graph_inputs(workspace, base.as_deref());
+    let mut kept = lock(kept);
+    match (&read, inputs) {
+        (Ok(graph), Some(inputs)) if after == Some(inputs) => {
+            kept.insert(
+                key.to_string(),
+                KeptGraph {
+                    inputs,
+                    graph: graph.clone(),
+                },
+            );
+        }
+        _ => {
+            kept.remove(key);
+        }
+    }
+    read
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {

@@ -7,10 +7,12 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard, Weak};
 
 use natamux_proto::events::task_event::StoredEvent;
+use natamux_proto::stages::schema::Step;
 use natamux_proto::tasks::task::{PullRequestStatus, Task, TaskState};
 use natamux_store::attachments::AttachmentFile;
 use natamux_store::task_index::TaskIndex;
 use natamux_store::task_sync::TaskSync;
+use natamux_store::task_sync::reads::LastEvents;
 use natamux_store::task_writes::Writes;
 use natamux_store::watch::{WATCH_DELAY, watch_task_files};
 use serde_json::Value;
@@ -20,7 +22,7 @@ use crate::shared::jobs::{Clock, system_clock};
 use crate::tasks::errors::{TaskError, TaskResult};
 use crate::tasks::helpers::legacy_pipeline;
 use crate::tasks::records::{ActivityOptions, WorkspaceChange, activity_due};
-use crate::tasks::store::{Applied, Catalog, SettingsOf, Store};
+use crate::tasks::store::{Applied, Catalog, SettingsOf, Store, steps_in};
 
 pub struct TaskServiceOptions {
     pub data_dir: PathBuf,
@@ -174,6 +176,15 @@ impl TaskService {
         self.with(|store| Ok(store.list_tasks(state)))
     }
 
+    /// What `pick` takes from each task, in no order, with no copy of the tasks: for timers that
+    /// look at all tasks and need only a few fields.
+    pub fn scan<T>(&self, pick: impl FnMut(&Task) -> Option<T>) -> TaskResult<Vec<T>> {
+        self.with(|store| {
+            store.sync.check_folder();
+            Ok(store.sync.tasks.values().filter_map(pick).collect())
+        })
+    }
+
     /// The task a hook is for, in one lock take: the one the header names, else the one whose
     /// workspace `holds` accepts. None when there is none.
     pub fn task_for_hook(
@@ -220,6 +231,30 @@ impl TaskService {
         self.with(|store| store.list_events(task_id))
     }
 
+    /// The accepted `stage.started` events of a task, oldest first: they pin its terminals. A
+    /// hook asks on every call, so the wait for the task's pending write and the read run after
+    /// the lock, where the changes of the other tasks do not wait for them.
+    pub fn stage_starts(&self, task_id: &str) -> TaskResult<Vec<StoredEvent>> {
+        let read = self.with(|store| {
+            if !store.has_task(task_id)? {
+                return Err(TaskError::NotFound(task_id.into()));
+            }
+            Ok(store.sync.stage_starts_later(task_id))
+        })?;
+        read.read().map_err(TaskError::Failed)
+    }
+
+    /// The end of a task's events, as a read to run after the lock, as `stage_starts` does: for
+    /// a reader that walks the log back from its end and seldom needs all of it.
+    pub fn last_events(&self, task_id: &str) -> TaskResult<LastEvents> {
+        self.with(|store| {
+            if !store.has_task(task_id)? {
+                return Err(TaskError::NotFound(task_id.into()));
+            }
+            Ok(store.sync.last_events_later(task_id))
+        })
+    }
+
     pub fn update_task(&self, task_id: &str, raw: Option<&Value>) -> TaskResult<Task> {
         self.with(|store| store.update_task(task_id, raw))
     }
@@ -248,8 +283,21 @@ impl TaskService {
         self.with_later(|store| store.apply_event_on(task_id, raw, Some(catalog)))
     }
 
-    pub fn steps_of(&self, task: &Task) -> TaskResult<Vec<natamux_proto::stages::schema::Step>> {
-        self.with(|store| Ok(store.steps_of(task)))
+    /// Needs no lock: the steps come from this copy of the task and its repository's settings.
+    pub fn steps_of(&self, task: &Task) -> TaskResult<Vec<Step>> {
+        Ok(steps_in(task, &(self.settings_of)(task.repo.as_deref())))
+    }
+
+    /// Whether the task is done or cancelled, with no copy of it. None when there is no task.
+    pub fn is_finished(&self, task_id: &str) -> TaskResult<Option<bool>> {
+        self.with(|store| {
+            store.sync.check_file(task_id);
+            if let Some(task) = store.sync.tasks.get(task_id) {
+                return Ok(Some(task.state.is_finished()));
+            }
+            let found = store.find_task(task_id)?;
+            Ok(found.map(|task| task.state.is_finished()))
+        })
     }
 
     pub fn record_workspace(&self, task_id: &str, change: WorkspaceChange) -> TaskResult<Task> {
@@ -365,6 +413,6 @@ impl TaskService {
 /// A done or cancelled task needs its shells no more. Neither does a task that is gone.
 pub fn is_task_ended(tasks: &TaskService, task_id: &str) -> bool {
     tasks
-        .get_task(task_id)
-        .map_or(true, |task| task.state.is_finished())
+        .is_finished(task_id)
+        .map_or(true, |finished| finished.unwrap_or(true))
 }

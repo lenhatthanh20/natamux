@@ -63,7 +63,7 @@ pub struct BlockRect {
     pub color: Hsla,
 }
 
-#[derive(Default)]
+#[derive(Clone, Default, PartialEq)]
 pub struct CellLayout {
     pub runs: Vec<TextRun>,
     pub rects: Vec<BackgroundRect>,

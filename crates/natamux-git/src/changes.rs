@@ -14,7 +14,7 @@ use natamux_proto::workspaces::workspace::{ChangeEntry, DiffStat};
 use serde_json::{Value, json};
 
 use crate::exec::{GitError, checked_ref, git, with_git_config};
-use crate::file_diff::{MAX_FILE_BYTES, looks_binary, read_inside};
+use crate::file_diff::{MAX_FILE_BYTES, looks_binary, read_inside_real};
 
 /// Added and removed lines of one file. None for a file that is binary or not known.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -158,9 +158,9 @@ fn lock_cache() -> std::sync::MutexGuard<'static, HashMap<PathBuf, CachedLines>>
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
-fn untracked_counts(worktree: &Path, path: &str) -> LineCounts {
+fn untracked_counts(worktree: &Path, real_root: &Path, path: &str) -> LineCounts {
     let none = LineCounts::default();
-    let Ok(Some(file)) = read_inside(worktree, path) else {
+    let Ok(Some(file)) = read_inside_real(worktree, real_root, path) else {
         return none;
     };
     // Git lists a nested repository as one untracked folder.
@@ -181,7 +181,11 @@ fn untracked_counts(worktree: &Path, path: &str) -> LineCounts {
             let lines = (!looks_binary(&bytes)).then(|| count_text_lines(&bytes));
             let mut cache = lock_cache();
             if cache.len() >= MAX_CACHED_COUNTS {
-                cache.clear();
+                // Other worktrees go first; this one keeps its counts unless it alone is full.
+                cache.retain(|real, _| real.starts_with(real_root));
+                if cache.len() >= MAX_CACHED_COUNTS {
+                    cache.clear();
+                }
             }
             let cached = CachedLines {
                 size: file.size,
@@ -213,6 +217,11 @@ pub fn read_env() -> Vec<(String, String)> {
 
 // The counts of the untracked files at `paths`, on at most `COUNT_THREADS` threads.
 fn count_untracked(worktree: &Path, paths: &[&str]) -> Vec<LineCounts> {
+    // A root that cannot be resolved has no readable file.
+    let Ok(real_root) = worktree.canonicalize() else {
+        return vec![LineCounts::default(); paths.len()];
+    };
+    let real_root = &real_root;
     let next = &AtomicUsize::new(0);
     let threads = COUNT_THREADS.min(paths.len());
     let mut counted = vec![LineCounts::default(); paths.len()];
@@ -226,7 +235,7 @@ fn count_untracked(worktree: &Path, paths: &[&str]) -> Vec<LineCounts> {
                         let Some(path) = paths.get(at) else {
                             return mine;
                         };
-                        mine.push((at, untracked_counts(worktree, path)));
+                        mine.push((at, untracked_counts(worktree, real_root, path)));
                     }
                 })
             })

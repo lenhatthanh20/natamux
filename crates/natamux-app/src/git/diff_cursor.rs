@@ -24,7 +24,7 @@ fn offset_of(rows: &SideRows, old: bool, row: u32, column: usize) -> Option<usiz
 fn line_end(rows: &SideRows, index: usize) -> usize {
     rows.line_starts
         .get(index + 1)
-        .map_or(rows.text.len(), |next| next - 1)
+        .map_or(rows.text_len(), |next| next - 1)
 }
 
 impl DiffView {

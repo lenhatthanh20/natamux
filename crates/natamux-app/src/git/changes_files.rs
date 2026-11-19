@@ -10,6 +10,7 @@ use natamux_proto::workspaces::workspace::ChangeEntry;
 use ui::{ContextMenu, ContextMenuEntry, Disclosure, Tooltip, prelude::*};
 
 use super::ChangesView;
+use super::kept::{RowFacts, RowNode};
 use super::rows::{counts_label, file_row, zed_button};
 use crate::app::view_rules::WorkspaceTab;
 use crate::components::colors::change_color;
@@ -18,10 +19,7 @@ use crate::components::menu::MenuLayer;
 use crate::components::resize_rules::Limits;
 use crate::components::text_size::row_text;
 use crate::git::change_rules::{count_label, status_tone};
-use crate::git::change_tree::{
-    FileViewMode, TreeNode, TreeRow, all_folder_keys, ancestor_keys, build_change_tree,
-    entries_under, flatten_tree, list_rows, total_counts,
-};
+use crate::git::change_tree::{FileViewMode, total_counts};
 use crate::git::diff_rules::COUNTS_FROM;
 use crate::git::rollback_dialog;
 use crate::git::rollback_rules::rollback_offer;
@@ -35,54 +33,7 @@ pub const FILES_LIMITS: Limits = Limits {
     collapse_below: None,
 };
 
-/// One row as drawn: what it shows and what a click does.
-struct RowFacts {
-    key: String,
-    depth: usize,
-    node: TreeNode,
-    expanded: bool,
-}
-
 impl ChangesView {
-    fn rows(&self, cx: &App) -> Vec<RowFacts> {
-        let Some(list) = self.list.as_deref() else {
-            return Vec::new();
-        };
-        let facts = |row: TreeRow| RowFacts {
-            key: row.key,
-            depth: row.level - 1,
-            node: row.node.into_owned(),
-            expanded: row.expanded,
-        };
-        match self.mode(cx) {
-            FileViewMode::List => list_rows(list).into_iter().map(facts).collect(),
-            FileViewMode::Tree => {
-                let nodes = build_change_tree(list, true);
-                let folded = self.folded_now();
-                flatten_tree(&nodes, &folded)
-                    .into_iter()
-                    .map(facts)
-                    .collect()
-            }
-        }
-    }
-
-    /// The folded folders of the task on screen; the picked file's folders are always open.
-    fn folded_now(&self) -> BTreeSet<String> {
-        let mut folded = self
-            .task_id
-            .as_ref()
-            .and_then(|id| self.folded.get(id))
-            .cloned()
-            .unwrap_or_default();
-        if let (Some(list), Some(path)) = (self.list.as_deref(), self.picked.as_deref()) {
-            for key in ancestor_keys(&build_change_tree(list, true), path) {
-                folded.remove(&key);
-            }
-        }
-        folded
-    }
-
     fn set_folded(&mut self, folded: BTreeSet<String>, cx: &mut Context<Self>) {
         if let Some(id) = self.task_id.clone() {
             self.folded.insert(id, folded);
@@ -102,7 +53,7 @@ impl ChangesView {
         let keys = self
             .list
             .as_deref()
-            .map(|list| all_folder_keys(&build_change_tree(list, true)))
+            .map(|list| self.kept.folder_keys(list).to_vec())
             .unwrap_or_default();
         let folded = if fold {
             keys.into_iter().collect()
@@ -116,14 +67,14 @@ impl ChangesView {
     fn activate(&mut self, row: &RowFacts, cx: &mut Context<Self>) {
         self.cursor = Some(row.key.clone());
         match &row.node {
-            TreeNode::File(file) => {
+            RowNode::File(file) => {
                 self.pick(&file.entry.path.clone(), cx);
                 // A row in the panel must also cover the terminals in main.
                 self.dashboard.update(cx, |dashboard, cx| {
                     dashboard.pick_tab(WorkspaceTab::Changes, cx)
                 });
             }
-            TreeNode::Folder(_) => self.toggle_folder(&row.key, cx),
+            RowNode::Folder(_) => self.toggle_folder(&row.key, cx),
         }
     }
 
@@ -141,12 +92,12 @@ impl ChangesView {
 
     fn open_row_menu(
         &mut self,
-        node: TreeNode,
+        node: &RowNode,
         position: Point<Pixels>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let offer = rollback_offer(entries_under(&node));
+        let offer = rollback_offer(self.row_entries(node));
         let this = cx.weak_entity();
         let focus = self.files_focus.clone();
         let name = node.name().to_owned();
@@ -199,14 +150,14 @@ impl ChangesView {
                 }
             }
             "right" if row.expanded => self.move_cursor(rows.get(at + 1), cx),
-            "right" | "left" if matches!(row.node, TreeNode::Folder(_)) => {
+            "right" | "left" if matches!(row.node, RowNode::Folder(_)) => {
                 if (key == "right") != row.expanded {
                     self.toggle_folder(&row.key.clone(), cx);
                 }
             }
             "enter" | "space" => self.activate(row, cx),
             "f10" if event.keystroke.modifiers.shift => {
-                self.open_row_menu(row.node.clone(), window.mouse_position(), window, cx)
+                self.open_row_menu(&row.node, window.mouse_position(), window, cx)
             }
             _ => return self.type_ahead(key, &rows, at, cx),
         }
@@ -216,8 +167,8 @@ impl ChangesView {
     /// Moving onto a file shows it, as a picker does; a folder only takes the cursor.
     fn activate_or_move(&mut self, row: &RowFacts, cx: &mut Context<Self>) {
         match &row.node {
-            TreeNode::File(_) => self.activate(row, cx),
-            TreeNode::Folder(_) => self.move_cursor(Some(row), cx),
+            RowNode::File(_) => self.activate(row, cx),
+            RowNode::Folder(_) => self.move_cursor(Some(row), cx),
         }
     }
 
@@ -261,10 +212,14 @@ impl ChangesView {
         let focused = self.files_focus.contains_focused(window, cx);
         let counts_shown = panel >= COUNTS_FROM;
         let comments = self.render_comments(cx);
+        // shortcut: every row is an element each frame; a list of the rows in view moves the
+        // 4 px padding out of the scrolled content, which changes pixels.
         let row_elements: Vec<AnyElement> = rows
-            .into_iter()
+            .iter()
             .enumerate()
-            .map(|(index, row)| self.render_row(index, row, &shown, focused, counts_shown, cx))
+            .map(|(index, row)| {
+                self.render_row(index, row.clone(), &shown, focused, counts_shown, cx)
+            })
             .collect();
         v_flex()
             .flex_1()
@@ -288,9 +243,12 @@ impl ChangesView {
         let list = self.list.as_deref().unwrap_or_default();
         let tree = self.mode(cx) == FileViewMode::Tree;
         let has_folders = list.iter().any(|entry| entry.path.contains('/'));
-        let any_open = !all_folder_keys(&build_change_tree(list, true))
+        let folded = self.folded_now();
+        let any_open = !self
+            .kept
+            .folder_keys(list)
             .iter()
-            .all(|key| self.folded_now().contains(key));
+            .all(|key| folded.contains(key));
         let totals = total_counts(list).map(|counts| {
             h_flex()
                 .id("changes-totals")
@@ -314,7 +272,6 @@ impl ChangesView {
                     cx.listener(move |view, _: &ClickEvent, _, cx| view.fold_all(any_open, cx)),
                 )
         });
-        let all = list.to_vec();
         h_flex()
             .h(rems_from_px(32.0_f32))
             .flex_none()
@@ -349,7 +306,7 @@ impl ChangesView {
                     .disabled(list.is_empty())
                     .tooltip(Tooltip::text("Rollback… (Mod+Alt+Z)"))
                     .on_click(cx.listener(move |view, _: &ClickEvent, window, cx| {
-                        view.open_rollback(all.clone(), window, cx)
+                        view.open_rollback(view.list.clone().unwrap_or_default(), window, cx)
                     })),
             )
             .child(
@@ -370,7 +327,7 @@ impl ChangesView {
     ) -> AnyElement {
         let colors = cx.theme().colors();
         let picked =
-            matches!(&row.node, TreeNode::File(file) if Some(&file.entry.path) == shown.as_ref());
+            matches!(&row.node, RowNode::File(file) if Some(&file.entry.path) == shown.as_ref());
         let at_cursor = focused && self.cursor.as_deref() == Some(row.key.as_str());
         let indent = if self.mode(cx) == FileViewMode::Tree {
             12. * row.depth as f32
@@ -378,8 +335,8 @@ impl ChangesView {
             0.
         };
         let content = match &row.node {
-            TreeNode::File(file) => file_row(&file.entry, self.mode(cx), counts_shown, cx),
-            TreeNode::Folder(folder) => {
+            RowNode::File(file) => file_row(&file.entry, self.mode(cx), counts_shown, cx),
+            RowNode::Folder(folder) => {
                 let counts = (!row.expanded)
                     .then(|| folder.added.zip(folder.removed))
                     .flatten()
@@ -424,7 +381,7 @@ impl ChangesView {
             .on_mouse_down(
                 MouseButton::Right,
                 cx.listener(move |view, event: &MouseDownEvent, window, cx| {
-                    view.open_row_menu(node.clone(), event.position, window, cx)
+                    view.open_row_menu(&node, event.position, window, cx)
                 }),
             )
             .into_any_element()

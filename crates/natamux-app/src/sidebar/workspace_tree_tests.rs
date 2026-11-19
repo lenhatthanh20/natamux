@@ -13,10 +13,11 @@ use ui::prelude::*;
 
 use super::WorkspaceTree;
 use crate::app::dashboard::Dashboard;
+use crate::app::dashboard_data::{Generations, Part, Seen};
 use crate::app::source::Source;
 use crate::app::test_views;
 use crate::sidebar::task_card::{GLYPH_COLUMN, HEAD_GAP};
-use crate::sidebar::tree_lines::{LinesChange, changed_lines};
+use crate::sidebar::tree_lines::{LinesChange, changed_lines, tree_news};
 use crate::sidebar::tree_model::Line;
 
 /// The sidebar caches the tree as Root caches the sidebar.
@@ -109,13 +110,48 @@ fn usage_builds_and_draws_nothing_but_diff_stats_draw_without_a_build(cx: &mut T
 }
 
 #[gpui::test]
+fn a_selection_or_a_panel_width_builds_and_draws_nothing(cx: &mut TestAppContext) {
+    let (dashboard, tree, cx) = sidebar_tree(cx);
+    let before = counts(&tree, cx);
+    dashboard.update(cx, |dashboard, cx| {
+        dashboard.select(Some("T-0146".into()), cx);
+        dashboard.set_sidebar_width(300.0, cx);
+        dashboard.set_details_width(400.0, cx);
+    });
+    cx.run_until_parked();
+    assert_eq!(counts(&tree, cx), before);
+}
+
+#[test]
+fn the_selection_and_the_widths_ask_nothing_of_the_tree() {
+    let mut gens = Generations::default();
+    let mut seen = Seen::default();
+    seen.take(&gens);
+    let mut asked = |gens: &Generations| {
+        let news = tree_news(&seen.take(gens));
+        (news.build, news.draw, news.measure)
+    };
+    for part in [Part::Selection, Part::Widths, Part::Usage] {
+        gens.bump(part);
+        assert_eq!(asked(&gens), (false, false, false));
+    }
+    // The blur is view state: it changes the height of the cards.
+    gens.bump(Part::View);
+    assert_eq!(asked(&gens), (true, true, true));
+    gens.bump(Part::DiffStats);
+    assert_eq!(asked(&gens), (false, true, false));
+    gens.bump(Part::Events);
+    assert_eq!(asked(&gens), (false, true, true));
+}
+
+#[gpui::test]
 fn the_parent_drawing_again_does_not_draw_the_tree_but_a_new_title_does(cx: &mut TestAppContext) {
     let (host, dashboard, tree, cx) = hosted_tree(cx);
     let before = counts(&tree, cx);
     host.update(cx, |_, cx| cx.notify());
     cx.run_until_parked();
     assert_eq!(counts(&tree, cx), before);
-    let mut task = dashboard.read_with(cx, |dashboard, _| dashboard.data.tasks[0].clone());
+    let mut task = dashboard.read_with(cx, |dashboard, _| (*dashboard.data.tasks[0]).clone());
     task.title = "A new title".into();
     send(&dashboard, DashboardEvent::TaskChanged(Box::new(task)), cx);
     assert!(counts(&tree, cx).1 > before.1);
@@ -165,7 +201,7 @@ fn the_snapshot_is_read_again_only_when_an_input_changed(cx: &mut TestAppContext
     assert!(redrawn > drawn);
     assert_eq!(same, built);
 
-    let mut task = dashboard.read_with(cx, |dashboard, _| dashboard.data.tasks[0].clone());
+    let mut task = dashboard.read_with(cx, |dashboard, _| (*dashboard.data.tasks[0]).clone());
     task.title = "A new title".into();
     send(&dashboard, DashboardEvent::TaskChanged(Box::new(task)), cx);
     let (after_title, _) = snapshots(&tree, cx);

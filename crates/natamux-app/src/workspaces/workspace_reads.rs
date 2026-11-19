@@ -2,6 +2,8 @@
 //! (Push, Create PR, Create workspace, Start agent, Reopen agent, Stop), each for the task on
 //! screen only.
 
+use std::rc::Rc;
+
 use natamux_client::ClientError;
 use natamux_proto::tasks::task::Task;
 use natamux_proto::workspaces::workspace::{ChangeEntry, GitGraph};
@@ -87,8 +89,8 @@ impl WorkspaceView {
         let mut changed = false;
         // A failed read keeps what is shown.
         match graph {
-            Ok(graph) if shown.graph.as_ref() != Some(&graph) || shown.graph_error.is_some() => {
-                shown.graph = Some(graph);
+            Ok(graph) if shown.graph.as_deref() != Some(&graph) || shown.graph_error.is_some() => {
+                shown.graph = Some(Rc::new(graph));
                 shown.graph_error = None;
                 changed = true;
             }

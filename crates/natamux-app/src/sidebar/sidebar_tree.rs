@@ -4,12 +4,15 @@
 // Ported with their tests (spec D11); the stage rules serve the details panel of screen 3.
 #![cfg_attr(not(test), allow(dead_code))]
 
-use std::collections::BTreeMap;
+use std::borrow::Borrow;
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use natamux_proto::stages::capabilities::stage_name_of_id;
 pub use natamux_proto::stages::schema::{PathRef, StepRef};
 use natamux_proto::tasks::task::{Task, TaskState};
 use serde_json::Value;
+
+use crate::tasks::task_changes::task_of;
 
 /// Which project groups, finished lists and task rows the user opened (true) or closed (false),
 /// oldest choice first.
@@ -231,15 +234,22 @@ pub struct SubtaskCount {
 }
 
 /// The subtask count of every parent, from one pass over `tasks`.
-pub fn subtask_counts(tasks: &[Task]) -> BTreeMap<&str, SubtaskCount> {
+pub fn subtask_counts<T: Borrow<Task>>(tasks: &[T]) -> BTreeMap<&str, SubtaskCount> {
     let mut counts = BTreeMap::new();
-    for parent in tasks.iter().filter_map(|task| task.parent_id.as_deref()) {
+    let parents = tasks
+        .iter()
+        .filter_map(|task| task_of(task).parent_id.as_deref());
+    for parent in parents {
         counts
             .entry(parent)
             .or_insert(SubtaskCount { done: 0, total: 0 })
             .total += 1;
     }
-    for task in tasks.iter().filter(|task| task.state == TaskState::Done) {
+    let done = tasks
+        .iter()
+        .map(task_of)
+        .filter(|task| task.state == TaskState::Done);
+    for task in done {
         if let Some(count) = task
             .parent_id
             .as_deref()
@@ -252,17 +262,29 @@ pub fn subtask_counts(tasks: &[Task]) -> BTreeMap<&str, SubtaskCount> {
 }
 
 /// The filtered tasks plus the parent of each subtask among them, so a match is shown in its place.
-pub fn with_parents(shown: &[Task], all: &[Task]) -> Vec<Task> {
+/// Borrows, and looks parents up by id, so a rebuild stays linear in the number of tasks.
+/// The tasks are held by value or shared: what comes back is what was passed in.
+pub fn with_parents<'a, T: Borrow<Task>>(shown: &[&'a T], all: &'a [T]) -> Vec<&'a T> {
+    let mut by_id: HashMap<&str, &'a T> = HashMap::with_capacity(all.len());
+    for task in all {
+        // The first task with an id wins, as a search from the start would find it.
+        by_id.entry(task_of(task).id.as_str()).or_insert(task);
+    }
+    let mut present: HashSet<&str> = shown
+        .iter()
+        .map(|task| task_of(*task).id.as_str())
+        .collect();
     let mut result = shown.to_vec();
     for task in shown {
-        let parent = all
-            .iter()
-            .find(|other| Some(other.id.as_str()) == task.parent_id.as_deref());
+        let parent = task_of(*task)
+            .parent_id
+            .as_deref()
+            .and_then(|id| by_id.get(id).copied());
         if let Some(parent) = parent
-            && parent.workspace.is_some()
-            && !result.iter().any(|each| each.id == parent.id)
+            && task_of(parent).workspace.is_some()
+            && present.insert(task_of(parent).id.as_str())
         {
-            result.push(parent.clone());
+            result.push(parent);
         }
     }
     result

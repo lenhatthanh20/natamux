@@ -74,12 +74,17 @@ impl ProjectsDialog {
         );
         // The projects and the daemon's worktree folder.
         let mut seen = Seen::default();
-        let follow = cx.observe_in(&dashboard, window, move |this, dashboard, window, cx| {
-            let gens = dashboard.read(cx).data.gens;
-            if seen.changed(&gens, &[Part::Repos]) {
-                this.show_default_worktree(window, cx);
-            }
-        });
+        let follow = Dashboard::observe_in(
+            &dashboard,
+            window,
+            cx,
+            move |this, dashboard, window, cx| {
+                let gens = dashboard.read(cx).data.gens;
+                if seen.changed(&gens, &[Part::Repos]) {
+                    this.show_default_worktree(window, cx);
+                }
+            },
+        );
         let mut subscriptions = vec![follow];
         subscriptions.push(folder.subscribe(cx, |this, _, event, cx| {
             if event == TextEvent::Edited {

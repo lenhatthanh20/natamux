@@ -15,6 +15,7 @@ use natamux_proto::tasks::job::Job;
 use natamux_proto::tasks::task::Task;
 use natamux_proto::terminals::list::TerminalList;
 use natamux_proto::workspaces::workspace::{DiffStat, PreparingStep};
+use serde::Deserialize;
 use tokio::time::Instant;
 
 use crate::config::Config;
@@ -40,8 +41,18 @@ pub enum DashboardEvent {
     Jobs(Vec<Job>),
     /// By task id.
     Activity(BTreeMap<String, TaskActivity>),
+    /// One task's whole activity, from the body of its message: no read. Empty: it has none now.
+    ActivityOf {
+        task_id: String,
+        activity: TaskActivity,
+    },
     /// By task id.
     Usage(BTreeMap<String, TaskUsage>),
+    /// One task's whole usage, from the body of its message: no read.
+    UsageOf {
+        task_id: String,
+        usage: TaskUsage,
+    },
     /// The plan limits of the agents that told them.
     Limits(Vec<AgentLimits>),
     /// By task id.
@@ -96,7 +107,8 @@ pub(crate) struct Stale {
     diff_stats: bool,
     dirty: bool,
     dirty_read_at: Option<Instant>,
-    /// Events that go out as they are, with no read: task ids, and tasks from message bodies.
+    /// Events that go out as they are, with no read: task ids, and the tasks, activity, usage and
+    /// jobs of message bodies.
     passed: Vec<DashboardEvent>,
     pub terminals: BTreeSet<String>,
     /// Parts whose last read failed to connect or timed out: they stay stale and wait here.
@@ -111,6 +123,24 @@ pub(crate) struct Stale {
 struct Retry {
     tries: u32,
     not_before: Instant,
+}
+
+/// The data an `activity.changed`, `usage.changed` or `jobs.changed` carries. The daemon builds
+/// it from the same state as the GET of that part (`DaemonMessage::to_json`): one task's whole
+/// activity or usage, or every job.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PartBody {
+    task_id: Option<String>,
+    activity: Option<TaskActivity>,
+    usage: Option<TaskUsage>,
+    jobs: Option<Vec<Job>>,
+}
+
+impl PartBody {
+    fn of(text: &str) -> Option<PartBody> {
+        serde_json::from_str(text).ok()
+    }
 }
 
 impl Stale {
@@ -156,9 +186,30 @@ impl Stale {
                 }
             }
             Resource::Repos => self.repos = true,
-            Resource::Jobs => self.jobs = true,
-            Resource::Activity => self.activity = true,
-            Resource::Usage => self.usage = true,
+            // A body the feed cannot read falls back to a read of the part.
+            Resource::Jobs => match PartBody::of(text).and_then(|body| body.jobs) {
+                Some(jobs) => self.passed.push(DashboardEvent::Jobs(jobs)),
+                None => self.jobs = true,
+            },
+            Resource::Activity => match PartBody::of(text) {
+                Some(PartBody {
+                    task_id: Some(task_id),
+                    activity: Some(activity),
+                    ..
+                }) => self
+                    .passed
+                    .push(DashboardEvent::ActivityOf { task_id, activity }),
+                _ => self.activity = true,
+            },
+            Resource::Usage => match PartBody::of(text) {
+                Some(PartBody {
+                    task_id: Some(task_id),
+                    usage: Some(usage),
+                    ..
+                }) => self.passed.push(DashboardEvent::UsageOf { task_id, usage }),
+                _ => self.usage = true,
+            },
+            // Read: `GET /limits` leaves out the windows that reset, the message body does not.
             Resource::Limits => self.limits = true,
             Resource::DiffStats => {
                 self.dirty = true;
@@ -397,3 +448,7 @@ pub(crate) fn send(
 #[cfg(test)]
 #[path = "stale_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "stale_body_tests.rs"]
+mod body_tests;

@@ -1,7 +1,11 @@
 //! Finished work piles up: the Done and Cancelled columns of the board draw their newest cards
 //! only, and "Show N more" draws more. Hundreds of cards cost a frame each draw (T-0223, P2).
 
+use std::borrow::Borrow;
+
 use natamux_proto::tasks::task::{Task, TaskState};
+
+use crate::tasks::task_changes::task_of;
 
 /// Cards a capped column draws at first, and how many more each click adds.
 pub const CARDS_STEP: usize = 50;
@@ -36,12 +40,15 @@ impl CardLimits {
 
     /// Which tasks of one column it draws, in the column's order: the `limit` most recently
     /// updated ones. ISO times sort as text.
-    pub fn drawn(&self, state: TaskState, tasks: &[&Task]) -> Vec<bool> {
+    pub fn drawn<T: Borrow<Task>>(&self, state: TaskState, tasks: &[&T]) -> Vec<bool> {
         let Some(limit) = self.limit(state).filter(|limit| *limit < tasks.len()) else {
             return vec![true; tasks.len()];
         };
         let mut newest: Vec<usize> = (0..tasks.len()).collect();
-        newest.sort_by(|a, b| tasks[*b].updated_at.cmp(&tasks[*a].updated_at));
+        newest.sort_by(|a, b| {
+            let (a, b) = (task_of(tasks[*a]), task_of(tasks[*b]));
+            b.updated_at.cmp(&a.updated_at)
+        });
         let mut drawn = vec![false; tasks.len()];
         for index in newest.into_iter().take(limit) {
             drawn[index] = true;

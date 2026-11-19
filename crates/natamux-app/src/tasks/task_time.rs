@@ -114,7 +114,12 @@ pub fn format_age(iso_time: &str, now_ms: i64, style: AgeStyle, offset_minutes: 
 /// How long until `format_age` of `iso_time` shows another label: at the next minute, hour or
 /// day of its age. None for a date (a week or more), which stays the same, and a bad time.
 pub fn next_age_change_ms(iso_time: &str, now_ms: i64) -> Option<i64> {
-    let age = (now_ms - parse_iso_ms(iso_time)?).max(0);
+    age_change_after(parse_iso_ms(iso_time)?, now_ms)
+}
+
+/// `next_age_change_ms` of a time that is read already, so a caller reads it once.
+pub fn age_change_after(at_ms: i64, now_ms: i64) -> Option<i64> {
+    let age = (now_ms - at_ms).max(0);
     let unit = if age < 3_600_000 {
         60_000
     } else if age < 86_400_000 {
@@ -163,6 +168,10 @@ mod tests {
         assert_eq!(at("2026-10-01T12:00:00.000Z"), None);
         assert_eq!(at("2026-10-09T12:00:00.000Z"), Some(60_000));
         assert_eq!(at("soon"), None);
+        // A time that is read already gives the same wait.
+        let read = parse_iso_ms("2026-10-08T11:59:30.000Z").unwrap();
+        assert_eq!(age_change_after(read, now()), Some(30_000));
+        assert_eq!(age_change_after(now() + 5_000, now()), Some(60_000));
     }
 
     #[test]
