@@ -6,7 +6,7 @@
 use std::rc::Rc;
 use std::sync::Arc;
 
-use gpui::{ClipboardItem, Entity, EventEmitter, WeakEntity};
+use gpui::{ClipboardItem, EventEmitter, WeakEntity};
 use natamux_proto::workspaces::changes::{BlameAnswer, ImageSide};
 use ui::{ContextMenu, ContextMenuEntry, prelude::*};
 
@@ -190,15 +190,15 @@ impl BlameMarks {
     }
 }
 
-/// The right-click menu of side `index`.
+/// The blame part of the right-click menu of side `index`, after a separator.
 fn set_menu(target: &dyn BlameTarget, index: usize, marks: WeakEntity<BlameMarks>, cx: &mut App) {
     let menu: RowMenu = Rc::new(
-        move |row: Option<u32>, window: &mut Window, cx: &mut App| -> Option<Entity<ContextMenu>> {
-            let items = marks.upgrade()?.read(cx).items(index, row, cx);
-            let marks = marks.clone();
-            Some(ContextMenu::build(window, cx, move |menu, _, _| {
-                fill(menu, items, marks)
-            }))
+        move |row: Option<u32>, menu: ContextMenu, _: &mut Window, cx: &mut App| -> ContextMenu {
+            let Some(shown) = marks.upgrade() else {
+                return menu;
+            };
+            let items = shown.read(cx).items(index, row, cx);
+            fill(menu.separator(), items, marks.clone())
         },
     );
     target.set_menu(menu, cx);
@@ -232,6 +232,8 @@ fn fill(
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used)]
+
     use gpui::TestAppContext;
 
     use super::*;
@@ -247,6 +249,73 @@ mod tests {
         fn set_menu(&self, _: RowMenu, _: &mut App) {}
         fn set_labels(&self, _: Vec<(u32, String)>, _: &mut App) {}
         fn clear_labels(&self, _: &mut App) {}
+    }
+
+    /// Keeps the menu that `set_menu` gives.
+    #[derive(Default)]
+    struct MenuProbe(std::cell::RefCell<Option<RowMenu>>);
+
+    impl BlameTarget for MenuProbe {
+        fn lines(&self, _: &App) -> u32 {
+            0
+        }
+        fn set_menu(&self, menu: RowMenu, _: &mut App) {
+            *self.0.borrow_mut() = Some(menu);
+        }
+        fn set_labels(&self, _: Vec<(u32, String)>, _: &mut App) {}
+        fn clear_labels(&self, _: &mut App) {}
+    }
+
+    /// The rows of a menu that starts with an edit item and then gets `add`.
+    fn rows_after_edit_item(
+        cx: &mut TestAppContext,
+        add: impl FnOnce(ContextMenu, &mut Window, &mut App) -> ContextMenu + 'static,
+    ) -> Vec<String> {
+        let window = cx
+            .update(|cx| {
+                cx.open_window(Default::default(), |window, cx| {
+                    ContextMenu::build(window, cx, move |menu, window, cx| {
+                        add(menu.entry("Copy", None, |_, _| {}), window, cx)
+                    })
+                })
+            })
+            .unwrap();
+        let menu = window.root(cx).unwrap();
+        menu.read_with(cx, |menu, _| {
+            menu.row_texts().iter().map(ToString::to_string).collect()
+        })
+    }
+
+    /// T-0350: the blame items follow the code view's edit items, behind one line.
+    #[gpui::test]
+    fn blame_items_follow_the_edit_items_behind_a_line(cx: &mut TestAppContext) {
+        crate::app::test_views::init(cx);
+        let marks = cx.new(|_| BlameMarks::new(None));
+        let probe = MenuProbe::default();
+        let weak = marks.downgrade();
+        cx.update(|cx| set_menu(&probe, 0, weak.clone(), cx));
+        let row_menu = probe.0.borrow_mut().take().unwrap();
+        let off = rows_after_edit_item(cx, move |menu, window, cx| {
+            row_menu(Some(0), menu, window, cx)
+        });
+        assert_eq!(off, ["Copy", "-", "Annotate with Git Blame"]);
+
+        let items = vec![
+            BlameItem::Title("abc1234 · Ann · 2026-11-01 — Fix".into()),
+            BlameItem::CopyHash("abc1234".into()),
+            BlameItem::Close,
+        ];
+        let on = rows_after_edit_item(cx, move |menu, _, _| fill(menu.separator(), items, weak));
+        assert_eq!(
+            on,
+            [
+                "Copy",
+                "-",
+                "abc1234 · Ann · 2026-11-01 — Fix",
+                "Copy Commit Hash",
+                "Close Annotations"
+            ]
+        );
     }
 
     #[gpui::test]

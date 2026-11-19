@@ -1,6 +1,7 @@
 //! The file panel of the Changes tab (`ChangedFiles.tsx`, `ChangedRow.tsx`): the header with the
-//! counts and its buttons, the files as a list or a tree, their row menu (Rollback…), the keys
-//! of the tree. It shows in main or in the details panel, so a row also makes main show Changes.
+//! counts and its buttons, the files as a list or a tree, their row menu (Copy Path, Copy
+//! Relative Path, Rollback…), the keys of the tree. It shows in main or in the details panel, so
+//! a row also makes main show Changes.
 //! The picker of the narrow layout and the rows' parts are in `changes_rows.rs`.
 
 use std::collections::BTreeSet;
@@ -18,6 +19,7 @@ use crate::components::icons::icon_path;
 use crate::components::menu::MenuLayer;
 use crate::components::resize_rules::Limits;
 use crate::components::text_size::row_text;
+use crate::files::file_tree::copy_path_items;
 use crate::git::change_rules::{count_label, status_tone};
 use crate::git::change_tree::{FileViewMode, total_counts};
 use crate::git::diff_rules::COUNTS_FROM;
@@ -101,8 +103,17 @@ impl ChangesView {
         let this = cx.weak_entity();
         let focus = self.files_focus.clone();
         let name = node.name().to_owned();
-        let menu = ContextMenu::build(window, cx, move |menu, _, _| {
+        let path = match node {
+            RowNode::File(file) => file.entry.path.clone(),
+            RowNode::Folder(folder) => folder.key.clone(),
+        };
+        let (dashboard, task_id) = (self.dashboard.clone(), self.task_id.clone());
+        let menu = ContextMenu::build(window, cx, move |menu, _, cx| {
             let menu = menu.context(focus).header(format!("Actions for {name}"));
+            let menu = match &task_id {
+                Some(task_id) => copy_path_items(menu, &dashboard, task_id, &path, cx).separator(),
+                None => menu,
+            };
             let entry = ContextMenuEntry::new("Rollback…")
                 .custom_icon_path(icon_path("undo-2"))
                 .icon_position(IconPosition::Start)

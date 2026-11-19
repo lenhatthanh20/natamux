@@ -476,6 +476,20 @@ impl ContextMenu {
     pub fn clear_selected(&mut self) {
         self.selected = None;
     }
+
+    /// The text of each row in order, for tests: `-` for a line, "" for a custom row.
+    pub fn row_texts(&self) -> Vec<SharedString> {
+        self.rows
+            .iter()
+            .map(|row| match row {
+                Row::Line => "-".into(),
+                Row::Heading(text) | Row::Text(text) => text.clone(),
+                Row::Entry(entry) => entry.label.clone(),
+                Row::Custom { .. } => SharedString::default(),
+                Row::Opener { label, .. } => label.clone(),
+            })
+            .collect()
+    }
 }
 
 #[cfg(test)]

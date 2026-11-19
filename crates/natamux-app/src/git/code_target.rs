@@ -6,7 +6,7 @@
 use std::ops::Range;
 use std::rc::Rc;
 
-use gpui::{App, Entity, EntityId, FocusHandle, Subscription, Window};
+use gpui::{App, EntityId, FocusHandle, Subscription, Window};
 use ui::ContextMenu;
 
 pub trait FindTarget {
@@ -28,8 +28,9 @@ pub trait FindTarget {
     fn on_edited(&self, changed: Box<dyn Fn(&mut App)>, cx: &mut App) -> Subscription;
 }
 
-/// Builds the right-click menu for a 0-based row of the text; None for a point on no row of it.
-pub type RowMenu = Rc<dyn Fn(Option<u32>, &mut Window, &mut App) -> Option<Entity<ContextMenu>>>;
+/// Adds the items of a 0-based row of the text (None for a point on no row of it) to the
+/// right-click menu, under the code view's own edit items.
+pub type RowMenu = Rc<dyn Fn(Option<u32>, ContextMenu, &mut Window, &mut App) -> ContextMenu>;
 
 pub trait BlameTarget {
     /// Rows of the text.

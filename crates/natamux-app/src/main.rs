@@ -421,6 +421,7 @@ mod text_view {
     mod code_find;
     mod code_gutter;
     mod code_langs;
+    mod code_menu;
     #[cfg(test)]
     mod code_mouse_tests;
     mod code_paint;

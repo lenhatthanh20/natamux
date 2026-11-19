@@ -32,6 +32,25 @@ pub fn join_path(folder: &str, name: &str) -> String {
     }
 }
 
+/// What Copy Path and Copy Relative Path give for the worktree path `key`: the full path in the
+/// task's folder with the platform's separator (None while the folder is not known), and the
+/// path in the worktree. Neither ends with a separator.
+pub fn copy_paths(workspace: Option<&str>, key: &str) -> (Option<String>, String) {
+    let relative = key.trim_matches('/').to_owned();
+    let full = workspace.filter(|folder| !folder.is_empty()).map(|folder| {
+        if relative.is_empty() {
+            let trimmed = folder.trim_end_matches(['/', '\\']);
+            return if trimmed.is_empty() { folder } else { trimmed }.to_string();
+        }
+        let inside = relative.replace('/', std::path::MAIN_SEPARATOR_STR);
+        std::path::Path::new(folder)
+            .join(inside)
+            .to_string_lossy()
+            .into_owned()
+    });
+    (full, relative)
+}
+
 /// The rows on screen: the root, then the children of each open folder that was read. "" is the
 /// root.
 pub fn explorer_rows(

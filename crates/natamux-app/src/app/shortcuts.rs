@@ -268,6 +268,7 @@ pub fn bind(cx: &mut App) {
     cx.bind_keys(settings_keys(mac));
     cx.bind_keys(terminal_keeps(mac));
     super::text_boxes::bind(cx, mac);
+    cx.bind_keys(crate::components::docs_markdown::copy::bindings());
     cx.bind_keys(diff_undo_keys(mac));
     // A terminal sends ctrl-c and the like to the shell; only copy and paste are the app's.
     let (copy, paste) = if mac {
