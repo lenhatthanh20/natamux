@@ -39,29 +39,18 @@ pub fn own_command(settings: &str) -> Option<String> {
     (!command.is_empty()).then(|| command.to_string())
 }
 
-/// The files Claude Code reads a status line from after Natamux's own, in its order: the project's
-/// local and shared settings, then the user's.
-fn settings_files(input: &Value, env: &Env) -> Vec<PathBuf> {
-    let project = input
-        .pointer("/workspace/project_dir")
-        .or_else(|| input.get("cwd"))
-        .and_then(Value::as_str)
-        .map(PathBuf::from);
+/// The user's settings file only. A project file is a repo's text, and its command would run
+/// here with `sh -c` without any repo trust check.
+fn settings_files(env: &Env) -> Vec<PathBuf> {
     let user = match env.trimmed("CLAUDE_CONFIG_DIR") {
         Some(dir) => Some(PathBuf::from(dir)),
         None => env
             .trimmed("HOME")
             .map(|home| Path::new(home).join(".claude")),
     };
-    let mut files = Vec::new();
-    if let Some(project) = project {
-        files.push(project.join(".claude").join("settings.local.json"));
-        files.push(project.join(".claude").join("settings.json"));
-    }
-    if let Some(user) = user {
-        files.push(user.join("settings.json"));
-    }
-    files
+    user.map(|user| user.join("settings.json"))
+        .into_iter()
+        .collect()
 }
 
 fn shell(command: &str) -> Command {
@@ -103,7 +92,7 @@ pub async fn run_statusline<T: Transport>(
     }
     let input = read_stdin();
     let parsed: Value = serde_json::from_slice(&input).unwrap_or(Value::Null);
-    let own = settings_files(&parsed, env)
+    let own = settings_files(env)
         .iter()
         .find_map(|path| own_command(&std::fs::read_to_string(path).ok()?));
     let child = own.and_then(|command| start_own(&command, &input));
@@ -185,20 +174,27 @@ mod tests {
     }
 
     #[test]
-    fn looks_in_the_project_then_the_user_settings() {
-        let input = json!({"cwd": "/w/sub", "workspace": {"project_dir": "/w"}});
+    fn looks_only_in_the_user_settings() {
         let env = Env::from([("HOME", "/home/me")]);
-        let files: Vec<String> = settings_files(&input, &env)
+        let files: Vec<String> = settings_files(&env)
             .iter()
             .map(|path| path.to_string_lossy().replace('\\', "/"))
             .collect();
-        assert_eq!(
-            files,
-            [
-                "/w/.claude/settings.local.json",
-                "/w/.claude/settings.json",
-                "/home/me/.claude/settings.json",
-            ]
+        assert_eq!(files, ["/home/me/.claude/settings.json"]);
+        let env = Env::from([("HOME", "/home/me"), ("CLAUDE_CONFIG_DIR", "/cfg")]);
+        let files = settings_files(&env);
+        assert_eq!(files.len(), 1);
+        assert!(files[0].starts_with("/cfg"));
+    }
+
+    #[test]
+    fn never_picks_a_project_status_line_command() {
+        // The project folder is in the input, but no path of it is read.
+        let env = Env::from([("HOME", "/home/me")]);
+        assert!(
+            settings_files(&env)
+                .iter()
+                .all(|path| !path.starts_with("/w"))
         );
     }
 }

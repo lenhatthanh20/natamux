@@ -6,6 +6,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 
+use natamux_agents::hook_files::{WorkspaceHooks, workspace_file};
 use natamux_proto::projects::repo::ProjectSettings;
 use natamux_proto::projects::repo_trust::{RepoCommand, RepoTrustView, SetupScript};
 use natamux_proto::stages::schema::{Condition, Step};
@@ -25,13 +26,30 @@ pub type TrustedOf = Arc<dyn Fn(Option<&str>) -> bool + Send + Sync>;
 
 const TRUST_FILE: &str = "repo-trust.json";
 
-/// One approval. `setup` is the hash of the setup scripts alone: a settings save approves the
-/// commands the user wrote, never a setup script they did not see.
+/// Agent config files a repo can commit. Agents trust the folder and run in auto mode, so the
+/// hooks and MCP servers in them run with no prompt. Files that only Natamux writes into a
+/// workspace (`.claude/settings.local.json`, `.cursor/hooks.json`, `.github/hooks/natamux.json`,
+/// `.qwen/settings.json`, `.factory/hooks.json`, `.opencode/plugins/natamux.js`) stay out: a task
+/// in the main checkout writes them, and would break its own trust.
+pub const AGENT_FILES: [&str; 6] = [
+    ".claude/settings.json",
+    ".mcp.json",
+    ".codex/config.toml",
+    ".codex/hooks.json",
+    ".cursor/mcp.json",
+    ".gemini/settings.json",
+];
+
+/// One approval. `setup` and `agents` are the hashes of the setup scripts and the agent files
+/// alone: a settings save approves the commands the user wrote, never a file they did not see.
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 struct Approval {
     path: String,
     hash: String,
     setup: String,
+    // Records written before agent files counted have none.
+    #[serde(default)]
+    agents: String,
 }
 
 /// The file and what each project looked like at its last check.
@@ -122,12 +140,12 @@ pub fn commands_of(settings: &ProjectSettings) -> Vec<RepoCommand> {
     commands
 }
 
-/// The setup scripts of a folder as bytes. One that is there but cannot be read still counts,
-/// so it never looks like no script.
-pub fn setup_files(folder: &Path) -> Vec<(String, Vec<u8>)> {
-    [SETUP_SCRIPT, SETUP_SCRIPT_WINDOWS]
-        .into_iter()
-        .filter_map(|name| {
+/// Files of a folder as bytes. One that is there but cannot be read still counts, so it never
+/// looks like no file.
+fn read_files(folder: &Path, names: &[&str]) -> Vec<(String, Vec<u8>)> {
+    names
+        .iter()
+        .filter_map(|&name| {
             let path = folder.join(name);
             match std::fs::read(&path) {
                 Ok(bytes) => Some((name.to_string(), bytes)),
@@ -136,6 +154,25 @@ pub fn setup_files(folder: &Path) -> Vec<(String, Vec<u8>)> {
             }
         })
         .collect()
+}
+
+/// The setup scripts of a folder as bytes.
+pub fn setup_files(folder: &Path) -> Vec<(String, Vec<u8>)> {
+    read_files(folder, &[SETUP_SCRIPT, SETUP_SCRIPT_WINDOWS])
+}
+
+/// The agent config files of a folder as bytes. Natamux writes `.codex/config.toml` and
+/// `.gemini/settings.json` into a main-checkout task's folder too: that exact text is its own and
+/// does not count.
+pub fn agent_files(folder: &Path) -> Vec<(String, Vec<u8>)> {
+    let own: Vec<(String, Vec<u8>)> = ["codex", "gemini"]
+        .into_iter()
+        .filter_map(|agent| workspace_file(agent, WorkspaceHooks::default()))
+        .map(|file| (file.path.to_string(), file.content.into_bytes()))
+        .collect();
+    let mut files = read_files(folder, &AGENT_FILES);
+    files.retain(|file| !own.contains(file));
+    files
 }
 
 /// Each part goes in with its length, so no two lists give the same bytes.
@@ -152,17 +189,26 @@ fn hex(hasher: Sha256) -> String {
         .collect()
 }
 
-fn setup_hash(setup: &[(String, Vec<u8>)]) -> String {
+fn files_hash(files: &[(String, Vec<u8>)]) -> String {
     let mut hasher = Sha256::new();
-    for (file, bytes) in setup {
+    for (file, bytes) in files {
         feed(&mut hasher, file.as_bytes());
         feed(&mut hasher, bytes);
     }
     hex(hasher)
 }
 
-/// SHA-256 over the commands, then the setup scripts, in a fixed order.
-pub fn hash_of(commands: &[RepoCommand], setup: &[(String, Vec<u8>)]) -> String {
+/// Whether a settings save would approve files the user has not seen.
+fn unseen(files: &[(String, Vec<u8>)], approved: Option<&str>) -> bool {
+    !files.is_empty() && approved != Some(files_hash(files).as_str())
+}
+
+/// SHA-256 over the commands, then the setup scripts, then the agent files, in a fixed order.
+pub fn hash_of(
+    commands: &[RepoCommand],
+    setup: &[(String, Vec<u8>)],
+    agents: &[(String, Vec<u8>)],
+) -> String {
     let mut hasher = Sha256::new();
     feed(&mut hasher, b"commands");
     for command in commands {
@@ -170,7 +216,12 @@ pub fn hash_of(commands: &[RepoCommand], setup: &[(String, Vec<u8>)]) -> String 
         feed(&mut hasher, command.text.as_bytes());
     }
     feed(&mut hasher, b"setup");
-    feed(&mut hasher, setup_hash(setup).as_bytes());
+    feed(&mut hasher, files_hash(setup).as_bytes());
+    // Only when there are some, so the approvals of a repo without them stay valid.
+    if !agents.is_empty() {
+        feed(&mut hasher, b"agents");
+        feed(&mut hasher, files_hash(agents).as_bytes());
+    }
     hex(hasher)
 }
 
@@ -179,12 +230,23 @@ struct Current {
     path: String,
     commands: Vec<RepoCommand>,
     setup: Vec<(String, Vec<u8>)>,
+    agents: Vec<(String, Vec<u8>)>,
     hash: String,
+}
+
+fn shown(files: Vec<(String, Vec<u8>)>) -> Vec<SetupScript> {
+    files
+        .into_iter()
+        .map(|(file, bytes)| SetupScript {
+            file,
+            text: String::from_utf8_lossy(&bytes).into_owned(),
+        })
+        .collect()
 }
 
 impl Current {
     fn trusted(&self, approval: Option<&Approval>) -> bool {
-        let nothing = self.commands.is_empty() && self.setup.is_empty();
+        let nothing = self.commands.is_empty() && self.setup.is_empty() && self.agents.is_empty();
         nothing || approval.is_some_and(|it| it.path == self.path && it.hash == self.hash)
     }
 
@@ -192,7 +254,8 @@ impl Current {
         Approval {
             path: self.path.clone(),
             hash: self.hash.clone(),
-            setup: setup_hash(&self.setup),
+            setup: files_hash(&self.setup),
+            agents: files_hash(&self.agents),
         }
     }
 
@@ -201,14 +264,8 @@ impl Current {
             trusted,
             hash: self.hash,
             commands: self.commands,
-            setup: self
-                .setup
-                .into_iter()
-                .map(|(file, bytes)| SetupScript {
-                    file,
-                    text: String::from_utf8_lossy(&bytes).into_owned(),
-                })
-                .collect(),
+            setup: shown(self.setup),
+            agent_files: shown(self.agents),
         }
     }
 }
@@ -219,16 +276,19 @@ impl Repos {
         let _ = self.trust.bus.set(bus);
     }
 
-    /// `folder`: where the setup scripts are read; None: the project folder.
+    /// `folder`: where the setup scripts are read; None: the project folder. The agent files
+    /// always come from the project folder, as the commands do.
     fn current(&self, id: &str, folder: Option<&Path>) -> Result<Current, RepoError> {
         let repo = self.get(Some(id))?;
         let commands = commands_of(&self.settings_of(Some(id)));
         let setup = setup_files(folder.unwrap_or(Path::new(&repo.path)));
-        let hash = hash_of(&commands, &setup);
+        let agents = agent_files(Path::new(&repo.path));
+        let hash = hash_of(&commands, &setup, &agents);
         Ok(Current {
             path: repo.path,
             commands,
             setup,
+            agents,
             hash,
         })
     }
@@ -273,7 +333,7 @@ impl Repos {
     }
 
     /// A settings save by the user approves the commands they wrote (`body`), but not a setup
-    /// script that changed since the last approval.
+    /// script or an agent file that changed since the last approval.
     pub fn approve_saved(&self, id: &str, body: &Value) -> Result<(), RepoError> {
         let settings = parse_settings(body)
             .map_err(RepoError::SettingsInput)?
@@ -281,15 +341,20 @@ impl Repos {
         let repo = self.get(Some(id))?;
         let commands = commands_of(&settings);
         let setup = setup_files(Path::new(&repo.path));
-        let before = self.trust.approvals().get(id).map(|it| it.setup.clone());
-        if !setup.is_empty() && before.as_deref() != Some(setup_hash(&setup).as_str()) {
+        let agents = agent_files(Path::new(&repo.path));
+        let before = self.trust.approvals().get(id).cloned();
+        let before = before.as_ref();
+        if unseen(&setup, before.map(|it| it.setup.as_str()))
+            || unseen(&agents, before.map(|it| it.agents.as_str()))
+        {
             return Ok(());
         }
         let current = Current {
-            hash: hash_of(&commands, &setup),
+            hash: hash_of(&commands, &setup, &agents),
             path: repo.path,
             commands,
             setup,
+            agents,
         };
         let approval = current.approval();
         self.trust.change(|all| {
@@ -318,7 +383,10 @@ impl Repos {
         }
         let mut approvals = Vec::new();
         for repo in self.list()? {
-            if let Ok(current) = self.current(&repo.id, None) {
+            // Agent files never ran under a check before; the user reviews them once.
+            if let Ok(current) = self.current(&repo.id, None)
+                && current.agents.is_empty()
+            {
                 approvals.push((repo.id, current.approval()));
             }
         }

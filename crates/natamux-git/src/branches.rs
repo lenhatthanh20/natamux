@@ -113,6 +113,9 @@ pub fn delete_branch_force(repo: &Path, branch: &str) -> bool {
 /// Deletes a branch when origin has every commit of it, as last pushed or fetched, merged or not.
 /// For a branch that GitHub merged with a squash or a rebase, which `git branch -d` keeps.
 pub fn delete_pushed_branch(repo: &Path, branch: &str) -> bool {
+    if checked_ref(branch).is_err() {
+        return false;
+    }
     let range = format!("refs/remotes/origin/{branch}..refs/heads/{branch}");
     let Ok(ahead) = git(repo, &["rev-list", "--count", &range], None, &[]) else {
         return false;

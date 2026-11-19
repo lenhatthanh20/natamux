@@ -8,6 +8,8 @@ use natamux_proto::workspaces::changes::ChangeStatus;
 use natamux_proto::workspaces::files::{EntryKind, TreeEntry};
 use natamux_proto::workspaces::workspace::ChangeEntry;
 
+use crate::terminals::paste_rules::quote_path;
+
 /// One row of the explorer. The key is the path in the worktree. Level and place are 1-based.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ExplorerRow {
@@ -114,20 +116,17 @@ pub fn shown_folders(expanded: &BTreeSet<String>) -> Vec<String> {
 /// What a drop on a terminal types: the path from the worktree root (a folder ends with `/`),
 /// quoted when a shell would split or expand it, then a space. No Enter.
 pub fn drop_text(path: &str, kind: EntryKind) -> String {
-    let text = if kind == EntryKind::Folder {
-        format!("{path}/")
-    } else {
-        path.to_string()
-    };
-    let plain = !text.is_empty()
-        && text
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || "._/@+-".contains(c));
-    if plain {
-        format!("{text} ")
-    } else {
-        format!("'{}' ", text.replace('\'', "'\\''"))
+    drop_text_for(path, kind, cfg!(windows))
+}
+
+/// `drop_text` for a chosen shell: `windows` picks PowerShell quoting, else POSIX. Control
+/// characters are removed so a file name cannot type keys (Enter, ^C) into the terminal.
+pub fn drop_text_for(path: &str, kind: EntryKind, windows: bool) -> String {
+    let mut text: String = path.chars().filter(|c| *c >= ' ' && *c != '\x7f').collect();
+    if kind == EntryKind::Folder {
+        text.push('/');
     }
+    format!("{} ", quote_path(&text, windows))
 }
 
 /// What a row drags: the task is in it, so a terminal of another task can refuse before the drop.

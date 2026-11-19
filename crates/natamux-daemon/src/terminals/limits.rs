@@ -7,7 +7,11 @@ pub use natamux_pty::input_gap::{ENTER_AFTER_PASTE_MS, INPUT_GAP_MS};
 
 /// 30 agents of the default pipeline (three agent shells a task) plus plain terminals.
 pub const MAX_SESSIONS: usize = 64;
+/// One task cannot take every slot. The perf bench opens 30 terminals in one task, so 32.
+pub const MAX_SESSIONS_PER_TASK: usize = 32;
 pub const TICKET_TTL_MS: u64 = 30_000;
+/// Open (not yet used or expired) socket tickets.
+pub const MAX_OPEN_TICKETS: usize = 256;
 /// Output is sent in batches. A chunk that comes after a quiet moment and is small (typing echo)
 /// goes out at once; anything else waits this long for more.
 pub const OUTPUT_COALESCE_MS: u64 = 4;

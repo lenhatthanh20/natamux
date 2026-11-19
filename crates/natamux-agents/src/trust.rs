@@ -9,6 +9,7 @@ use natamux_core::js::{is_js_space, iso_now, js_trim};
 use natamux_core::json::{parse_js, to_js_string_pretty};
 use serde_json::{Value, json};
 
+use crate::hook_files::{CODEX_EVENTS, codex_hook_value};
 use crate::paths::relative;
 
 /// Where Cursor and Copilot keep the folders the user trusted.
@@ -158,6 +159,20 @@ fn untrust_in_copilot(workspace: &str, config_path: &Path) -> std::io::Result<()
     config.insert("trustedFolders".into(), Value::Array(kept));
     let out = format!("{header}{}\n", to_js_string_pretty(&Value::Object(config)));
     fs::write(config_path, out)
+}
+
+/// The hooks Codex takes for one session as `-c` overrides. They count only with the trust check
+/// off for this run: Codex asks to trust every hook it has not seen.
+pub fn codex_hook_args() -> Vec<String> {
+    CODEX_EVENTS
+        .iter()
+        .flat_map(|event| {
+            [
+                "-c".to_string(),
+                format!("hooks.{event}={}", codex_hook_value(event)),
+            ]
+        })
+        .collect()
 }
 
 #[cfg(test)]

@@ -129,6 +129,26 @@ fn quotes_a_path_that_a_shell_would_split_or_expand() {
 }
 
 #[test]
+fn removes_control_characters_from_a_dropped_path() {
+    assert_eq!(
+        drop_text_for("a\rb\x03c\nd\x7fe", EntryKind::File, false),
+        "abcde "
+    );
+    assert_eq!(
+        drop_text_for("my\n dir", EntryKind::Folder, false),
+        "'my dir/' "
+    );
+}
+
+#[test]
+fn quotes_a_dropped_path_for_powershell_on_windows() {
+    assert_eq!(
+        drop_text_for("it's a.md", EntryKind::File, true),
+        "'it''s a.md' "
+    );
+}
+
+#[test]
 fn names_the_task_in_the_type_in_lower_case_so_a_drop_target_can_check_it_before_the_drop() {
     let drag = DraggedPath {
         task_id: "T-0118".to_string(),

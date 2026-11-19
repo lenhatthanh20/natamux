@@ -13,15 +13,16 @@ pub const SETUP_SKIPPED: &str = "Setup script skipped: repo commands are not app
 /// The command line that runs the setup script of a worktree, or None when it has none.
 pub fn setup_command(worktree: &Path, windows: bool) -> Option<String> {
     if windows {
-        return worktree
-            .join(SETUP_SCRIPT_WINDOWS)
-            .exists()
+        return regular_file(&worktree.join(SETUP_SCRIPT_WINDOWS))
             .then(|| format!("& ./{SETUP_SCRIPT_WINDOWS}"));
     }
-    worktree
-        .join(SETUP_SCRIPT)
-        .exists()
-        .then(|| format!("sh ./{SETUP_SCRIPT}"))
+    regular_file(&worktree.join(SETUP_SCRIPT)).then(|| format!("sh ./{SETUP_SCRIPT}"))
+}
+
+/// A link could point somewhere else between the trust check and the run, so only a regular
+/// file runs.
+fn regular_file(path: &Path) -> bool {
+    std::fs::symlink_metadata(path).is_ok_and(|meta| meta.is_file())
 }
 
 #[cfg(test)]
@@ -54,5 +55,19 @@ mod tests {
             setup_command(folder.path(), true).as_deref(),
             Some("& ./.natamux-setup.ps1")
         );
+    }
+
+    // A regression test: a linked script was run through the link.
+    #[cfg(unix)]
+    #[test]
+    fn never_runs_a_script_that_is_a_link() {
+        let folder = TempDir::new("setup");
+        let target = folder.path().join("real-setup");
+        std::fs::write(&target, "pnpm install\n").unwrap();
+        std::os::unix::fs::symlink(&target, folder.path().join(SETUP_SCRIPT)).unwrap();
+        std::os::unix::fs::symlink(&target, folder.path().join(SETUP_SCRIPT_WINDOWS)).unwrap();
+
+        assert_eq!(setup_command(folder.path(), false), None);
+        assert_eq!(setup_command(folder.path(), true), None);
     }
 }

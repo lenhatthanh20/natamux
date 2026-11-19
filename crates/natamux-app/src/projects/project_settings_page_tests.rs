@@ -158,7 +158,8 @@ fn t15_overwrite_keeps_the_other_clients_keys(cx: &mut TestAppContext) {
     press(cx, "mod-enter");
     assert!(open.page.read_with(cx, |page, _| page.conflict));
 
-    open.page.update(cx, |page, cx| page.overwrite(cx));
+    open.page
+        .update_in(cx, |page, window, cx| page.overwrite(window, cx));
     cx.run_until_parked();
     let (version, raw) = file();
     assert_eq!(version.as_deref(), Some("v3"));

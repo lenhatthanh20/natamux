@@ -165,6 +165,7 @@ impl Data {
                 file: ".natamux-setup".into(),
                 text: "pnpm install --frozen-lockfile\ncp .env.example .env\n".into(),
             }],
+            agent_files: Vec::new(),
         };
         #[cfg(test)]
         if self.projects.changed.contains(repo_id) {
