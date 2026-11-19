@@ -18,7 +18,6 @@ use ui::prelude::*;
 use super::edit_form::EditForm;
 use crate::app::dashboard::details::PanelRequest;
 use crate::app::dashboard::{Dashboard, DashboardChange};
-use crate::app::dashboard_data::{Part, Seen};
 use crate::app::layout_mode::DetailsMode;
 use crate::app::settings_reads::{SettingsReads, SettingsRefreshed};
 use crate::app::shown_cache::ShownCache;
@@ -73,6 +72,8 @@ pub struct Shown {
     /// Bumped when `events` or `settings` change; with the Tasks generation it keys `memo`.
     rev: u64,
     memo: std::cell::RefCell<Option<(run::MemoKey, run::Computed)>>,
+    /// The Activity section's lines with the `rev` they were made for.
+    lines: lists::KeptLines,
 }
 
 pub struct DetailsPanel {
@@ -178,31 +179,8 @@ impl DetailsPanel {
         self.dashboard.read(cx).details_shown()
     }
 
-    /// Root caches the panel: a change of what it reads draws it again from here. The task
-    /// shown follows the open or the selected task (View, Tasks).
-    fn follow_dashboard(dashboard: &Entity<Dashboard>, cx: &mut Context<Self>) -> Subscription {
-        let mut seen = Seen::default();
-        cx.observe(dashboard, move |panel, dashboard, cx| {
-            let gens = dashboard.read(cx).data.gens;
-            let changed = seen.take(&gens);
-            if changed.any(&[Part::Tasks, Part::View]) {
-                panel.sync(cx);
-            }
-            let parts = [
-                Part::Tasks,
-                Part::View,
-                Part::Usage,
-                Part::Activity,
-                Part::DiffStats,
-            ];
-            if changed.any(&parts) {
-                cx.notify();
-            }
-        })
-    }
-
     fn on_change(&mut self, change: &DashboardChange, cx: &mut Context<Self>) {
-        if matches!(change, DashboardChange::Tasks) {
+        if matches!(change, DashboardChange::Tasks(_)) {
             let dashboard = self.dashboard.read(cx);
             self.cache.retain(|id| dashboard.data.task(id).is_some());
         }
@@ -473,6 +451,9 @@ mod header;
 
 #[path = "details_summary.rs"]
 mod summary;
+
+#[path = "details_follow.rs"]
+mod follow;
 
 #[cfg(test)]
 #[path = "details_panel_tests.rs"]

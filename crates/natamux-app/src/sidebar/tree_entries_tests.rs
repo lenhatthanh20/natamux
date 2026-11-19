@@ -14,11 +14,11 @@ fn make_task(overrides: Value) -> Task {
     serde_json::from_value(base).unwrap_or_default()
 }
 
-fn task(id: &str, title: &str) -> Task {
-    make_task(json!({"id": id, "title": title}))
+fn task(id: &str, title: &str) -> Arc<Task> {
+    Arc::new(make_task(json!({"id": id, "title": title})))
 }
 
-fn group(id: &str, open: Vec<Task>, finished: Vec<Task>) -> RepoGroup {
+fn group(id: &str, open: Vec<Arc<Task>>, finished: Vec<Arc<Task>>) -> RepoGroup {
     RepoGroup {
         repo: RepoRef {
             id: id.into(),

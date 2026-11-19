@@ -7,7 +7,8 @@ use ui::prelude::*;
 use super::remote_terminal::RemoteTerminal;
 
 /// `ended` dims the screen. The cache of a view does not know the opacity around it, so an ended
-/// screen draws uncached.
+/// screen draws uncached. No view between Root and this screen may be cached: a cached view that
+/// draws again draws every cached view inside it, so each frame of one terminal would draw all.
 pub fn terminal_screen(terminal: &Entity<RemoteTerminal>, ended: bool, cx: &App) -> Div {
     let view = terminal.read(cx).view.clone();
     let style = StyleRefinement::default().size_full();

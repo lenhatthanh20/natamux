@@ -71,6 +71,12 @@ impl MenuLayer {
         layer.open.as_ref()?.opener.clone()
     }
 
+    /// A menu shows.
+    pub fn is_open(cx: &App) -> bool {
+        cx.try_global::<GlobalMenuLayer>()
+            .is_some_and(|global| global.0.read(cx).open.is_some())
+    }
+
     /// The open menu, for the flow tests.
     #[cfg(test)]
     pub fn open_menu(cx: &App) -> Option<Entity<ContextMenu>> {

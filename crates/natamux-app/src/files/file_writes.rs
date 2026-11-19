@@ -71,9 +71,8 @@ impl FileEditor {
             .to_owned();
         match answer {
             Ok(saved) => {
-                let written = disk_text(&sent.text, self.crlf).into_owned();
                 if let Some(disk) = self.disk.as_mut() {
-                    disk.text = Some(written);
+                    disk.text = Some(sent.text.clone());
                     disk.version = saved.version.clone();
                 }
                 let now = self.draft(cx);

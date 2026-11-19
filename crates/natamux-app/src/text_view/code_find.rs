@@ -15,8 +15,8 @@ impl FindTarget for CodeView {
         self.input_id()
     }
 
-    fn text(&self, cx: &App) -> String {
-        self.input_ref().read(cx).text().to_owned()
+    fn read_text(&self, cx: &App, read: &mut dyn FnMut(&str)) {
+        read(self.input_ref().read(cx).text());
     }
 
     fn one_line_selection(&self, cx: &mut App) -> Option<String> {

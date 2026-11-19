@@ -175,7 +175,10 @@ fn detail_of(event: &TaskEvent) -> Option<String> {
 /// Consecutive events of the same kind, from the same actor, become one line with a count, so
 /// "Details edited" four times in a row reads as "Details edited ×4". Oldest first in, oldest
 /// first out.
-pub fn group_events(events: &[StoredEvent], path_names: &PathNames) -> Vec<ActivityLine> {
+pub fn group_events<'a>(
+    events: impl IntoIterator<Item = &'a StoredEvent>,
+    path_names: &PathNames,
+) -> Vec<ActivityLine> {
     let mut lines: Vec<ActivityLine> = Vec::new();
     for stored in events {
         let event = &stored.event;
@@ -226,12 +229,10 @@ pub fn describe_line(line: &ActivityLine) -> String {
 /// The Activity section's lines, newest first. "Agent is working" lines, in logs written before
 /// they were dropped, are not news.
 pub fn timeline_lines(events: &[StoredEvent]) -> Vec<ActivityLine> {
-    let shown: Vec<StoredEvent> = events
+    let shown = events
         .iter()
-        .filter(|stored| stored.event.kind != "agent.active")
-        .cloned()
-        .collect();
-    let mut lines = group_events(&shown, &PathNames::new());
+        .filter(|stored| stored.event.kind != "agent.active");
+    let mut lines = group_events(shown, &PathNames::new());
     lines.reverse();
     lines
 }

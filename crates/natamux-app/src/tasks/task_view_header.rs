@@ -10,7 +10,8 @@ use crate::app::commands::shortcut_of;
 use crate::app::view_state::Layout;
 use crate::components::chips::{CountBadge, tip_with_keys};
 use crate::tasks::state_filter::{StateFilter, width_probe};
-use crate::tasks::task_attention::{count_by_state, filter_tasks};
+use crate::tasks::task_attention::{count_by_state, filter_task_refs};
+use crate::tasks::task_changes::task_of;
 use crate::tasks::task_view_rules::{NARROW_BELOW, filter_states};
 
 impl TaskView {
@@ -21,8 +22,9 @@ impl TaskView {
         let dashboard = self.dashboard.read(cx);
         let layout = dashboard.view().layout;
         let show_finished = dashboard.view().show_finished;
-        let searched = filter_tasks(&dashboard.data.tasks, None, &dashboard.filter);
-        let states = filter_states(&count_by_state(&searched), dashboard.state_filter);
+        let searched = filter_task_refs(&dashboard.data.tasks, None, &dashboard.filter);
+        let searched = searched.into_iter().map(task_of);
+        let states = filter_states(&count_by_state(searched), dashboard.state_filter);
         let filter = StateFilter::new(
             self.dashboard.clone(),
             states,

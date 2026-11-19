@@ -117,6 +117,28 @@ impl TerminalHandle {
         }
     }
 
+    /// A handle with no socket that hands each input to `input`, on a thread of its own; the
+    /// other commands go nowhere. For the app's `--bench-flows`, whose fake terminal echoes keys.
+    pub fn looped(
+        events: UnboundedReceiver<TerminalEvent>,
+        input: impl Fn(String) + Send + 'static,
+    ) -> TerminalHandle {
+        let (commands, mut received) = mpsc::unbounded_channel();
+        // Ends once the handle is dropped.
+        std::thread::spawn(move || {
+            while let Some(command) = received.blocking_recv() {
+                if let Command::Input(text) = command {
+                    input(text);
+                }
+            }
+        });
+        TerminalHandle {
+            commands,
+            events,
+            loss: Loss::default(),
+        }
+    }
+
     fn send(&self, command: Command) {
         // Fails only once the session ended, when there is nothing left to tell.
         let _ = self.commands.send(command);

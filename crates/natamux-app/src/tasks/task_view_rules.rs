@@ -1,9 +1,12 @@
 //! Pure rules of the All tasks view (`Dashboard.tsx`, `StateFilter.tsx`, `TaskBoard.tsx`): what
 //! main shows, the states of the filter, the board's columns and folds, and when a task can be added.
 
+use std::borrow::Borrow;
+
 use natamux_proto::projects::repo::Repo;
 use natamux_proto::tasks::task::{Task, TaskState};
 
+use super::task_changes::task_of;
 use super::task_rules::{state_label, uncommitted_sentence};
 use super::task_sort::STATE_ORDER;
 
@@ -181,9 +184,10 @@ pub const DELETE_CHECKOUT_TASK: &str = "This deletes the task, its notes and its
 
 /// The tasks whose files that are not committed a delete or a removal would lose. A main checkout
 /// task keeps them, so its changes are not read.
-pub fn worktree_ids(tasks: &[Task]) -> Vec<String> {
+pub fn worktree_ids<T: Borrow<Task>>(tasks: &[T]) -> Vec<String> {
     tasks
         .iter()
+        .map(task_of)
         .filter(|task| task.workspace.is_some() && task.main_checkout != Some(true))
         .map(|task| task.id.clone())
         .collect()

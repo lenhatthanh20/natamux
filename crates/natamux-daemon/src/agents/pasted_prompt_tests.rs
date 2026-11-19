@@ -244,3 +244,21 @@ fn a_newer_start_replaces_a_prompt_not_pasted_yet() {
     env.prompts.tick();
     assert_eq!(env.pasted(), one("1", "new"));
 }
+
+#[test]
+fn the_ticker_stops_when_nothing_is_held_and_hold_starts_it_again() {
+    let env = env();
+    env.hold("1", "Fix the bug");
+    assert!(!env.prompts.stop_if_idle());
+    assert!(env.prompts.ticking.load(Ordering::SeqCst));
+
+    env.in_front(Some("aider"));
+    env.at(START + LAUNCH_WATCH_MS);
+    env.prompts.tick();
+    assert!(env.prompts.stop_if_idle());
+    assert!(!env.prompts.ticking.load(Ordering::SeqCst));
+
+    // The flag is false again, so the next hold starts a thread.
+    env.prompts.hold("T-0001", "1", "next");
+    assert!(env.prompts.ticking.load(Ordering::SeqCst));
+}

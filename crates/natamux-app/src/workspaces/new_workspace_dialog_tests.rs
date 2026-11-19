@@ -37,7 +37,8 @@ fn open_dialog(
 fn started(dashboard: &Entity<Dashboard>, cx: &mut VisualTestContext) -> Vec<Task> {
     dashboard.read_with(cx, |dashboard, _| {
         let tasks = dashboard.data.tasks.iter();
-        tasks.filter(|task| task.title == TITLE).cloned().collect()
+        let started = tasks.filter(|task| task.title == TITLE);
+        started.map(|task| Task::clone(task)).collect()
     })
 }
 

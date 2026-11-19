@@ -1,12 +1,13 @@
 //! `pull-request-watcher.test.ts`. The tests of the timer move the manual `Scheduler` on with
 //! `tick`, then `settle` the watcher: gh runs on the worker thread, not in the timer's job.
 
+use std::collections::HashSet;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use natamux_daemon::github::pull_request_watcher::{
-    CwdOf, HasRemoteBranch, Log, PullRequestWatcher, PullRequestWatcherOptions,
-    SETTLED_INTERVAL_MS, WATCH_INTERVAL_MS, is_watched,
+    CwdOf, Log, PullRequestWatcher, PullRequestWatcherOptions, RemoteBranches, SETTLED_INTERVAL_MS,
+    WATCH_INTERVAL_MS, is_watched,
 };
 use natamux_daemon::projects::repos::Repos;
 use natamux_daemon::shared::event_bus::EventBus;
@@ -165,17 +166,25 @@ pub(super) fn options(fx: &Fx, gh: RunGh) -> PullRequestWatcherOptions {
     options
 }
 
-pub(super) fn on_origin() -> HasRemoteBranch {
-    Arc::new(|_, _| Ok(true))
+/// Origin has `branches`; each look is counted.
+pub(super) fn origin_with(branches: &[&str], looks: &Arc<AtomicUsize>) -> RemoteBranches {
+    let branches: HashSet<String> = branches.iter().map(|branch| branch.to_string()).collect();
+    let looks = Arc::clone(looks);
+    Arc::new(move |_| {
+        looks.fetch_add(1, Ordering::SeqCst);
+        Ok(branches.clone())
+    })
 }
 
-/// Origin never has the branch; each look is counted.
-pub(super) fn counting_no_branch(looks: &Arc<AtomicUsize>) -> HasRemoteBranch {
-    let looks = Arc::clone(looks);
-    Arc::new(move |_, _| {
-        looks.fetch_add(1, Ordering::SeqCst);
-        Ok(false)
-    })
+/// Origin has the branches of the tests.
+pub(super) fn on_origin() -> RemoteBranches {
+    let branches = ["natamux/t-1", "natamux/t-2", "natamux/t-3", "natamux/t-4"];
+    origin_with(&branches, &Arc::default())
+}
+
+/// Origin has no branch; each look is counted.
+pub(super) fn counting_no_branch(looks: &Arc<AtomicUsize>) -> RemoteBranches {
+    origin_with(&[], looks)
 }
 
 pub(super) fn logged(options: &mut PullRequestWatcherOptions) -> Arc<Mutex<Vec<String>>> {

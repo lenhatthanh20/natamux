@@ -3,12 +3,13 @@
 //! read shows its error. The open folders of each task are kept while the app runs.
 
 use std::collections::{BTreeSet, HashMap};
+use std::rc::Rc;
 
 use gpui::{App, Context, Global};
 use natamux_proto::workspaces::files::TreeEntry;
 use natamux_proto::workspaces::workspace::ChangeEntry;
 
-use super::explorer_tree::shown_folders;
+use super::explorer_tree::{ChangeMarks, ExplorerRow, change_marks, explorer_rows, shown_folders};
 use super::file_tree::FileTree;
 use crate::app::source::reason;
 
@@ -35,18 +36,43 @@ pub fn keep_open_folders(task_id: &str, folders: &BTreeSet<String>, cx: &mut App
 #[derive(Default)]
 pub struct FileReads {
     pub folders: HashMap<String, Vec<TreeEntry>>,
-    pub changes: Vec<ChangeEntry>,
+    /// Worked out once per read, not on every draw.
+    pub marks: ChangeMarks,
     /// The root's error while it has never been read.
     pub root_error: Option<String>,
     /// Folders a read was started for, so each opens with one read.
     asked: BTreeSet<String>,
+    /// The flat rows, kept until a folder read or a fold changes them.
+    rows: Option<Rc<Vec<ExplorerRow>>>,
 }
 
 impl FileReads {
+    pub fn rows(&mut self, expanded: &BTreeSet<String>) -> Rc<Vec<ExplorerRow>> {
+        let folders = &self.folders;
+        Rc::clone(
+            self.rows
+                .get_or_insert_with(|| Rc::new(explorer_rows(folders, expanded))),
+        )
+    }
+
+    /// Call when `expanded` changes.
+    pub fn forget_rows(&mut self) {
+        self.rows = None;
+    }
+
+    /// True when the marks differ from the ones shown.
+    pub fn apply_changes(&mut self, changes: &[ChangeEntry]) -> bool {
+        let marks = change_marks(changes);
+        let changed = marks != self.marks;
+        self.marks = marks;
+        changed
+    }
+
     fn apply_folder(&mut self, folder: &str, result: Result<Vec<TreeEntry>, String>) {
         match result {
             Ok(entries) => {
                 self.folders.insert(folder.to_owned(), entries);
+                self.rows = None;
                 if folder.is_empty() {
                     self.root_error = None;
                 }
@@ -107,8 +133,9 @@ impl FileTree {
             // A failed read keeps the marks shown.
             if let Ok(changes) = answer.await {
                 tree.update(cx, |tree, cx| {
-                    tree.reads.changes = changes;
-                    cx.notify();
+                    if tree.reads.apply_changes(&changes) {
+                        cx.notify();
+                    }
                 })
                 .ok();
             }
@@ -116,3 +143,7 @@ impl FileTree {
         .detach();
     }
 }
+
+#[cfg(test)]
+#[path = "file_reads_tests.rs"]
+mod tests;

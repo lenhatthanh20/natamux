@@ -4,9 +4,12 @@
 // Ported with their tests (spec D14); the details panel calls them.
 #![cfg_attr(not(test), allow(dead_code))]
 
+use std::borrow::Borrow;
+
 use natamux_proto::tasks::task::Task;
 use natamux_proto::workspaces::workspace::DiffStat;
 
+use super::task_changes::task_of;
 use super::task_sort::task_number;
 
 /// `tries-<letters>-<digits>`, in lower case.
@@ -33,10 +36,11 @@ pub fn try_group(task: &Task) -> Option<&str> {
 
 /// Every task of the group, the first try first. The group is named after the first try, whose
 /// number may be higher than the others when the user chose its id.
-pub fn tries_of<'a>(group: &str, tasks: &'a [Task]) -> Vec<&'a Task> {
+pub fn tries_of<'a, T: Borrow<Task>>(group: &str, tasks: &'a [T]) -> Vec<&'a Task> {
     let first = |task: &Task| i32::from(group != format!("tries-{}", task.id.to_lowercase()));
     let mut tries: Vec<&Task> = tasks
         .iter()
+        .map(task_of)
         .filter(|task| task.labels.iter().any(|label| label == group))
         .collect();
     tries.sort_by_key(|task| (first(task), task_number(&task.id)));

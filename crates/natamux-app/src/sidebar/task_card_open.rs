@@ -3,6 +3,8 @@
 //! under thin dividers. Also the pieces a closed card shares: the waiting box, the project and
 //! the blur check.
 
+use std::sync::Arc;
+
 use gpui::{AnyElement, ClickEvent, Hsla};
 use natamux_proto::tasks::task::{Task, TaskState};
 use ui::{Tooltip, prelude::*};
@@ -28,7 +30,7 @@ impl WorkspaceTree {
         &self,
         task: &Task,
         rows: &[ShellRow],
-        children: &[Task],
+        children: &[Arc<Task>],
         model: &TreeModel,
         snap: &Snapshot,
         pinned_row: bool,

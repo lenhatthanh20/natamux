@@ -37,8 +37,8 @@ const AGENT_STOP_EVENTS: [&str; 4] = [
 
 /// Where gh runs for the tasks of a repository. A full pull request address works from any folder.
 pub type CwdOf = Arc<dyn Fn(Option<&str>) -> String + Send + Sync>;
-/// Whether origin has the branch of a worktree: no network.
-pub type HasRemoteBranch = Arc<dyn Fn(&Path, &str) -> Result<bool, String> + Send + Sync>;
+/// The branches origin has, read in a worktree of the repository: no network.
+pub type RemoteBranches = Arc<dyn Fn(&Path) -> Result<HashSet<String>, String> + Send + Sync>;
 pub type Log = Arc<dyn Fn(&str) + Send + Sync>;
 /// The task, after its branch follows the one checked out in its worktree.
 pub type SyncBranch = Arc<dyn Fn(&str) -> Result<Task, TaskError> + Send + Sync>;
@@ -119,8 +119,8 @@ pub struct PullRequestWatcherOptions {
     /// Only dashboards show the status, so the timed checks rest while none listens. Without a bus
     /// they always run.
     pub bus: Option<Arc<EventBus>>,
-    /// Default: the remote-tracking ref of `natamux_git::graph::has_remote_branch`.
-    pub has_remote_branch: Option<HasRemoteBranch>,
+    /// Default: the remote-tracking refs of `natamux_git::graph::remote_branches`.
+    pub remote_branches: Option<RemoteBranches>,
     /// Asked before a task's pull request is looked for. Default: the task as stored.
     pub sync_branch: SyncBranch,
 }
@@ -141,7 +141,7 @@ impl PullRequestWatcherOptions {
             interval_ms: WATCH_INTERVAL_MS,
             log: None,
             bus: None,
-            has_remote_branch: None,
+            remote_branches: None,
             sync_branch: Arc::new(move |task_id| reading.get_task(task_id)),
         }
     }
@@ -176,7 +176,7 @@ struct State {
 
 struct Inner {
     options: PullRequestWatcherOptions,
-    has_remote_branch: HasRemoteBranch,
+    remote_branches: RemoteBranches,
     state: Mutex<State>,
     /// Work on the channel or running, for `settle`.
     pending: Mutex<usize>,
@@ -193,16 +193,15 @@ fn locked<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 
 impl PullRequestWatcher {
     pub fn new(options: PullRequestWatcherOptions) -> PullRequestWatcher {
-        let has_remote_branch = options.has_remote_branch.clone().unwrap_or_else(|| {
-            Arc::new(|worktree: &Path, branch: &str| {
-                natamux_git::graph::has_remote_branch(worktree, branch)
-                    .map_err(|error| error.to_string())
+        let remote_branches = options.remote_branches.clone().unwrap_or_else(|| {
+            Arc::new(|worktree: &Path| {
+                natamux_git::graph::remote_branches(worktree).map_err(|error| error.to_string())
             })
         });
         PullRequestWatcher {
             inner: Arc::new(Inner {
                 options,
-                has_remote_branch,
+                remote_branches,
                 state: Mutex::new(State::default()),
                 pending: Mutex::new(0),
                 idle: Condvar::new(),
@@ -413,12 +412,17 @@ impl Inner {
             let state = locked(&self.state);
             (state.on_origin.clone(), state.failures, state.last_check_at)
         };
-        let tasks = self.options.tasks.list_tasks(None).unwrap_or_default();
-        // A pushed branch without a pull request may get one any minute.
-        let pushed = tasks
-            .iter()
-            .any(|task| is_candidate(task) && on_origin.contains(&task.id));
-        let settled = !pushed && tasks.iter().filter(|task| is_watched(task)).all(is_settled);
+        // Settled: no task waits for its checks, and no pushed branch without a pull request,
+        // which may get one any minute.
+        let busy = self
+            .options
+            .tasks
+            .scan(|task| {
+                let pushed = is_candidate(task) && on_origin.contains(&task.id);
+                (pushed || (is_watched(task) && !is_settled(task))).then_some(())
+            })
+            .unwrap_or_default();
+        let settled = busy.is_empty();
         let interval = self.options.interval_ms;
         let base = if settled {
             SETTLED_INTERVAL_MS

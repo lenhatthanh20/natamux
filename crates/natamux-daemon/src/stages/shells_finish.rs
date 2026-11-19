@@ -88,7 +88,7 @@ impl StageRun {
     /// nothing tells an agent from a dev server, so such a shell ends, as all of them did before.
     fn end_shells(&self, task_id: &str, started: &HashMap<String, Started>) {
         let ended_at = iso_from_millis(self.now());
-        let finishing = self.all_tasks().into_iter().find(|each| each.id == task_id);
+        let finishing = self.task(task_id).ok();
         let stages = finishing
             .as_ref()
             .map(|task| self.last_stages(task))
@@ -127,7 +127,7 @@ impl StageRun {
         }
         // A task deleted meanwhile keeps nothing, and its shells are closed already. One started
         // again meanwhile may use these shells.
-        let task = self.all_tasks().into_iter().find(|each| each.id == task_id);
+        let task = self.task(task_id).ok();
         if !task.is_some_and(|task| task.state.is_finished()) {
             return;
         }

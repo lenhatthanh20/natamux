@@ -12,16 +12,14 @@
 
 use std::collections::HashMap;
 use std::sync::mpsc::{Sender, channel};
-use std::sync::{Mutex, PoisonError};
+use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use natamux_agents::custom::{agent_kind, custom_agent};
-use natamux_agents::sign_in::sign_in_line;
 use natamux_core::js::parse_iso_millis;
 use serde_json::{Value, json};
 
-use super::launch_text::{
-    BellScan, failed_mark_at, last_line, not_found_line, quoted, tail, without_escapes,
-};
+use self::launch_watch::{LaunchWatch, Launches};
+use super::launch_text::BellScan;
 use super::runner::AgentLaunch;
 use crate::shared::jobs::{Clock, system_clock};
 use crate::tasks::records::ActivityOptions;
@@ -42,8 +40,6 @@ pub const START_BELL_MS: i64 = 15_000;
 /// screen, or an agent that ended. As long as the launch grace of a shell: an agent installed
 /// with npm can take more than 15 s to show its first screen on a cold start.
 pub const LAUNCH_WATCH_MS: i64 = 30_000;
-/// The last bit of text kept to join a line that came in two pieces, in UTF-16 units.
-const WATCH_TEXT_UNITS: usize = 4000;
 
 /// The part of the daemon's variables for an agent: `NATAMUX_<name>_COMMAND`.
 fn variable_name(agent: &str) -> String {
@@ -86,15 +82,6 @@ fn terminal_label(terminal: &str) -> String {
     format!("Terminal {terminal}")
 }
 
-struct LaunchWatch {
-    launch: AgentLaunch,
-    at: i64,
-    text: String,
-    /// Windows types the whole launch line, prompt and all, and the terminal echoes it. Its first
-    /// line is left out once, so a prompt that names a sign-in line does not match.
-    echo_left: bool,
-}
-
 #[derive(Default)]
 struct Watching {
     last_look: HashMap<String, i64>,
@@ -102,7 +89,7 @@ struct Watching {
     last_bell: HashMap<String, i64>,
     /// Where the output of each task's first terminal stands in an OSC sequence.
     bell_scans: HashMap<String, BellScan>,
-    launches: HashMap<String, LaunchWatch>,
+    launches: Launches,
 }
 
 impl Watching {
@@ -201,20 +188,14 @@ impl GenericSignals {
         let _ = wait.recv();
     }
 
+    fn watching(&self) -> MutexGuard<'_, Watching> {
+        self.watching.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
     /// Reads the terminal of an agent that just started, for a shell that does not know it.
     pub fn watch_launch(&self, launch: &AgentLaunch) {
-        let key = format!("{}/{}", launch.task_id, launch.terminal);
-        let watch = LaunchWatch {
-            launch: launch.clone(),
-            at: (self.now)(),
-            text: String::new(),
-            echo_left: self.windows,
-        };
-        self.watching
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .launches
-            .insert(key, watch);
+        let watch = LaunchWatch::new(launch.clone(), (self.now)(), self.windows);
+        self.watching().launches.insert(watch);
     }
 
     pub fn on_output(&self, task_id: &str, terminal: &str, data: &[u8]) {
@@ -254,63 +235,16 @@ impl GenericSignals {
     /// its sign-in screen or ends. The stage would wait for an agent that never came, so the
     /// task fails, or waits for the user, with the words seen and what to do.
     fn check_launch(&self, task_id: &str, terminal: &str, data: &[u8], now: i64) -> Option<Job> {
-        let mut watching = self.watching.lock().unwrap_or_else(PoisonError::into_inner);
-        if watching.launches.is_empty() {
-            return None;
-        }
-        let key = format!("{task_id}/{terminal}");
-        let watch = watching.launches.get_mut(&key)?;
+        // Out of the map while the chunk is read: the text work takes no lock.
+        let mut watch = self.watching().launches.take(task_id, terminal)?;
         if now - watch.at > LAUNCH_WATCH_MS {
-            watching.launches.remove(&key);
             return None;
         }
-        // A line can come in two pieces; the last bit of text is enough to join them. Decoded
-        // only here, while a launch is watched: the rest needs no text.
-        let decoded = String::from_utf8_lossy(data);
-        let mut chunk: &str = &decoded;
-        if watch.echo_left {
-            match chunk.split_once('\n') {
-                Some((_, rest)) => {
-                    watch.echo_left = false;
-                    chunk = rest;
-                }
-                None => chunk = "",
-            }
+        let seen = watch.read(data);
+        if seen.is_none() {
+            self.watching().launches.put_back(watch);
         }
-        let joined = format!("{}{chunk}", watch.text);
-        watch.text = tail(joined, WATCH_TEXT_UNITS);
-        let task_id = task_id.to_string();
-        let launch = watch.launch.clone();
-        if let Some(line) = not_found_line(&watch.text, &launch.program) {
-            watching.launches.remove(&key);
-            return Some(Job::Failed {
-                task_id,
-                launch,
-                line,
-            });
-        }
-        // Sign-in before the failed mark: the same output gives the same state, however the
-        // terminal splits it into chunks.
-        let kind = agent_kind(&launch.agent);
-        if let Some(line) = sign_in_line(&kind, &without_escapes(&watch.text)) {
-            watching.launches.remove(&key);
-            return Some(Job::SignIn {
-                task_id,
-                launch,
-                line: quoted(&line),
-            });
-        }
-        let mark = failed_mark_at(&watch.text)?;
-        let line = last_line(&watch.text[..mark]);
-        let at = watch.at;
-        watching.launches.remove(&key);
-        // A restored agent goes on with an old session; one it cannot find is no failure.
-        (!launch.restored).then_some(Job::Ended {
-            task_id,
-            launch,
-            at,
-            line,
-        })
+        seen.flatten()
     }
 }
 
@@ -465,6 +399,9 @@ impl Worker {
         }
     }
 }
+
+#[path = "launch_watch.rs"]
+mod launch_watch;
 
 #[cfg(test)]
 mod tests {

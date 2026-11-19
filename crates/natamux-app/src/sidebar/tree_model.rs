@@ -3,6 +3,7 @@
 //! terminals read, and the keyboard entries. The tree view draws the lines in order.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
 
 use natamux_proto::projects::repo::Repo;
 use natamux_proto::tasks::task::{Task, TaskState};
@@ -13,15 +14,16 @@ use crate::sidebar::shell_rows::{ShellRow, shell_rows};
 use crate::sidebar::sidebar_tree::{RowTier, is_fold_open, row_tier, with_parents};
 use crate::sidebar::tree_entries::{Entry, TreeSource, tree_entries};
 use crate::sidebar::workspace_groups::{
-    DEFAULT_REPO_ID, RepoGroup, RepoRef, WorkspaceGroups, next_hint_change_ms, workspace_groups,
+    DEFAULT_REPO_ID, RepoGroup, RepoRef, WorkspaceGroups, next_hint_change_ms, workspace_groups_of,
 };
-use crate::tasks::task_attention::{filter_tasks, next_row_change_ms};
+use crate::tasks::task_attention::{filter_task_refs, next_row_change_ms};
+use crate::tasks::task_changes::task_of;
 
 /// What the tree reads from the dashboard and the saved view.
 pub struct TreeInput<'a> {
     pub repos: &'a [Repo],
-    /// Every task: the filter is applied here.
-    pub tasks: &'a [Task],
+    /// Every task, shared with the dashboard: the filter is applied here.
+    pub tasks: &'a [Arc<Task>],
     pub filter: &'a str,
     /// The task open in main.
     pub current_id: Option<&'a str>,
@@ -57,14 +59,15 @@ pub enum TaskLook {
     /// An open card: its terminal rows and its subtasks, drawn inside it.
     Open {
         rows: Vec<ShellRow>,
-        children: Vec<Task>,
+        children: Vec<Arc<Task>>,
     },
     /// A one-line row under "N finished".
     Finished,
 }
 
 /// One line of the tree, in the order they are shown. `group` is the index of the project card
-/// the line sits in; pinned lines sit in none.
+/// the line sits in; pinned lines sit in none. A task line shares its task with the dashboard, so
+/// a line of a task that did not change is found equal by the address of the task.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Line {
     PinnedHeader {
@@ -74,7 +77,7 @@ pub enum Line {
         group: usize,
     },
     Task {
-        task: Box<Task>,
+        task: Arc<Task>,
         group: Option<usize>,
         /// Under its parent, behind the guide line.
         nested: bool,
@@ -147,10 +150,11 @@ fn repo_of(task: &Task) -> &str {
 impl TreeModel {
     pub fn build(input: &TreeInput) -> TreeModel {
         let filtered = !input.filter.trim().is_empty();
-        let searched = if filtered {
-            filter_tasks(input.tasks, None, input.filter)
+        // Borrowed: the tasks that end up in a group are shared, not copied.
+        let searched: Vec<&Arc<Task>> = if filtered {
+            filter_task_refs(input.tasks, None, input.filter)
         } else {
-            input.tasks.to_vec()
+            input.tasks.iter().collect()
         };
         let repos: Vec<RepoRef> = input
             .repos
@@ -160,7 +164,7 @@ impl TreeModel {
                 name: repo.name.clone(),
             })
             .collect();
-        let groups = workspace_groups(
+        let groups = workspace_groups_of(
             &repos,
             &with_parents(&searched, input.tasks),
             input.pinned,
@@ -243,7 +247,7 @@ impl TreeModel {
 
     /// A folded row still shows the subtasks that wait on the user: no other part of the sidebar
     /// does.
-    pub fn waiting_children(&self, task_id: &str) -> Vec<Task> {
+    pub fn waiting_children(&self, task_id: &str) -> Vec<Arc<Task>> {
         self.groups
             .children
             .get(task_id)
@@ -262,12 +266,13 @@ impl TreeModel {
     pub fn next_label_change_ms(&self, now_ms: i64) -> Option<i64> {
         let rows = self.lines.iter().flat_map(|line| match line {
             Line::Task { task, look, .. } => {
-                let inside: &[Task] = match look {
+                let inside: &[Arc<Task>] = match look {
                     TaskLook::Open { children, .. } => children,
                     _ => &[],
                 };
-                std::iter::once(&**task)
+                std::iter::once(task)
                     .chain(inside)
+                    .map(task_of)
                     .collect::<Vec<&Task>>()
             }
             _ => Vec::<&Task>::new(),
@@ -302,7 +307,13 @@ impl TreeModel {
         })
     }
 
-    fn push_task(&self, lines: &mut Vec<Line>, task: &Task, group: Option<usize>, pinned: bool) {
+    fn push_task(
+        &self,
+        lines: &mut Vec<Line>,
+        task: &Arc<Task>,
+        group: Option<usize>,
+        pinned: bool,
+    ) {
         let open = self.is_open(&task.id);
         let look = if open {
             let children = self.groups.children.get(&task.id);
@@ -314,7 +325,7 @@ impl TreeModel {
             TaskLook::Closed
         };
         lines.push(Line::Task {
-            task: Box::new(task.clone()),
+            task: Arc::clone(task),
             group,
             nested: false,
             pinned_row: pinned,
@@ -324,7 +335,7 @@ impl TreeModel {
             // A closed card still shows the subtasks that wait on the user.
             let waiting = self.waiting_children(&task.id);
             lines.extend(waiting.into_iter().map(|child| Line::Task {
-                task: Box::new(child),
+                task: child,
                 group,
                 nested: true,
                 pinned_row: false,
@@ -362,7 +373,7 @@ impl TreeModel {
                 if info.finished_shown {
                     for task in &group.finished {
                         lines.push(Line::Task {
-                            task: Box::new(task.clone()),
+                            task: Arc::clone(task),
                             group: Some(index),
                             nested: false,
                             pinned_row: false,
@@ -378,13 +389,13 @@ impl TreeModel {
 
 /// The cards in sight: the pinned ones, then the open rows of each open group.
 fn card_tasks<'a>(groups: &'a WorkspaceGroups, repo_open: &dyn Fn(&str) -> bool) -> Vec<&'a Task> {
-    let mut shown: Vec<&Task> = groups.pinned.iter().collect();
+    let mut shown: Vec<&Task> = groups.pinned.iter().map(task_of).collect();
     for group in groups
         .groups
         .iter()
         .filter(|group| repo_open(&group.repo.id))
     {
-        shown.extend(&group.open);
+        shown.extend(group.open.iter().map(task_of));
     }
     shown
 }

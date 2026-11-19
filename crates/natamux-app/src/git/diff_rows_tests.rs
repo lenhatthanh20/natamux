@@ -145,3 +145,13 @@ fn changed_words_land_on_the_lines_that_show_them() {
     let (_, new) = beside("let a = 1;\n", "let b = 1;\n", Side::New);
     assert_eq!(new.words, vec![(4..5, Status::Added)]);
 }
+
+#[test]
+fn a_side_gives_its_text_away_and_keeps_its_length() {
+    let (_, mut side) = inline("a\nb", "a\nx\ny", false);
+    let len = side.text.len();
+    assert_eq!(side.text_len(), len);
+    assert_eq!(side.take_text(), "a\nb\nx\ny");
+    assert!(side.text.is_empty());
+    assert_eq!(side.text_len(), len);
+}

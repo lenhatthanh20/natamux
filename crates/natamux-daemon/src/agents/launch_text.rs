@@ -74,26 +74,41 @@ fn escape_end(chars: &[char], start: usize) -> Option<usize> {
     }
 }
 
-/// The shell's line that says it could not find the program, if the text holds one.
-pub fn not_found_line(text: &str, program: &str) -> Option<String> {
+/// The shell's line that says it could not find the program, if the text holds one. `plain`:
+/// the text `without_escapes`, which the caller has for its other readers too.
+pub fn not_found_in(plain: &str, program: &str) -> Option<String> {
     let name = program.rsplit(['\\', '/']).next().unwrap_or(program);
-    without_escapes(text)
+    plain
         .split(['\r', '\n'])
         .map(js_trim)
         .find(|line| {
-            let lower = line.to_lowercase();
-            NOT_FOUND.iter().any(|words| lower.contains(words)) && line.contains(name)
+            // The name first: most lines do not hold it, and the words cost more to look for.
+            line.contains(name) && NOT_FOUND.iter().any(|words| holds_lower(line, words))
         })
         .map(String::from)
+}
+
+/// `line.to_lowercase().contains(words)` for `words` in lower-case ASCII, with no copy of a line
+/// that is ASCII, as nearly every line of a shell is.
+fn holds_lower(line: &str, words: &str) -> bool {
+    if !line.is_ascii() {
+        return line.to_lowercase().contains(words);
+    }
+    let mut parts = line.as_bytes().windows(words.len());
+    parts.any(|part| part.eq_ignore_ascii_case(words.as_bytes()))
 }
 
 /// Where the title that the launch line sets on an error starts. The typed line on Windows holds
 /// the title's text too, but not the escape before it.
 pub fn failed_mark_at(text: &str) -> Option<usize> {
-    ["0", "2"]
-        .iter()
-        .filter_map(|code| text.find(&format!("\x1b]{code};{AGENT_FAILED_TITLE}")))
-        .min()
+    // Looked for in place, with no pattern built: this runs for every chunk.
+    let is_mark = |title: &str| {
+        let name = title.strip_prefix("0;");
+        let name = name.or_else(|| title.strip_prefix("2;"));
+        name.is_some_and(|name| name.starts_with(AGENT_FAILED_TITLE))
+    };
+    let mut starts = text.match_indices("\x1b]").map(|(at, _)| at);
+    starts.find(|at| is_mark(&text[at + 2..]))
 }
 
 const BELL: u8 = 0x07;
@@ -179,6 +194,49 @@ mod tests {
         assert_eq!(failed_mark_at("ab\x1b]2;natamux-agent-failed\x07"), Some(2));
         assert_eq!(failed_mark_at("\x1b]0;natamux-agent-failed\x07"), Some(0));
         assert_eq!(failed_mark_at("\x1b]2;natamux-agent-exited\x07"), None);
+    }
+
+    #[test]
+    fn finds_the_first_failed_mark_among_other_titles() {
+        let other = "\x1b]2;zsh\x07é\x1b]1;natamux-agent-failed\x07";
+        let mark = "\x1b]0;natamux-agent-failed\x07";
+        let text = format!("{other}{mark}\x1b]2;natamux-agent-failed");
+        assert_eq!(failed_mark_at(&text), Some(other.len()));
+        assert_eq!(failed_mark_at("\x1b]"), None);
+        assert_eq!(failed_mark_at("\x1b]2;natamux-agent-fail"), None);
+    }
+
+    /// `not_found_in` as it was: a lower-case copy of each line.
+    fn not_found_by_copy(plain: &str, program: &str) -> Option<String> {
+        let name = program.rsplit(['\\', '/']).next().unwrap_or(program);
+        let mut lines = plain.split(['\r', '\n']).map(js_trim);
+        let found = lines.find(|line| {
+            let lower = line.to_lowercase();
+            NOT_FOUND.iter().any(|words| lower.contains(words)) && line.contains(name)
+        });
+        found.map(String::from)
+    }
+
+    #[test]
+    fn finds_the_not_found_line_in_any_case_as_a_lower_case_copy_does() {
+        for (text, found) in [
+            ("zsh: command not found: claude\r\n$ ", true),
+            ("  bash: claude: Command Not Found  \r\n", true),
+            ("'claude' IS NOT RECOGNIZED as a command\r\n", true),
+            ("sh: 1: claude: not found", true),
+            ("fish: Unknown command: claude\r\n", true),
+            // Not ASCII: the Kelvin sign is a `k` in lower case, and the line is found as before.
+            ("fish: Un\u{212a}nown command: claude → ?\r\n", true),
+            ("é: command not found: claude", true),
+            ("zsh: command not found: codex\r\n", false),
+            ("claude\r\ncommand not found\r\n", false),
+            ("claude: not foun", false),
+            ("", false),
+        ] {
+            let line = not_found_in(text, "/usr/local/bin/claude");
+            assert_eq!(line, not_found_by_copy(text, "/usr/local/bin/claude"));
+            assert_eq!(line.is_some(), found, "{text}");
+        }
     }
 
     // Bytes of Claude Code 2.1.319's first screen and Codex 0.167.0's sign-in screen.

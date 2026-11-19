@@ -9,6 +9,7 @@ use ui::prelude::*;
 
 use super::docs_rules::{DocDraft, current_doc};
 use crate::app::dashboard::Dashboard;
+use crate::app::dashboard_data::Part;
 use crate::app::source::reason;
 use crate::app::view_rules::DetailsView;
 use crate::components::docs_markdown::MarkdownDoc;
@@ -50,7 +51,7 @@ pub struct DocsTab {
     pub(super) focus_edit: bool,
     pub(super) saving: bool,
     pub(super) store: Entity<DraftStore>,
-    _store: Subscription,
+    _subscriptions: [Subscription; 2],
 }
 
 impl DocsTab {
@@ -62,6 +63,9 @@ impl DocsTab {
     ) -> Self {
         let store = DraftStore::global(cx);
         let observe = cx.observe(&store, |_, _, cx| cx.notify());
+        // The workspace caches this view. From the dashboard it draws the Source switch and
+        // whether the details panel has the list (View, and the open task's workspace: Tasks).
+        let follow = Dashboard::redraw_on(&dashboard, &[Part::Tasks, Part::View], cx);
         let tab = Self {
             dashboard,
             task_id,
@@ -82,7 +86,7 @@ impl DocsTab {
             focus_edit: false,
             saving: false,
             store,
-            _store: observe,
+            _subscriptions: [observe, follow],
         };
         tab.read_list(cx);
         tab.read_attachments(cx);

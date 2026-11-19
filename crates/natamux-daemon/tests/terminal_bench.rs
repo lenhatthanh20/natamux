@@ -1,6 +1,7 @@
 //! `terminal-bench.test.ts` for the Rust daemon: the same cases and field names, printed as
-//! `TERMINAL_BENCH_JSON` for `scripts/compare-terminal-bench.py`. It runs in the daemon-bench CI
-//! job only (`--ignored`, release build), on the real clock.
+//! `TERMINAL_BENCH_JSON`, and flat as `terminal_bench:` for `scripts/perf-check.py`. It runs in
+//! the daemon-bench CI job and the daemon job of perf.yml only (`--ignored`, release build), on
+//! the real clock.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
@@ -291,6 +292,65 @@ fn live_case(measure: &str, chunks: &[String]) -> Value {
     })
 }
 
+/// The numbers of `results` as one flat object, named by case, for `scripts/perf-check.py`.
+fn flat(results: &[Value]) -> Value {
+    let mut numbers = serde_json::Map::new();
+    for result in results {
+        let text = |key: &str| result[key].as_str().unwrap_or_default().to_string();
+        let measure = text("measure");
+        let fields: Vec<(String, &str)> = match measure.as_str() {
+            "snapshot" => {
+                let case = format!("snapshot_{}_{}", result["cols"], text("style"));
+                vec![
+                    (format!("{case}_bytes"), "snapshotBytes"),
+                    (format!("{case}_serialize_ms"), "serializeMs"),
+                ]
+            }
+            "parse" => vec![(format!("parse_{}_mb_s", text("style")), "mbPerSecond")],
+            live => {
+                // "tui-redraw" is `tui`.
+                let case = live.split('-').next().unwrap_or(live);
+                vec![
+                    (format!("{case}_frames_per_s"), "framesPerSecond"),
+                    (format!("{case}_bytes_per_frame"), "bytesPerFrame"),
+                    (format!("{case}_wire_over_raw"), "wireOverRaw"),
+                ]
+            }
+        };
+        for (name, key) in fields {
+            numbers.insert(name, result[key].clone());
+        }
+    }
+    Value::Object(numbers)
+}
+
+#[test]
+fn the_flat_numbers_name_each_case() {
+    let results = [
+        json!({
+            "measure": "snapshot", "cols": 120, "style": "sgr", "snapshotBytes": 9,
+            "serializeMs": 1.5,
+        }),
+        json!({ "measure": "parse", "style": "plain", "megabytes": 16.8, "mbPerSecond": 80.5 }),
+        json!({
+            "measure": "flood", "frames": 3, "bytesPerFrame": 4096, "wireOverRaw": 1.001,
+            "framesPerSecond": 60.0,
+        }),
+        json!({
+            "measure": "tui-redraw", "frames": 2, "bytesPerFrame": 100, "wireOverRaw": 1.02,
+            "framesPerSecond": 30.0,
+        }),
+    ];
+    let numbers = flat(&results);
+    let expected = json!({
+        "snapshot_120_sgr_bytes": 9, "snapshot_120_sgr_serialize_ms": 1.5,
+        "parse_plain_mb_s": 80.5,
+        "flood_frames_per_s": 60.0, "flood_bytes_per_frame": 4096, "flood_wire_over_raw": 1.001,
+        "tui_frames_per_s": 30.0, "tui_bytes_per_frame": 100, "tui_wire_over_raw": 1.02,
+    });
+    assert_eq!(numbers, expected);
+}
+
 #[test]
 #[ignore = "a benchmark: the daemon-bench CI job runs it with --release"]
 fn terminal_benchmark() {
@@ -326,5 +386,6 @@ fn terminal_benchmark() {
         })
         .collect();
     results.push(live_case("tui-redraw", &redraws));
+    println!("terminal_bench: {}", flat(&results));
     println!("TERMINAL_BENCH_JSON {}", Value::Array(results));
 }

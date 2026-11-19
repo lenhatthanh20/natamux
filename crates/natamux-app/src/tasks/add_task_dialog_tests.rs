@@ -67,7 +67,8 @@ fn open_dialog(dashboard: &Entity<Dashboard>, cx: &mut VisualTestContext) -> Ent
 fn titled(dashboard: &Entity<Dashboard>, title: &str, cx: &mut VisualTestContext) -> Vec<Task> {
     dashboard.read_with(cx, |dashboard, _| {
         let tasks = dashboard.data.tasks.iter();
-        tasks.filter(|task| task.title == title).cloned().collect()
+        let titled = tasks.filter(|task| task.title == title);
+        titled.map(|task| Task::clone(task)).collect()
     })
 }
 
