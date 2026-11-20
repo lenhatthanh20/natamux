@@ -7,6 +7,11 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v1.0.30 (2026-11-20)
+
+- The **Progress** icon on the rail also shows the terminals again when **Changes**, **History**, **Docs** or a file covers them. It has a dot in the colour of the task's state. See [Dashboard](/docs/guides/dashboard/).
+- A project with **Blur names** on shows its names, titles and labels as blurred letters, and not as soft bars.
+
 ## v1.0.29 (2026-11-20)
 
 - **History** shows the git graph over the terminals at full width; the side panel has no History view any more. See [Changes and History](/docs/guides/changes-and-history/).
