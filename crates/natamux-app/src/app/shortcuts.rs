@@ -7,9 +7,9 @@ use gpui::{Action, App, KeyBinding, Menu, MenuItem, NoAction, actions};
 use super::commands::{Command, is_single_key, reaches_app_from_terminal};
 use super::commands::{MenuName, all_commands, command_by_id, keystroke, menu_items};
 pub use super::commands_app::{
-    AddProject, CheckForUpdates, ImportIssues, OpenJump, OpenPalette, OpenSettings,
+    AddProject, CheckForUpdates, ImportIssues, OpenJump, OpenPalette, OpenSettings, ResetZoom,
     RestartToUpdate, ShowShortcuts, ShowWhatsNew, ToggleAutomaticUpdates, UseCompactSize,
-    UseDarkTheme, UseDefaultSize, UseLargeSize, UseLightTheme, UseSystemTheme,
+    UseDarkTheme, UseDefaultSize, UseLargeSize, UseLightTheme, UseSystemTheme, ZoomIn, ZoomOut,
 };
 pub use super::commands_editor::{FindInEditor, GoToLine, ShowOutline};
 pub use super::commands_files::{CloseTab, SaveFile, ShowDocsTab, ShowOpenFile, ShowWorktreeFiles};
@@ -200,6 +200,9 @@ command_actions! {
     "ui-size.compact" => UseCompactSize,
     "ui-size.default" => UseDefaultSize,
     "ui-size.large" => UseLargeSize,
+    "zoom.in" => ZoomIn,
+    "zoom.out" => ZoomOut,
+    "zoom.reset" => ResetZoom,
     "repo.add" => AddProject,
     "repo.import" => ImportIssues,
 }
@@ -226,10 +229,13 @@ fn push_bindings<A: Action + Clone>(id: &str, action: A, mac: bool, out: &mut Ve
 }
 
 /// Global chords the shell owns (Ctrl+B and the like off macOS) go to the terminal, not the app.
-/// So does Esc: agents use it to stop (owner, 2026-10-22).
+/// So does Esc: agents use it to stop (owner, 2026-10-22). The zoom keys reach the app, as in VS
+/// Code (T-0355).
 fn terminal_keeps(mac: bool) -> Vec<KeyBinding> {
     all_commands()
-        .filter(|command| command.contexts.is_empty() && is_bound(command))
+        .filter(|command| {
+            command.contexts.is_empty() && is_bound(command) && !command.id.starts_with("zoom.")
+        })
         .flat_map(|command| command.keys.iter())
         .filter(|key| {
             (!is_single_key(key) || **key == "Escape") && !reaches_app_from_terminal(key, mac)
@@ -384,5 +390,25 @@ mod tests {
         // Esc, and Mod+Q, Mod+B, Mod+[, Mod+Alt+B, Mod+K, Mod+,, Mod+J, Mod+W (a shell's delete
         // word) and the Mod+Alt tools: Ctrl chords without Shift elsewhere. F1 reaches the app.
         assert_eq!(terminal_keeps(false).len(), 15);
+    }
+
+    #[test]
+    fn the_zoom_keys_reach_the_app_from_a_terminal() {
+        for mac in [true, false] {
+            let zoom = ["=", "+", "-", "0"].map(|key| {
+                let stroke = keystroke(&format!("Mod+{key}"), mac);
+                KeyBinding::new(&stroke, NoAction, None).keystrokes()[0].to_string()
+            });
+            for binding in terminal_keeps(mac) {
+                let stroke = binding.keystrokes()[0].to_string();
+                assert!(!zoom.contains(&stroke), "{stroke}");
+            }
+            let bound: Vec<_> = command_bindings(mac)
+                .iter()
+                .filter(|binding| binding.action().name().contains("Zoom"))
+                .map(|binding| binding.keystrokes()[0].to_string())
+                .collect();
+            assert_eq!(bound.len(), 4);
+        }
     }
 }

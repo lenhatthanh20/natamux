@@ -13,6 +13,7 @@ use serde_json::Value;
 use ui::prelude::*;
 
 use super::super::appearance;
+use super::super::appearance_rules::clamp_zoom_level;
 use super::super::dashboard_data::{DashboardData, Link, Part, Seen};
 use super::super::flow_bench;
 use super::super::settings_rules::{SettingsFocus, SettingsPage, page_to_open};
@@ -49,6 +50,12 @@ impl Dashboard {
 
     pub fn set_ui_size(&mut self, size: &str, cx: &mut Context<Self>) {
         self.update_view(cx, |view| view.ui_size = size.to_owned());
+        appearance::apply(&self.view, cx);
+    }
+
+    /// The zoom keys' level, kept within its limits (`appearance_rules::clamp_zoom_level`).
+    pub fn set_zoom_level(&mut self, level: i32, cx: &mut Context<Self>) {
+        self.update_view(cx, |view| view.zoom_level = clamp_zoom_level(level));
         appearance::apply(&self.view, cx);
     }
 

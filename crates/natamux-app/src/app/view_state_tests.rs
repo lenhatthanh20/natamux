@@ -56,6 +56,7 @@ fn a_saved_view_reads_back_the_same() {
             dark: "Tokyo Night",
         },
         ui_size: "large".into(),
+        zoom_level: -2,
         terminal_font: Some(serde_json::json!({ "family": "Iosevka", "size": 15 })),
         recent: vec!["T-2".into(), "T-1".into()],
         whats_new_seen: Some("1.0.19".into()),
@@ -527,6 +528,22 @@ fn keeps_the_theme_the_text_size_the_terminal_font_and_the_recent_workspaces() {
     assert_eq!(default.theme, "system");
     assert_eq!(default.ui_size, "default");
     assert_eq!(default.terminal_font, None);
+}
+
+#[test]
+fn keeps_the_zoom_level_and_reads_a_bad_one_as_the_nearest_level_or_zero() {
+    let state = ViewState::parse(r#"{"zoomLevel":2}"#);
+    assert_eq!(state.zoom_level, 2);
+    assert!(state.to_json().contains(r#""zoomLevel": 2"#));
+    for (raw, level) in [
+        ("{}", 0),
+        (r#"{"zoomLevel":"big"}"#, 0),
+        (r#"{"zoomLevel":99}"#, 5),
+        (r#"{"zoomLevel":-1e30}"#, -3),
+        (r#"{"zoomLevel":1.4}"#, 1),
+    ] {
+        assert_eq!(ViewState::parse(raw).zoom_level, level, "{raw}");
+    }
 }
 
 #[test]

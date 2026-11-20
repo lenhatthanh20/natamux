@@ -22,7 +22,7 @@ The dashboard shows shortcuts in tooltips and menus with the keys of your platfo
 
 - **Single keys** such as `n` or `c` work only when the focus is on the page, not in a text field and not in a terminal. They would otherwise type a letter.
 - **Chords** such as `Mod+K` work everywhere, except as the next point says.
-- **In a terminal**, the shell owns the keys. On macOS the ⌘ chords still reach Natamux. On Windows and Linux only function keys and chords with `Ctrl+Shift` reach Natamux. `Ctrl+K`, `Ctrl+B` and `Ctrl+J` go to the shell.
+- **In a terminal**, the shell owns the keys. On macOS the ⌘ chords still reach Natamux. On Windows and Linux only function keys and chords with `Ctrl+Shift` reach Natamux. `Ctrl+K`, `Ctrl+B` and `Ctrl+J` go to the shell. The zoom keys (`Ctrl+=`, `Ctrl+-`, `Ctrl+0`) are the exception: they zoom the app, as in VS Code.
 - When a dialog, menu or the palette is open, it owns the keyboard.
 
 ## Global
@@ -38,6 +38,9 @@ The dashboard shows shortcuts in tooltips and menus with the keys of your platfo
 | Move to the previous part of the window | `Shift+F6` |
 | Submit the current form | `Mod+Enter` |
 | Close the top layer, clear a field, or go back to All tasks | `Esc` |
+| Zoom in | `Mod+=` or `Mod++` |
+| Zoom out | `Mod+-` |
+| Reset zoom | `Mod+0` |
 
 `Mod+Enter` submits the form in a dialog, the commit box, the comment box and the task edit form. The primary button shows the shortcut.
 

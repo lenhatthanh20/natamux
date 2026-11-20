@@ -73,9 +73,9 @@ fn the_own_fonts_and_sizes_equal_the_theme_settings(cx: &mut TestAppContext) {
 fn a_shot_hides_the_scrollbars_unless_its_state_shows_them() {
     let font = terminal_font(None);
     let settings = ThemeSettings::default();
-    assert!(!appearance(&settings, &font, None).hide_scrollbars);
-    assert!(appearance(&settings, &font, Some("grid")).hide_scrollbars);
-    assert!(!appearance(&settings, &font, Some("terminal-scrollbar")).hide_scrollbars);
+    assert!(!appearance(&settings, &font, 1.0, None).hide_scrollbars);
+    assert!(appearance(&settings, &font, 1.0, Some("grid")).hide_scrollbars);
+    assert!(!appearance(&settings, &font, 1.0, Some("terminal-scrollbar")).hide_scrollbars);
 }
 
 fn custom(family: &str, size: f32) -> ResolvedFont {
@@ -87,7 +87,7 @@ fn custom(family: &str, size: f32) -> ResolvedFont {
 }
 
 fn terminal_of(font: &ResolvedFont) -> Option<(String, f32)> {
-    appearance(&ThemeSettings::default(), font, None)
+    appearance(&ThemeSettings::default(), font, 1.0, None)
         .terminal_font
         .map(|(family, size)| (family.to_string(), f32::from(size)))
 }
@@ -126,7 +126,7 @@ fn shows_the_scrollbars_in_the_scrollbar_shots_only() {
     let font = custom("Lilex", 15.0);
     let settings = ThemeSettings::default();
     let shown = |state: Option<&str>| {
-        let look = appearance(&settings, &font, state);
+        let look = appearance(&settings, &font, 1.0, state);
         (look.hide_scrollbars, look.always_scrollbars)
     };
     assert_eq!(shown(Some("terminal-scrollbar")), (false, true));
@@ -175,6 +175,26 @@ fn apply_sets_the_theme_settings_and_shows_their_theme(cx: &mut TestAppContext) 
         assert_eq!(f32::from(shown.buffer_font_size), 14.0);
         assert_eq!(cx.theme().name.as_ref(), "Natamux Dark");
         assert_eq!(cx.theme().colors().scrollbar_track_border, CLEAR);
+    });
+}
+
+// T-0355: the zoom keys scale the UI, the buffer and the picked terminal font on top of the UI
+// size.
+#[gpui::test]
+fn the_zoom_level_scales_every_font(cx: &mut TestAppContext) {
+    test_views::init(cx);
+    cx.update(|cx| {
+        let view = ViewState {
+            zoom_level: 2,
+            terminal_font: Some(json!({ "size": 14 })),
+            ..ViewState::default()
+        };
+        apply(&view, cx);
+        let own = cx.global::<Appearance>();
+        assert_eq!(f32::from(own.ui_font_size), 19.2);
+        assert_eq!(f32::from(own.buffer_font_size), 15.6);
+        let terminal = own.terminal_font.as_ref().map(|(_, size)| f32::from(*size));
+        assert_eq!(terminal, Some(16.8));
     });
 }
 
