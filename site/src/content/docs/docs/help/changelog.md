@@ -7,6 +7,15 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v1.0.29 (2026-11-20)
+
+- **History** shows the git graph over the terminals at full width; the side panel has no History view any more. See [Changes and History](/docs/guides/changes-and-history/).
+- A right-click on the text of the editor tab or of a diff opens **Cut**, **Copy**, **Paste** and **Select All**.
+- In rendered Markdown, `Mod+C` copies the selected text, and a right-click opens **Copy** and **Select All**.
+- The row menu of the **Files** tab and of the **Changes** list has **Copy Path** and **Copy Relative Path**.
+- Fix: rolling back files took seconds in a large worktree, even for one file. The Undo snapshot now reads only the picked files. See [Roll back changes](/docs/guides/changes-and-history/#roll-back-changes).
+- Fix: in **Changes**, the buttons of the comment box, the commit box and the **Push** row did not line up, and a label was cut in a narrow panel.
+
 ## v1.0.28 (2026-11-19)
 
 - Natamux is now under the MIT license, with its own views and new icons in place of the GPL crates of Zed.
