@@ -297,6 +297,18 @@ The new rows, median of the 11 runs after:
 | `daemon_binary_mb` | 8.94 (8.94–8.94) |
 | `cli_binary_mb` | 1.86 (1.86–1.86) |
 
+## Rollback speed (T-0353, 2026-11-20)
+
+A rollback in the Changes tab took seconds, also for one file. Before the files go back, the daemon makes a snapshot commit for Undo. It was a commit of the whole worktree: `git add --all` on a new index, which reads and hashes every file. The snapshot now holds HEAD plus the picked files (`snapshot_paths`, `git update-index --add --remove -- <paths>`). The rollback also reads its change list without line counts.
+
+One git step, by hand in a worktree of this repository (3,296 tracked files, warm disk, MacBook Pro):
+
+| Step of the snapshot | Before | After |
+| --- | --- | --- |
+| Files into the throwaway index | 1.77 s (`git add --all`) | 0.01 s (one picked path) |
+
+The time before grows with the size of the worktree; the time after grows only with the picked files. No bench row: the number is a git call, not app or daemon code.
+
 ## On the owner's Mac
 
 Cargo does not run on the owner's Mac, so these use a built app: the installed one, or the `app-binary` artifact of a `rust.yml` run.

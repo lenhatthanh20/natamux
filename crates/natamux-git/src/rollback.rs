@@ -86,9 +86,10 @@ pub fn rollback_files(worktree: &Path, entries: &[ChangeEntry]) -> Result<(), Gi
     each_batch(worktree, &["clean", "-f", "-q"], &untracked)
 }
 
-/// Undoes a rollback: each path gets its file from the snapshot made before it. A path that the
-/// snapshot does not have (a deleted file, the old name of a renamed one) is deleted again. Only
-/// the files come back, not the index: a commit adds every file anyway.
+/// Undoes a rollback: each path gets its file from the snapshot made before it (`snapshot_paths`
+/// of these paths). A path that the snapshot does not have (a deleted file, the old name of a
+/// renamed one) is deleted again. Only the files come back, not the index: a commit adds every
+/// file anyway.
 pub fn restore_from_snapshot(
     worktree: &Path,
     snapshot: &str,

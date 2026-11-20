@@ -49,6 +49,21 @@ fn rolls_back_the_named_files_then_undoes_it_once() {
     );
 }
 
+// T-0353: the snapshot holds only the picked files, so the undo cannot touch another file.
+#[test]
+fn the_undo_leaves_a_file_that_was_not_picked_as_it_is_now() {
+    let fx = Fx::new();
+    let (task, workspace) = task_with_changes(&fx);
+
+    fx.ws.rollback(&task.id, &strings(&["notes.txt"])).unwrap();
+    fs::write(workspace.join("keep.txt"), "later\n").unwrap();
+    fx.ws.undo_rollback(&task.id).unwrap();
+
+    let read = |name: &str| fs::read_to_string(workspace.join(name)).unwrap();
+    assert_eq!(read("notes.txt"), "hello\n");
+    assert_eq!(read("keep.txt"), "later\n");
+}
+
 #[test]
 fn forgets_the_rollback_after_a_commit_so_undo_cannot_replace_committed_files() {
     let fx = Fx::new();

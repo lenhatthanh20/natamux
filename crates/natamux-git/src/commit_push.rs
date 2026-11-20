@@ -9,6 +9,7 @@ use natamux_core::js::{js_trim, utf16_len};
 
 use crate::exec::{GITHUB_CREDENTIALS, GitError, checked_ref, git, with_git_config};
 use crate::graph::FIELD;
+use crate::rollback::path_batches;
 
 /// The text of `NothingToCommitError`.
 pub const NOTHING_TO_COMMIT: &str =
@@ -131,10 +132,41 @@ impl Drop for TempIndex {
 /// touching its branch, its index or its files. Ignored files stay out. With no change it is HEAD
 /// itself, so a CI check finds the runs that HEAD has already, for example as a PR's head.
 pub fn snapshot_commit(worktree: &Path, message: &str) -> Result<String, GitError> {
+    snapshot(worktree, message, |env| {
+        git(worktree, &["add", "--all"], None, env).map(drop)
+    })
+}
+
+/// `snapshot_commit` of only `paths`: every other file is as in HEAD. Git reads the named files
+/// and no other, so the time does not grow with the worktree (`git add --all` on a new index
+/// hashes every file). A path that is gone from disk is left out of the commit.
+pub fn snapshot_paths(
+    worktree: &Path,
+    message: &str,
+    paths: &[String],
+) -> Result<String, GitError> {
+    snapshot(worktree, message, |env| {
+        for batch in path_batches(paths) {
+            // `update-index` takes each name as it is, never as a pattern. Unlike `git add`, it
+            // does not fail on a path that is neither on disk nor in HEAD (added, then deleted).
+            let mut args = vec!["update-index", "--add", "--remove", "--"];
+            args.extend(batch.iter().map(String::as_str));
+            git(worktree, &args, None, env)?;
+        }
+        Ok(())
+    })
+}
+
+// A commit on HEAD of HEAD's files and what `add` puts in the throwaway index.
+fn snapshot(
+    worktree: &Path,
+    message: &str,
+    add: impl FnOnce(&[(String, String)]) -> Result<(), GitError>,
+) -> Result<String, GitError> {
     let index = TempIndex::new(worktree)?;
     let env = [index.env()];
     git(worktree, &["read-tree", "HEAD"], None, &env)?;
-    git(worktree, &["add", "--all"], None, &env)?;
+    add(&env)?;
     let tree = js_trim(&git(worktree, &["write-tree"], None, &env)?).to_string();
     let heads = run(worktree, &["rev-parse", "HEAD", "HEAD^{tree}"])?;
     let mut lines = js_trim(&heads).split('\n');

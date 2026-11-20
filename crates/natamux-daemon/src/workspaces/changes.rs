@@ -13,7 +13,7 @@ use std::time::SystemTime;
 use futures::executor::block_on;
 use natamux_git::blame::read_blame;
 use natamux_git::changes::list_changes;
-use natamux_git::commit_push::snapshot_commit;
+use natamux_git::commit_push::snapshot_paths;
 use natamux_git::exec::{GitError, current_branch};
 use natamux_git::file_diff::{read_file_diff, read_file_image, read_inside};
 use natamux_git::graph::{DEFAULT_LIMIT, graph_inputs, read_git_graph};
@@ -228,8 +228,8 @@ impl WorkspaceService {
     }
 
     /// Puts changed files back as they are in the last commit; a new file is deleted. Only files
-    /// in the list of changes can be named. A snapshot of the whole worktree comes first, for the
-    /// undo. Answers how many files it rolled back.
+    /// in the list of changes can be named. A snapshot of those files comes first, for the undo.
+    /// Answers how many files it rolled back.
     pub fn rollback(&self, task_id: &str, paths: &[String]) -> WorkspaceResult<usize> {
         self.exclusive(task_id, "Rolling back files", || {
             let workspace = self.workspace_of(task_id)?;
@@ -238,15 +238,18 @@ impl WorkspaceService {
                     "There is no commit to roll back to.".into(),
                 ));
             }
-            let changes = self.changes(task_id, true)?;
+            // Without line counts (one git call), and only the picked files in the snapshot: a
+            // rollback must not take longer in a large worktree.
+            let changes = list_changes(&workspace, false)?;
             let entries = rollback_entries(&changes, paths)?;
-            let snapshot = snapshot_commit(&workspace, "Natamux rollback")?;
+            let touched = rollback_paths(&entries);
+            let snapshot = snapshot_paths(&workspace, "Natamux rollback", &touched)?;
             // Kept before the files change, so a rollback that stops halfway can be undone too.
             self.reads.rollbacks().insert(
                 task_id.to_string(),
                 LastRollback {
                     snapshot,
-                    paths: rollback_paths(&entries),
+                    paths: touched,
                     files: entries.len(),
                 },
             );
