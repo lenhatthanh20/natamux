@@ -2,11 +2,11 @@
 //! sets them again, so a change applies at once (`lib/theme.ts`, `lib/ui-size.ts`,
 //! `terminal-font.ts` of the web).
 
-use gpui::{App, Font, Global, Pixels, SharedString, px};
+use gpui::{App, Font, Global, Pixels, SharedString};
 use theme::ThemeSettings;
 
 use super::appearance_rules::{
-    ThemeChoice, parse_theme, parse_ui_size, shows_scrollbars, theme_settings,
+    ThemeChoice, parse_theme, parse_ui_size, shows_scrollbars, theme_settings, zoom_factor,
 };
 use super::options::ThemeMode;
 use super::theme_catalog::ThemeKind;
@@ -48,7 +48,13 @@ pub struct Appearance {
 
 impl Global for Appearance {}
 
-fn appearance(settings: &ThemeSettings, terminal: &ResolvedFont, shot: Option<&str>) -> Appearance {
+/// `zoom` scales the picked terminal font, as the zoom keys scale the rest (`zoom_factor`).
+fn appearance(
+    settings: &ThemeSettings,
+    terminal: &ResolvedFont,
+    zoom: f32,
+    shot: Option<&str>,
+) -> Appearance {
     Appearance {
         ui_font: settings.ui_font.clone(),
         ui_font_size: settings.ui_font_size,
@@ -58,7 +64,7 @@ fn appearance(settings: &ThemeSettings, terminal: &ResolvedFont, shot: Option<&s
         terminal_font: (terminal.source == FontSource::Custom).then(|| {
             (
                 SharedString::from(terminal.family.clone()),
-                px(terminal.size.clamp(6., 100.)),
+                theme::zoomed(terminal.size, zoom),
             )
         }),
         hide_scrollbars: shot.is_some_and(|state| !shows_scrollbars(state)),
@@ -89,8 +95,9 @@ pub fn apply(view: &ViewState, cx: &mut App) {
     };
     let custom = view.terminal_font.as_ref().and_then(parse_terminal_font);
     let font = terminal_font(custom.as_ref());
-    let settings = theme_settings(choice, names, parse_ui_size(&view.ui_size).zoom());
-    let mut look = appearance(&settings, &font, shot);
+    let zoom = zoom_factor(view.zoom_level);
+    let settings = theme_settings(choice, names, parse_ui_size(&view.ui_size).zoom() * zoom);
+    let mut look = appearance(&settings, &font, zoom, shot);
     look.show_whitespace = view.diff.show_whitespace;
     theme::set_appearance(cx, |shown| *shown = settings);
     cx.set_global(look);

@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use natamux_proto::tasks::task::TaskState;
 use serde_json::{Map, Value, json};
 
+use crate::app::appearance_rules::clamp_zoom_level;
 use crate::app::layout_mode::{DETAILS_WIDTH, SIDEBAR_WIDTH};
 use crate::app::theme_catalog::ThemeNames;
 use crate::app::view_rules::{
@@ -151,6 +152,8 @@ pub struct ViewState {
     pub themes: ThemeNames,
     /// `natamux.ui-size`: compact, default or large.
     pub ui_size: String,
+    /// `zoomLevel`: the zoom keys' steps on top of the UI size (`appearance_rules::zoom_factor`).
+    pub zoom_level: i32,
     /// `natamux.terminal-font`: `{ family?, size? }` as the user saved it, read by
     /// `terminals/terminal_font.rs`.
     pub terminal_font: Option<Value>,
@@ -193,6 +196,7 @@ impl Default for ViewState {
             theme: "system".to_owned(),
             themes: ThemeNames::default(),
             ui_size: "default".to_owned(),
+            zoom_level: 0,
             terminal_font: None,
             recent: Vec::new(),
             whats_new_seen: None,
@@ -326,6 +330,7 @@ impl ViewState {
             theme: text_or(map.get("theme"), &default.theme),
             themes: ThemeNames::parse(map.get("lightTheme"), map.get("darkTheme")),
             ui_size: text_or(map.get("uiSize"), &default.ui_size),
+            zoom_level: zoom_level_of(map.get("zoomLevel")),
             terminal_font: map
                 .get("terminalFont")
                 .filter(|font| font.is_object())
@@ -400,6 +405,7 @@ impl ViewState {
             "lightTheme": self.themes.light,
             "darkTheme": self.themes.dark,
             "uiSize": self.ui_size,
+            "zoomLevel": self.zoom_level,
             "terminalFont": self.terminal_font,
             "recent": self.recent,
             "whatsNewSeen": self.whats_new_seen,
@@ -519,6 +525,12 @@ fn strings(value: Option<&Value>) -> Vec<String> {
 
 fn text_or(value: Option<&Value>, fallback: &str) -> String {
     value.and_then(Value::as_str).unwrap_or(fallback).to_owned()
+}
+
+/// Not a number: 0. A number out of range: the nearest level.
+fn zoom_level_of(value: Option<&Value>) -> i32 {
+    // `as` saturates, so a huge number still lands on a limit.
+    clamp_zoom_level(value.and_then(Value::as_f64).unwrap_or(0.).round() as i32)
 }
 
 fn flag(value: Option<&Value>, fallback: bool) -> bool {

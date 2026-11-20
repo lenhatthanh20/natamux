@@ -63,7 +63,7 @@ Task titles use weight 400 at every size and in every state, including search ma
 
 Rules: nothing below 11px. 11px only for caps labels, badges and kbd. Hierarchy comes from weight and color, not more sizes.
 
-**UI size setting** (answers RA-18 without making every screen less dense): `html { font-size: calc(16px * var(--ui-zoom)) }`, `--ui-zoom` = 0.92 (Compact, 12px body), 1 (Default, 13px), 1.077 (Large, 14px). All sizes are rem, so the whole UI scales. xterm and Monaco font sizes read `13 * zoom` and `12 * zoom`. Stored in localStorage `natamux.ui-size`.
+**UI size setting** (answers RA-18 without making every screen less dense): `html { font-size: calc(16px * var(--ui-zoom)) }`, `--ui-zoom` = 0.92 (Compact, 12px body), 1 (Default, 13px), 1.077 (Large, 14px). All sizes are rem, so the whole UI scales. xterm and Monaco font sizes read `13 * zoom` and `12 * zoom`. Stored in localStorage `natamux.ui-size`. The native app adds a zoom level on top (`zoomLevel` in `view.json`, -3 to +5, set by `Mod+=` / `Mod++`, `Mod+-`, `Mod+0`): its zoom is the UI size zoom times `1 + 0.1 * level`, and a picked terminal font scales by the same factor.
 
 ### 2.3 Color tokens
 

@@ -110,6 +110,19 @@ pub fn parse_ui_size(raw: &str) -> UiSize {
     }
 }
 
+/// The zoom keys' range (`zoomLevel` in `view.json`): 0.7 to 1.5 of the UI size.
+pub const ZOOM_MIN: i32 = -3;
+pub const ZOOM_MAX: i32 = 5;
+
+pub fn clamp_zoom_level(level: i32) -> i32 {
+    level.clamp(ZOOM_MIN, ZOOM_MAX)
+}
+
+/// Steps of 10%: VS Code's 20% steps are too coarse for 13px text.
+pub fn zoom_factor(level: i32) -> f32 {
+    1.0 + 0.1 * clamp_zoom_level(level) as f32
+}
+
 /// The end of the name of the `--shot` states that show the scrollbars.
 const SCROLLBAR_STATES: &str = "-scrollbar";
 

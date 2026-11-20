@@ -28,10 +28,34 @@ actions!(
         UseCompactSize,
         UseDefaultSize,
         UseLargeSize,
+        ZoomIn,
+        ZoomOut,
+        ResetZoom,
         AddProject,
         ImportIssues
     ]
 );
+
+/// VS Code's zoom keys; `Mod++` is Mod+Shift+= on a US keyboard. `all_commands` puts them last,
+/// so they end the View menu.
+pub const ZOOM_COMMANDS: &[Command] = &[
+    zoom("zoom.in", "Zoom in", &["Mod+=", "Mod++"]),
+    zoom("zoom.out", "Zoom out", &["Mod+-"]),
+    zoom("zoom.reset", "Reset zoom", &["Mod+0"]),
+];
+
+/// Every zoom command works everywhere, terminals too (`shortcuts::terminal_keeps`).
+const fn zoom(id: &'static str, title: &'static str, chords: &'static [&'static str]) -> Command {
+    menu(
+        keys(
+            group(command(id, title, Category::View), SheetGroup::Global),
+            chords,
+            &[],
+        ),
+        MenuName::View,
+        4,
+    )
+}
 
 /// The palette's own view: its keys are drawn in the sheet, the view handles them.
 pub const PALETTE: &str = "NatamuxPalette";

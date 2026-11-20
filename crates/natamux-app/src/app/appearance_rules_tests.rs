@@ -103,3 +103,14 @@ fn hides_the_scrollbar_track_border_of_the_code_views() {
         assert_eq!(value.color_overrides, vec![clear]);
     }
 }
+
+#[test]
+fn keeps_the_zoom_level_within_its_limits_in_steps_of_a_tenth() {
+    assert_eq!(clamp_zoom_level(-4), -3);
+    assert_eq!(clamp_zoom_level(6), 5);
+    assert_eq!(clamp_zoom_level(2), 2);
+    assert_eq!(zoom_factor(0), 1.0);
+    for (level, factor) in [(2, 1.2), (-3, 0.7), (-9, 0.7), (5, 1.5), (9, 1.5)] {
+        assert!((zoom_factor(level) - factor).abs() < 1e-6, "{level}");
+    }
+}

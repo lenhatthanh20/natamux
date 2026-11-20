@@ -14,9 +14,9 @@ use crate::app::settings_rules::{SettingsFocus, SettingsPage, popup_bounds};
 use crate::app::settings_view::SettingsView;
 use crate::app::shortcut_sheet;
 use crate::app::shortcuts::{
-    AddProject, CheckForUpdates, ImportIssues, OpenJump, OpenPalette, OpenSettings,
+    AddProject, CheckForUpdates, ImportIssues, OpenJump, OpenPalette, OpenSettings, ResetZoom,
     RestartToUpdate, ShowShortcuts, ShowWhatsNew, ToggleAutomaticUpdates, UseCompactSize,
-    UseDarkTheme, UseDefaultSize, UseLargeSize, UseLightTheme, UseSystemTheme,
+    UseDarkTheme, UseDefaultSize, UseLargeSize, UseLightTheme, UseSystemTheme, ZoomIn, ZoomOut,
 };
 use crate::app::sign_in::{SignIn, SignedIn, access_file};
 use crate::app::source::Source;
@@ -95,6 +95,12 @@ impl Root {
             .on_action(
                 cx.listener(|root, _: &UseLargeSize, _, cx| root.set_ui_size(UiSize::Large, cx)),
             )
+            .on_action(cx.listener(|root, _: &ZoomIn, _, cx| root.zoom_by(1, cx)))
+            .on_action(cx.listener(|root, _: &ZoomOut, _, cx| root.zoom_by(-1, cx)))
+            .on_action(cx.listener(|root, _: &ResetZoom, _, cx| {
+                root.dashboard
+                    .update(cx, |dashboard, cx| dashboard.set_zoom_level(0, cx))
+            }))
     }
 
     /// Settings opens over the body, which stays as it was: the terminals keep their size.
@@ -246,6 +252,14 @@ impl Root {
     fn set_ui_size(&mut self, size: UiSize, cx: &mut Context<Self>) {
         self.dashboard
             .update(cx, |dashboard, cx| dashboard.set_ui_size(size.name(), cx));
+    }
+
+    /// At a limit the level stays; `set_zoom_level` clamps.
+    fn zoom_by(&mut self, step: i32, cx: &mut Context<Self>) {
+        self.dashboard.update(cx, |dashboard, cx| {
+            let level = dashboard.view().zoom_level + step;
+            dashboard.set_zoom_level(level, cx)
+        });
     }
 
     /// The issues of the open task's project, else of the project Add task picked last, else the
