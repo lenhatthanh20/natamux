@@ -124,9 +124,11 @@ pub fn shown_details_view(
 }
 
 /// What main shows after the rail (or a key) picks `view`: Changes, History and Docs cover the
-/// terminals; the other views leave main as it is.
+/// terminals; Progress shows them again, as it is the task's home view (T-0357); Files and
+/// Details leave main as it is.
 pub fn main_after_view(view: DetailsView, shown: WorkspaceTab) -> WorkspaceTab {
     match view {
+        DetailsView::Progress => WorkspaceTab::Terminal,
         DetailsView::Changes => WorkspaceTab::Changes,
         DetailsView::History => WorkspaceTab::History,
         DetailsView::Docs => WorkspaceTab::Docs,
@@ -144,20 +146,23 @@ pub enum RailClick {
     Terminals,
 }
 
-/// `main_history`: main shows History, which the History icon toggles as the others toggle the
-/// panel.
+/// `shown`: what main shows. The History icon toggles History over main, as the others toggle
+/// the panel. The picked Progress closes the panel only while the terminals show: over a covered
+/// main it shows them first (T-0357).
 pub fn rail_click(
     view: DetailsView,
     picked: DetailsView,
     open: bool,
-    main_history: bool,
+    shown: WorkspaceTab,
 ) -> RailClick {
     if view == DetailsView::History {
-        if main_history {
+        if shown == WorkspaceTab::History {
             RailClick::Terminals
         } else {
             RailClick::Show(view)
         }
+    } else if view == DetailsView::Progress && shown != WorkspaceTab::Terminal {
+        RailClick::Show(view)
     } else if open && view == picked {
         RailClick::Close
     } else {
@@ -286,14 +291,50 @@ mod tests {
         assert_eq!(main_after_view(DetailsView::History, Terminal), History);
         assert_eq!(main_after_view(DetailsView::History, Changes), History);
         assert_eq!(main_after_view(DetailsView::Docs, Editor), Docs);
-        for view in [
-            DetailsView::Progress,
-            DetailsView::Files,
-            DetailsView::Details,
-        ] {
+        for view in [DetailsView::Files, DetailsView::Details] {
             assert_eq!(main_after_view(view, Terminal), Terminal);
             assert_eq!(main_after_view(view, Changes), Changes);
         }
+    }
+
+    #[test]
+    fn progress_shows_the_terminals_again() {
+        use WorkspaceTab::*;
+        for shown in [Terminal, Changes, History, Docs, Editor] {
+            assert_eq!(main_after_view(DetailsView::Progress, shown), Terminal);
+        }
+    }
+
+    #[test]
+    fn the_picked_progress_shows_the_terminals_before_it_closes_the_panel() {
+        use DetailsView::Progress;
+        for covered in [
+            WorkspaceTab::Changes,
+            WorkspaceTab::History,
+            WorkspaceTab::Docs,
+            WorkspaceTab::Editor,
+        ] {
+            for open in [true, false] {
+                assert_eq!(
+                    rail_click(Progress, Progress, open, covered),
+                    RailClick::Show(Progress)
+                );
+            }
+        }
+        assert_eq!(
+            rail_click(Progress, Progress, true, WorkspaceTab::Terminal),
+            RailClick::Close
+        );
+        // Files and Details still close over a covered main.
+        assert_eq!(
+            rail_click(
+                DetailsView::Files,
+                DetailsView::Files,
+                true,
+                WorkspaceTab::Editor
+            ),
+            RailClick::Close
+        );
     }
 
     #[test]
@@ -311,18 +352,22 @@ mod tests {
     #[test]
     fn a_click_on_the_picked_view_closes_the_open_panel() {
         use DetailsView::*;
-        assert_eq!(rail_click(Changes, Changes, true, false), RailClick::Close);
+        let (terminal, history) = (WorkspaceTab::Terminal, WorkspaceTab::History);
         assert_eq!(
-            rail_click(Changes, Changes, false, false),
+            rail_click(Changes, Changes, true, WorkspaceTab::Changes),
+            RailClick::Close
+        );
+        assert_eq!(
+            rail_click(Changes, Changes, false, terminal),
             RailClick::Show(Changes)
         );
         assert_eq!(
-            rail_click(History, Changes, true, false),
+            rail_click(History, Changes, true, terminal),
             RailClick::Show(History)
         );
         // Main shows History: a click on another view still opens the panel on it.
         assert_eq!(
-            rail_click(Progress, Changes, false, true),
+            rail_click(Progress, Changes, false, history),
             RailClick::Show(Progress)
         );
     }
@@ -333,14 +378,14 @@ mod tests {
         // Panel open or closed, History shows over main.
         for open in [true, false] {
             assert_eq!(
-                rail_click(History, Progress, open, false),
+                rail_click(History, Progress, open, WorkspaceTab::Terminal),
                 RailClick::Show(History)
             );
         }
         // Main shows History: the terminals show again.
         for open in [true, false] {
             assert_eq!(
-                rail_click(History, Progress, open, true),
+                rail_click(History, Progress, open, WorkspaceTab::History),
                 RailClick::Terminals
             );
         }
