@@ -246,6 +246,7 @@ mod projects {
 }
 mod sidebar {
     pub mod blur_bar;
+    pub mod blur_image;
     pub mod card_rules;
     pub mod comet;
     pub mod project_buttons;
