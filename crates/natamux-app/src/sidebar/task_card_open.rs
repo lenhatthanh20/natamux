@@ -12,7 +12,7 @@ use ui::{Tooltip, prelude::*};
 use super::blur_bar::{BlurBar, private_text};
 use super::sidebar::{lucide, mono, small};
 use super::task_card::{CONTENT_INSET, inset};
-use super::workspace_row::task_title_size;
+use super::workspace_row::{task_title_size, title_color};
 use super::workspace_tree::{Snapshot, WorkspaceTree};
 use crate::components::button_style::action_button;
 use crate::components::colors::{project_color, state_colors};
@@ -108,7 +108,7 @@ impl WorkspaceTree {
             let (name, color) = self.project_of(task, cx);
             let text = private_text(
                 blurred,
-                || BlurBar::new(name.clone(), 12.0),
+                || BlurBar::new(name.clone(), 12.0).color(Color::Custom(color)),
                 || {
                     Label::new(name.clone())
                         .size(LabelSize::Custom(rems_from_px(12_f32)))
@@ -176,7 +176,11 @@ impl WorkspaceTree {
         let group = SharedString::from(format!("row-{}", task.id));
         let name = private_text(
             blurred,
-            || BlurBar::new(branch.clone(), 11.0).mono(),
+            || {
+                BlurBar::new(branch.clone(), 11.0)
+                    .mono()
+                    .color(Color::Muted)
+            },
             || mono(branch.clone(), cx).truncate().into_any_element(),
         );
         let copy = (!blurred).then(|| {
@@ -312,16 +316,16 @@ pub(super) fn open_title(task: &Task, blurred: bool) -> AnyElement {
     let finished = matches!(task.state, TaskState::Done | TaskState::Cancelled);
     private_text(
         blurred,
-        || BlurBar::new(task.title.clone(), size).weight(gpui::FontWeight::NORMAL),
+        || {
+            BlurBar::new(task.title.clone(), size)
+                .weight(gpui::FontWeight::NORMAL)
+                .color(title_color(finished))
+        },
         || {
             let title = Label::new(task.title.clone())
                 .size(LabelSize::Custom(rems_from_px(size)))
                 .weight(gpui::FontWeight::NORMAL)
-                .color(if finished {
-                    Color::Muted
-                } else {
-                    Color::Default
-                });
+                .color(title_color(finished));
             if task.state == TaskState::Cancelled {
                 title.strikethrough().line_clamp(2).into_any_element()
             } else {

@@ -23,6 +23,7 @@ use super::title_bar::open_add_menu;
 use super::view_rules::DetailsView;
 use super::view_state::{Layout, ViewState};
 use super::window::Root;
+use crate::sidebar::blur_bar;
 use crate::tasks::task_time::parse_iso_ms;
 use crate::tasks::{add_subtask_dialog, add_task_dialog, fan_out_dialog};
 use crate::terminals::terminal_cache::{TerminalCache, terminal_key};
@@ -229,6 +230,9 @@ async fn steps(handle: WindowHandle<Root>, shot: Shot, cx: &mut AsyncApp) -> boo
                 board.update(cx, |board, cx| board.scroll_column(TaskState::Done, at, cx));
             })
             .ok();
+    }
+    if shot == Shot::SidebarBlurred {
+        wait_for_blur(cx).await;
     }
     if shot == Shot::TerminalFind {
         cx.background_executor().timer(PANES_DRAWN).await;
@@ -511,6 +515,19 @@ fn panel_step(shot: Shot, root: &mut Root, window: &mut Window, cx: &mut gpui::C
         }
         _ => {}
     }
+}
+
+/// Waits until every blurred text has its picture: they render in the background, and a shot
+/// taken before shows the soft bars. The first check comes after the rows drew once.
+async fn wait_for_blur(cx: &mut AsyncApp) {
+    cx.background_executor().timer(SETTLE).await;
+    for _ in 0..PARSE_TRIES {
+        cx.background_executor().timer(PARSE_POLL).await;
+        if !cx.update(|cx| blur_bar::pictures_pending(cx)) {
+            return;
+        }
+    }
+    eprintln!("shot: the blurred texts have no picture in time");
 }
 
 /// Waits until the Changes tab draws `path` with its language parsed. `with_base`: the last

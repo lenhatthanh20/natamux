@@ -1,46 +1,24 @@
-//! What a blurred project shows in place of its private text (docs/ui-spec.md, "Blurred project").
-//! GPUI has no text blur, so the row draws a soft bar as wide as the text would be: a drop shadow
-//! with a blurred edge. The real text is never drawn.
+//! What a blurred project shows in place of its private text (docs/ui-spec.md, "Blurred project"):
+//! a picture of the text with a Gaussian blur, as the web's `filter: blur(5px)`. GPUI has no blur
+//! filter, so its SVG renderer makes the picture (`blur_image.rs`), in the background. Until the
+//! picture is there, and when it fails, the row draws a soft bar. The sharp text is never drawn.
 
-use std::collections::HashMap;
-
-use gpui::{AnyElement, BoxShadow, FontWeight, Global, point};
+use gpui::{AnyElement, BoxShadow, Font, FontWeight, img, point};
 use ui::prelude::*;
+
+use super::blur_image::{BlurCache, BlurKey, Entry, MAX_CHARS, Picture, ROOM};
+use crate::app::app_log;
 
 /// The base size of the rem: sizes in this file are in px at this rem, then follow the UI size.
 const BASE_REM: f32 = 16.0;
-/// Room around the bar for its blurred edge, so the row's clip does not cut it.
+/// The blurred edge of the soft bar.
 const EDGE: f32 = 4.0;
 /// The line a one-line row label sits in (the title line is `rems_from_px(16)`).
 const LINE: f32 = 16.0;
 /// Width of a glyph the font cannot give, as a part of the font size: wide (CJK, emoji).
 const WIDE_EM: f32 = 1.0;
-/// Fewest characters the bar is wide for, so a short text does not leave a dot.
+/// Fewest characters the box is wide for, so a short text does not leave a dot.
 const MIN_EM: f32 = 1.6;
-const CACHE_LIMIT: usize = 4096;
-
-/// The text, the font weight and kind, and the size in px that gave a width.
-type WidthKey = (SharedString, u32, bool, u32);
-
-#[derive(Default)]
-struct WidthCache(HashMap<WidthKey, f32>);
-
-impl Global for WidthCache {}
-
-impl WidthCache {
-    /// The cached width, or the measure's result, which is then kept.
-    fn get_or_measure(&mut self, key: WidthKey, measure: impl FnOnce() -> f32) -> f32 {
-        if let Some(width) = self.0.get(&key) {
-            return *width;
-        }
-        let width = measure();
-        if self.0.len() >= CACHE_LIMIT {
-            self.0.clear();
-        }
-        self.0.insert(key, width);
-        width
-    }
-}
 
 /// The width of a text from the advance of each character. A character the font has no glyph for
 /// counts as wide when it is not ASCII.
@@ -58,7 +36,21 @@ fn text_width(text: &str, size: f32, advance: impl Fn(char) -> Option<f32>) -> f
     width.max(size * MIN_EM)
 }
 
-/// A blurred bar for a text, as wide as the text in the same font and size. It follows the UI
+/// The start of a text that is longer than a row can show.
+fn capped(text: SharedString) -> SharedString {
+    let whole: &str = text.as_ref();
+    match whole.char_indices().nth(MAX_CHARS) {
+        Some((end, _)) => SharedString::from(whole[..end].to_owned()),
+        None => text,
+    }
+}
+
+/// True while a blurred text still waits for its picture. The shots wait for it.
+pub fn pictures_pending(cx: &App) -> bool {
+    cx.try_global::<BlurCache>().is_some_and(BlurCache::pending)
+}
+
+/// A blurred text, in a box as wide as the text in the same font and size. It follows the UI
 /// size, and shrinks with its row like a truncated text.
 #[derive(IntoElement)]
 pub struct BlurBar {
@@ -67,15 +59,17 @@ pub struct BlurBar {
     size: f32,
     weight: FontWeight,
     mono: bool,
+    color: Color,
 }
 
 impl BlurBar {
     pub fn new(text: impl Into<SharedString>, size: f32) -> Self {
         Self {
-            text: text.into(),
+            text: capped(text.into()),
             size,
             weight: FontWeight::NORMAL,
             mono: false,
+            color: Color::Default,
         }
     }
 
@@ -90,16 +84,25 @@ impl BlurBar {
         self
     }
 
-    fn measure(&self, size: Pixels, window: &Window, cx: &App) -> f32 {
+    /// The colour of the label it replaces.
+    pub fn color(mut self, color: Color) -> Self {
+        self.color = color;
+        self
+    }
+
+    fn font(&self, window: &Window, cx: &App) -> Font {
         let mut font = if self.mono {
             theme::theme_settings(cx).buffer_font(cx).clone()
         } else {
             window.text_style().font()
         };
         font.weight = self.weight;
+        font
+    }
+
+    fn measure(&self, font: &Font, size: f32, cx: &App) -> f32 {
         let system = cx.text_system();
-        let font_id = system.resolve_font(&font);
-        let size = f32::from(size);
+        let font_id = system.resolve_font(font);
         text_width(&self.text, size, |ch| {
             system
                 .advance(font_id, px(size), ch)
@@ -107,55 +110,107 @@ impl BlurBar {
                 .map(|advance| f32::from(advance.width))
         })
     }
+
+    /// Measures a new text, keeps it as pending and renders its picture in the background.
+    fn start(
+        &self,
+        key: BlurKey,
+        font: &Font,
+        size: f32,
+        line: f32,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Entry {
+        let width = self.measure(font, size, cx);
+        let dropped = cx.default_global::<BlurCache>().start(key.clone(), width);
+        for image in dropped {
+            cx.drop_image(image, Some(&mut *window));
+        }
+        let svg = key.svg(width, line);
+        let renderer = cx.svg_renderer();
+        // The first text an SVG draws reads the system's font list, which is slow.
+        let render = cx.background_executor().spawn(async move {
+            renderer
+                .render_single_frame(svg.as_bytes(), 1.0)
+                .map_err(|error| error.to_string())
+        });
+        cx.spawn(async move |cx| {
+            let result = render.await;
+            cx.update(|cx| {
+                let error = result.as_ref().err().cloned();
+                let first_failure = cx.default_global::<BlurCache>().finish(&key, result.ok());
+                if let Some(error) = error.filter(|_| first_failure) {
+                    app_log::write(&format!("blurred text: no picture: {error}"));
+                }
+                cx.refresh_windows();
+            });
+        })
+        .detach();
+        Entry {
+            width,
+            picture: Picture::Pending,
+        }
+    }
 }
 
 impl RenderOnce for BlurBar {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let scale = f32::from(window.rem_size()) / BASE_REM;
-        let size = px(self.size * scale);
-        let key = (
-            self.text.clone(),
-            self.weight.0.to_bits(),
-            self.mono,
-            f32::from(size).to_bits(),
-        );
-        let cached = cx.default_global::<WidthCache>().0.get(&key).copied();
-        let width = match cached {
-            Some(width) => width,
-            None => {
-                let width = self.measure(size, window, cx);
-                cx.default_global::<WidthCache>()
-                    .get_or_measure(key, || width)
+        let size = self.size * scale;
+        let line = LINE * scale;
+        let room = ROOM * scale;
+        let color = self.color.color(cx);
+        let font = self.font(window, cx);
+        let key = BlurKey::new(self.text.clone(), &font, self.mono, size, scale, color);
+        let known = cx.default_global::<BlurCache>().get(&key);
+        let entry = match known {
+            Some(entry) => entry,
+            None => self.start(key, &font, size, line, window, cx),
+        };
+        let width = entry.width;
+        let inner = match entry.picture {
+            Picture::Ready(image) => img(image)
+                .absolute()
+                .left_0()
+                .top_0()
+                .w(px(width + 2.0 * room))
+                .h(px(line + 2.0 * room))
+                .into_any_element(),
+            Picture::Pending | Picture::Failed => {
+                // A bar of the letters' height with a blurred glow of its own colour. A drop
+                // shadow draws only outside its box, so the box is the bar.
+                let height = (self.size * 0.6).round() * scale;
+                let soft = color.opacity(0.3);
+                div()
+                    .absolute()
+                    .left(px(room))
+                    .top(px(room + (line - height) / 2.0))
+                    .w(px(width))
+                    .h(px(height))
+                    .rounded_full()
+                    .bg(soft)
+                    .shadow(vec![BoxShadow {
+                        color: soft,
+                        offset: point(px(0.0), px(0.0)),
+                        blur_radius: px(EDGE * scale),
+                        spread_radius: px(0.0),
+                        inset: false,
+                    }])
+                    .into_any_element()
             }
         };
-        let edge = EDGE * scale;
-        let line = LINE * scale;
-        let height = (self.size * 0.6).round() * scale;
-        // A bar of its real height with a blurred glow of its own colour: the glow softens the edge
-        // and the ends are round. A drop shadow draws only outside its box, so the box is the bar.
-        let color = cx.theme().colors().text.opacity(0.3);
-        let core = div()
-            .absolute()
-            .left(px(edge))
-            .top(px((line - height) / 2.0))
-            .w(px(width))
-            .h(px(height))
-            .rounded_full()
-            .bg(color)
-            .shadow(vec![BoxShadow {
-                color,
-                offset: point(px(0.0), px(0.0)),
-                blur_radius: px(edge),
-                spread_radius: px(0.0),
-                inset: false,
-            }]);
-        div()
-            .relative()
-            .min_w_0()
-            .overflow_hidden()
-            .w(px(width + 2.0 * edge))
-            .h(px(line))
-            .child(core)
+        // The box is the plain text's box, so a blurred row keeps its layout. The blur reaches
+        // past the box by `room`; a box that shrank with its row cuts the picture there.
+        div().relative().min_w_0().w(px(width)).h(px(line)).child(
+            div()
+                .absolute()
+                .top(px(-room))
+                .bottom(px(-room))
+                .left(px(-room))
+                .right(px(-room))
+                .overflow_hidden()
+                .child(inner),
+        )
     }
 }
 
@@ -200,23 +255,10 @@ mod tests {
     }
 
     #[test]
-    fn the_width_is_measured_once_per_text_and_size() {
-        let mut cache = WidthCache::default();
-        let calls = Cell::new(0);
-        let key = |size: f32| (SharedString::from("title"), 0, false, size.to_bits());
-        for _ in 0..3 {
-            let width = cache.get_or_measure(key(13.0), || {
-                calls.set(calls.get() + 1);
-                50.0
-            });
-            assert_eq!(width, 50.0);
-        }
-        assert_eq!(calls.get(), 1);
-        cache.get_or_measure(key(14.0), || {
-            calls.set(calls.get() + 1);
-            55.0
-        });
-        assert_eq!(calls.get(), 2);
+    fn a_long_text_is_cut_at_a_character() {
+        let long: String = "日".repeat(MAX_CHARS + 5);
+        assert_eq!(capped(long.into()).chars().count(), MAX_CHARS);
+        assert_eq!(capped("short".into()), SharedString::from("short"));
     }
 
     #[test]
