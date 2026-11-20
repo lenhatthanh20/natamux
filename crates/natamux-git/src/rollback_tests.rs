@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use super::*;
-use crate::commit_push::snapshot_commit;
+use crate::commit_push::snapshot_paths;
 use crate::test_support::{TempDir, run_git, test_repo};
 
 struct Repo {
@@ -101,6 +101,11 @@ fn repo() -> Repo {
     repo
 }
 
+// The snapshot the daemon makes before a rollback of `entries`.
+fn snapshot_of(repo: &Repo, entries: &[ChangeEntry]) -> String {
+    snapshot_paths(&repo.dir, "Natamux rollback", &rollback_paths(entries)).unwrap()
+}
+
 // One change of each kind: modified, deleted, renamed and edited, added, not tracked.
 fn change_everything(repo: &Repo) {
     repo.write("mod.txt", "m2\n");
@@ -178,7 +183,7 @@ fn brings_back_every_file_as_it_was_before_the_rollback() {
     let repo = repo();
     change_everything(&repo);
     let entries = repo.changes();
-    let snapshot = snapshot_commit(&repo.dir, "Natamux rollback").unwrap();
+    let snapshot = snapshot_of(&repo, &entries);
     rollback_files(&repo.dir, &entries).unwrap();
 
     restore_from_snapshot(&repo.dir, &snapshot, &rollback_paths(&entries)).unwrap();
@@ -216,7 +221,7 @@ fn brings_back_a_file_whose_name_looks_like_a_pattern_and_only_that_file() {
     repo.write("[ab].txt", "ab2\n");
     let entries = repo.changes_of(&[":(top)x", "[ab].txt"]);
     assert_eq!(entries.len(), 2);
-    let snapshot = snapshot_commit(&repo.dir, "Natamux rollback").unwrap();
+    let snapshot = snapshot_of(&repo, &entries);
     rollback_files(&repo.dir, &entries).unwrap();
     assert_eq!(repo.read(":(top)x"), "top\n");
 
@@ -234,7 +239,7 @@ fn leaves_the_other_files_alone() {
     repo.write("mod.txt", "m2\n");
     repo.write("a.txt", "a2\n");
     let entries = repo.changes_of(&["mod.txt"]);
-    let snapshot = snapshot_commit(&repo.dir, "Natamux rollback").unwrap();
+    let snapshot = snapshot_of(&repo, &entries);
     rollback_files(&repo.dir, &entries).unwrap();
     repo.write("a.txt", "a3\n");
 
@@ -269,4 +274,76 @@ fn keeps_each_group_of_paths_short_enough_for_one_command_line() {
         path_batches(&[long.clone(), long.clone(), "a".to_string()]),
         vec![vec![long.clone()], vec![long, "a".to_string()]]
     );
+}
+
+// T-0353: the snapshot of the whole worktree made a rollback slow. Git may read only the picked
+// files, so a file that is not picked is in the snapshot as HEAD has it, or not at all.
+#[test]
+fn the_snapshot_holds_only_the_picked_files() {
+    let repo = repo();
+    change_everything(&repo);
+    repo.write("a.txt", "a2\n");
+    repo.write("sub/deep/u.txt", "u\n");
+    let head = run_git(&repo.dir, &["rev-parse", "HEAD"])
+        .trim()
+        .to_string();
+    let index = run_git(&repo.dir, &["ls-files", "-s"]);
+    let entries = repo.changes_of(&["mod.txt", "new.txt", "del.txt"]);
+
+    let snapshot = snapshot_of(&repo, &entries);
+
+    let parent = run_git(&repo.dir, &["rev-parse", &format!("{snapshot}^")]);
+    assert_eq!(parent.trim(), head);
+    let show = |path: &str| run_git(&repo.dir, &["show", &format!("{snapshot}:{path}")]);
+    assert_eq!(show("mod.txt"), "m2\n");
+    assert_eq!(show("new.txt"), "old\nx\n");
+    // Changed but not picked: as in HEAD.
+    assert_eq!(show("a.txt"), "a\n");
+    let listed = run_git(&repo.dir, &["ls-tree", "-r", "--name-only", &snapshot]);
+    let mut files: Vec<&str> = listed.lines().collect();
+    files.sort_unstable();
+    // The deleted file and the old name are gone; the new files that are not picked are not in.
+    assert_eq!(files, ["[ab].txt", "a.txt", "mod.txt", "new.txt"]);
+    // The worktree's own index and branch are as before.
+    assert_eq!(run_git(&repo.dir, &["ls-files", "-s"]), index);
+    assert_eq!(run_git(&repo.dir, &["rev-parse", "HEAD"]).trim(), head);
+}
+
+#[test]
+fn the_snapshot_takes_more_paths_than_one_command_line_holds() {
+    let repo = repo();
+    // 1,200 paths of about 60 characters: more than one batch of 64 KiB. Short paths, for the
+    // path limit of Windows.
+    let folder = "d".repeat(40);
+    let paths: Vec<String> = (0..1200)
+        .map(|at| format!("{folder}/{}-{at}.txt", "f".repeat(10)))
+        .collect();
+    assert!(path_batches(&paths).len() > 1);
+    for path in &paths {
+        repo.write(path, "x\n");
+    }
+
+    let snapshot = snapshot_paths(&repo.dir, "Natamux rollback", &paths).unwrap();
+
+    let listed = run_git(&repo.dir, &["ls-tree", "-r", "--name-only", &snapshot]);
+    let kept = listed.lines().filter(|path| path.starts_with(&folder));
+    assert_eq!(kept.count(), 1200);
+}
+
+// `git add` fails on a path that is neither on disk nor in HEAD; the rollback must not.
+#[test]
+fn the_snapshot_takes_a_file_that_was_added_and_then_deleted() {
+    let repo = repo();
+    repo.write("ghost.txt", "g\n");
+    run_git(&repo.dir, &["add", "ghost.txt"]);
+    repo.remove("ghost.txt");
+    repo.write("mod.txt", "m2\n");
+    let paths = vec!["ghost.txt".to_string(), "mod.txt".to_string()];
+
+    let snapshot = snapshot_paths(&repo.dir, "Natamux rollback", &paths).unwrap();
+
+    let listed = run_git(&repo.dir, &["ls-tree", "-r", "--name-only", &snapshot]);
+    assert!(!listed.lines().any(|path| path == "ghost.txt"));
+    let shown = run_git(&repo.dir, &["show", &format!("{snapshot}:mod.txt")]);
+    assert_eq!(shown, "m2\n");
 }
