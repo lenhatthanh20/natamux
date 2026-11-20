@@ -10,8 +10,8 @@ use natamux_proto::workspaces::workspace::ChangeEntry;
 
 use crate::exec::{GitError, git};
 
-/// Paths go on the command line, which the system limits (1 MiB on macOS, environment included).
-const MAX_BATCH_CHARS: usize = 64 * 1024;
+/// Paths go on the command line. Windows caps one at 32,767 characters, so a batch stays far under it.
+const MAX_BATCH_CHARS: usize = 16 * 1024;
 
 /// A file named like `a*.ts` or `:(top)x` names only itself, never a pattern of other files.
 fn literal_env() -> Vec<(String, String)> {
