@@ -187,7 +187,7 @@ Some commands are only in the palette (`Mod+K`, then type the name):
 - **Follow the system**, **Light**, **Dark** (theme)
 - **Text size: Compact**, **Default**, **Large**
 - **Add a project**, **Import GitHub issues**
-- **Show the task progress**, for the open or selected task (opens the details on **Progress**)
+- **Show the task progress**, for the open or selected task (opens the details on **Progress** and shows the terminals)
 - **Show the files of the worktree**, for the open workspace (opens the details on **Files**)
 - **Show the open file**, while a file is open in the editor tab
 - **Mark ready**, **Block**, **Resume the agent**, **Unblock**, **Retry**, for the selected task

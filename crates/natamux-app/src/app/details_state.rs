@@ -95,9 +95,9 @@ impl Dashboard {
     }
 
     /// Keys 2 to 4 and the commands of a view: the panel opens on `view`; Changes and Docs also
-    /// cover the terminals in main (`main_after_view`). History covers main at full width and
-    /// closes the panel, which keeps its view: at 1024 px the docked panel leaves main 384 px,
-    /// too narrow for the graph (T-0351).
+    /// cover the terminals in main and Progress shows them again (`main_after_view`). History
+    /// covers main at full width and closes the panel, which keeps its view: at 1024 px the
+    /// docked panel leaves main 384 px, too narrow for the graph (T-0351).
     pub fn show_view(&mut self, view: DetailsView, cx: &mut Context<Self>) {
         if view == DetailsView::History {
             self.set_details_open(false, cx);
@@ -114,12 +114,11 @@ impl Dashboard {
     /// A click on a rail icon (`rail_click`): the picked view of an open panel closes it, and
     /// History over main shows the terminals again.
     pub fn rail_pick(&mut self, view: DetailsView, cx: &mut Context<Self>) {
-        let main_history = self.shown_workspace_tab() == WorkspaceTab::History;
         match rail_click(
             view,
             self.details_view_now(),
             self.details_shown(),
-            main_history,
+            self.shown_workspace_tab(),
         ) {
             RailClick::Close => self.set_details_open(false, cx),
             RailClick::Terminals => self.pick_tab(WorkspaceTab::Terminal, cx),
@@ -127,10 +126,15 @@ impl Dashboard {
         }
     }
 
-    /// Show in progress, Show progress and `progress.show` (`showProgress`). The panel is about
+    /// Show in progress, Show progress and `progress.show` (`showProgress`): the panel on
+    /// Progress and the terminals in main, as the rail's Progress (T-0357). The panel is about
     /// `details_task`, so `_id` only keeps the callers' shape.
     pub fn show_progress(&mut self, _id: &str, cx: &mut Context<Self>) {
         self.update_view(cx, |state| state.show_progress());
+        let main = main_after_view(DetailsView::Progress, self.workspace_tab);
+        if main != self.workspace_tab {
+            self.pick_tab(main, cx);
+        }
     }
 
     /// `files.show` and `showFiles`: the dock open on its Files tab.
