@@ -2,10 +2,12 @@
 //! right edge of the window, as Zed's and VS Code's side bars. It stays while the panel is
 //! closed, so a view is one click away; a click on the picked view of an open panel closes it
 //! (`rail_click`). History covers main instead, and its icon toggles it (T-0351). Changes shows
-//! the count of files to commit. "..." at the bottom is the task's
+//! the count of files to commit. Progress is the task's home view, so it stands out: a bright
+//! icon with a dot in the task's state colour (T-0357). "..." at the bottom is the task's
 //! menu, as in the panel's header over the list.
 
 use gpui::{Entity, Subscription};
+use natamux_proto::tasks::task::TaskState;
 use ui::{FixedWidth, IconButtonShape, Tooltip, prelude::*};
 
 use crate::app::commands::shortcut_of;
@@ -15,13 +17,23 @@ use crate::app::layout_mode::RAIL_WIDTH;
 use crate::app::tab_rules::details_tabs;
 use crate::app::view_rules::{DetailsView, WorkspaceTab};
 use crate::components::chips::tip_with_keys;
+use crate::components::colors::state_colors;
+use crate::components::motion;
+use crate::components::motion_rules::{Moving, beat};
+use crate::components::shape::ShapeKind;
 use crate::git::commit_rules::tab_count_label;
+use crate::sidebar::shell_rows::task_glyph_state;
 use crate::tasks::details_panel::DetailsPanel;
 
 const RAIL_ICON: f32 = 18.;
 /// A square of `ButtonSize::Large`'s 32 px: Zed's square shape sizes the button from a custom
 /// icon size and outgrew the rail, so its hover spilled into the panel.
 const RAIL_BUTTON: f32 = 32.;
+/// The state dot of Progress, and the ring that parts it from the icon.
+const DOT: f32 = 7.;
+const DOT_RING: f32 = 2.;
+/// The dot's distance from the top and the right of the button.
+const DOT_INSET: f32 = 3.;
 
 /// A view's button: its id, icon, name and the command whose key the tooltip shows.
 type ViewButton = (&'static str, IconName, &'static str, Option<&'static str>);
@@ -89,6 +101,11 @@ pub fn view_tip(label: &str, badge: Option<usize>) -> String {
     }
 }
 
+/// The tooltip of Progress says the state too, as the dot's colour alone must not carry it.
+pub fn progress_tip(label: &str, state: TaskState) -> String {
+    format!("{label} · {}", ShapeKind::of(Some(state), false).label())
+}
+
 pub struct DetailsRail {
     dashboard: Entity<Dashboard>,
     /// The panel: its "..." menu sits at the bottom of the rail.
@@ -116,19 +133,52 @@ impl DetailsRail {
         view: DetailsView,
         on: bool,
         count: Option<usize>,
+        // The task's state, for Progress only.
+        state: Option<TaskState>,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let (id, icon, label, command) = view_button(view);
         let keys = command.and_then(shortcut_of);
         let badge = changes_badge(count);
-        let tip = view_tip(label, badge);
+        let tip = match state {
+            Some(state) => progress_tip(label, state),
+            None => view_tip(label, badge),
+        };
+        let dot = state.map(|state| {
+            let tick = (state == TaskState::Running)
+                .then(|| motion::frame(Moving::Beat, window, cx))
+                .flatten();
+            let colors = cx.theme().colors();
+            let ring = if on {
+                colors.ghost_element_selected
+            } else {
+                colors.panel_background
+            };
+            let color = state_colors(state, cx).fg.opacity(beat(tick).opacity);
+            div()
+                .absolute()
+                .top(px(DOT_INSET - DOT_RING))
+                .right(px(DOT_INSET - DOT_RING))
+                .size(px(DOT + 2. * DOT_RING))
+                .rounded_full()
+                .bg(ring)
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(div().size(px(DOT)).rounded_full().bg(color))
+        });
         let button = IconButton::new(id, icon)
             .shape(IconButtonShape::Wide)
             .size(ButtonSize::Large)
             .width(px(RAIL_BUTTON))
             // A bit larger than Zed's 16 px, as the owner asked (T-0183).
             .icon_size(IconSize::Custom(rems_from_px(RAIL_ICON)))
-            .icon_color(if on { Color::Default } else { Color::Muted })
+            .icon_color(if on || state.is_some() {
+                Color::Default
+            } else {
+                Color::Muted
+            })
             // Grey, not the accent: the pill alone shows the picked view (T-0171).
             .selected_icon_color(Color::Default)
             .toggle_state(on)
@@ -161,13 +211,14 @@ impl DetailsRail {
         div()
             .relative()
             .child(button)
+            .children(dot)
             .children(badge)
             .into_any_element()
     }
 }
 
 impl Render for DetailsRail {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let dashboard = self.dashboard.read(cx);
         let Some(task) = dashboard.details_task() else {
             return div().into_any_element();
@@ -181,12 +232,16 @@ impl Render for DetailsRail {
             .then(|| dashboard.details_view_now());
         let main_history = dashboard.shown_workspace_tab() == WorkspaceTab::History;
         let count = dashboard.open_changes_of(&task.id);
+        // shortcut: the rail has no terminal rows, so an agent that works only in a side
+        // terminal does not show as Running here; pass the rows when that matters.
+        let state = task_glyph_state(task, &[]);
         let buttons: Vec<AnyElement> = views
             .into_iter()
             .map(|view| {
                 let count = (view == DetailsView::Changes).then_some(count).flatten();
                 let on = rail_on(view, picked, main_history);
-                self.button(view, on, count, cx)
+                let state = (view == DetailsView::Progress).then_some(state);
+                self.button(view, on, count, state, window, cx)
             })
             .collect();
         let more = self
@@ -224,6 +279,19 @@ mod tests {
         assert!(rail_on(Changes, Some(Changes), true));
         assert!(!rail_on(Changes, None, false));
         assert!(!rail_on(Progress, None, true));
+    }
+
+    #[test]
+    fn says_the_state_in_the_tooltip_of_progress() {
+        assert_eq!(
+            progress_tip("Progress", TaskState::Running),
+            "Progress · Running"
+        );
+        assert_eq!(
+            progress_tip("Progress", TaskState::NeedsInput),
+            "Progress · Needs input"
+        );
+        assert_eq!(progress_tip("Progress", TaskState::Done), "Progress · Done");
     }
 
     #[test]
