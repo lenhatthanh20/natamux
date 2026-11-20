@@ -84,7 +84,7 @@ impl WorkspaceTree {
             .map(|text| {
                 private_text(
                     blurred,
-                    || BlurBar::new(text.clone(), 12.0),
+                    || BlurBar::new(text.clone(), 12.0).color(Color::Muted),
                     || small(text.clone()).truncate().into_any_element(),
                 )
             });
@@ -94,7 +94,7 @@ impl WorkspaceTree {
                 .flex_none()
                 .child(private_text(
                     blurred,
-                    || BlurBar::new(tag.clone(), 11.0).mono(),
+                    || BlurBar::new(tag.clone(), 11.0).mono().color(Color::Muted),
                     || mono(tag.clone(), cx).into_any_element(),
                 ))
                 .tooltip(Tooltip::text(format!(
@@ -106,18 +106,23 @@ impl WorkspaceTree {
             .agent
             .as_deref()
             .map(|agent| agent_mark(SharedString::from(format!("{key}-agent")).into(), agent));
+        let label_color = if row.plain {
+            Color::Muted
+        } else {
+            Color::Default
+        };
         let label = private_text(
             blurred,
-            || BlurBar::new(row.label.clone(), 12.0).weight(FontWeight::MEDIUM),
+            || {
+                BlurBar::new(row.label.clone(), 12.0)
+                    .weight(FontWeight::MEDIUM)
+                    .color(label_color)
+            },
             || {
                 Label::new(row.label.clone())
                     .size(LabelSize::Custom(rems_from_px(12_f32)))
                     .weight(FontWeight::MEDIUM)
-                    .color(if row.plain {
-                        Color::Muted
-                    } else {
-                        Color::Default
-                    })
+                    .color(label_color)
                     .single_line()
                     .into_any_element()
             },
@@ -202,6 +207,15 @@ pub(super) fn task_title_size(state: TaskState) -> f32 {
     }
 }
 
+/// A finished task's title is muted, as plain text and blurred.
+pub(super) fn title_color(finished: bool) -> Color {
+    if finished {
+        Color::Muted
+    } else {
+        Color::Default
+    }
+}
+
 /// The id (only with Task ids in the sidebar, T-0240), then the title in the look of its tier:
 /// muted when finished. The id never shrinks; only the title truncates.
 pub(super) fn title_label(task: &Task, blurred: bool, show_id: bool, cx: &App) -> AnyElement {
@@ -212,11 +226,7 @@ pub(super) fn title_label(task: &Task, blurred: bool, show_id: bool, cx: &App) -
         let title = Label::new(task.title.clone())
             .size(LabelSize::Custom(rems_from_px(size)))
             .weight(weight)
-            .color(if finished {
-                Color::Muted
-            } else {
-                Color::Default
-            })
+            .color(title_color(finished))
             .truncate();
         if task.state == TaskState::Cancelled {
             title.strikethrough().into_any_element()
@@ -226,7 +236,11 @@ pub(super) fn title_label(task: &Task, blurred: bool, show_id: bool, cx: &App) -
     };
     let title = private_text(
         blurred,
-        || BlurBar::new(task.title.clone(), size).weight(weight),
+        || {
+            BlurBar::new(task.title.clone(), size)
+                .weight(weight)
+                .color(title_color(finished))
+        },
         plain,
     );
     h_flex()

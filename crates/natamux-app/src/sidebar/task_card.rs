@@ -311,7 +311,7 @@ impl WorkspaceTree {
                 .gap_1()
                 .child(private_text(
                     blurred,
-                    || BlurBar::new(name.clone(), 12.0),
+                    || BlurBar::new(name.clone(), 12.0).color(Color::Custom(color)),
                     || {
                         Label::new(name.clone())
                             .size(LabelSize::Custom(rems_from_px(12_f32)))
@@ -328,7 +328,7 @@ impl WorkspaceTree {
                 .gap_1()
                 .child(private_text(
                     blurred,
-                    || BlurBar::new(stage.clone(), 12.0),
+                    || BlurBar::new(stage.clone(), 12.0).color(Color::Muted),
                     || small(stage.clone()).into_any_element(),
                 ))
                 .when(branch.is_some(), |part| part.child(small("·")))
@@ -336,7 +336,7 @@ impl WorkspaceTree {
         let branch_part = div().min_w_0().flex_1().children(branch.map(|name| {
             private_text(
                 blurred,
-                || BlurBar::new(name.clone(), 11.0).mono(),
+                || BlurBar::new(name.clone(), 11.0).mono().color(Color::Muted),
                 || mono(name.clone(), cx).truncate().into_any_element(),
             )
         }));
