@@ -272,7 +272,7 @@ fn keeps_each_group_of_paths_short_enough_for_one_command_line() {
     );
     assert_eq!(
         path_batches(&[long.clone(), long.clone(), "a".to_string()]),
-        vec![vec![long.clone()], vec![long, "a".to_string()]]
+        vec![vec![long.clone()], vec![long], vec!["a".to_string()]]
     );
 }
 
@@ -312,7 +312,7 @@ fn the_snapshot_holds_only_the_picked_files() {
 #[test]
 fn the_snapshot_takes_more_paths_than_one_command_line_holds() {
     let repo = repo();
-    // 1,200 paths of about 60 characters: more than one batch of 64 KiB. Short paths, for the
+    // 1,200 paths of about 60 characters: more than one batch of 16 KiB. Short paths, for the
     // path limit of Windows.
     let folder = "d".repeat(40);
     let paths: Vec<String> = (0..1200)
