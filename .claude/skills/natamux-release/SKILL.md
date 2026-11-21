@@ -16,7 +16,7 @@ Use this skill only for a release PR or an owner approved release. Feature PRs d
 
 ## Owner tag and signature
 
-After the merge, run `gh workflow run release.yml --ref main -f tag=main -f publish=false`. Check its six assets and `SHA256SUMS.txt`, startup smoke results, and build attestations. Then, from the merged `main`, the owner runs:
+After the merge, run `gh workflow run release.yml --ref main -f tag=main -f publish=false`. Check its six download files, four SBOM files (`.cdx.json`) and `SHA256SUMS.txt`, startup smoke results, and build attestations. Then, from the merged `main`, the owner runs:
 
 ```sh
 git fetch --no-tags origin main && git switch --detach origin/main

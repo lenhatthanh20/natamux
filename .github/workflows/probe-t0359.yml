@@ -1,0 +1,41 @@
+name: Probe T-0359
+on:
+  push:
+    branches: ['wip/t-0359-probe']
+permissions:
+  contents: read
+jobs:
+  probe:
+    strategy:
+      matrix:
+        include:
+          - { os: ubuntu-latest, py: python3 }
+          - { os: windows-latest, py: python }
+          - { os: macos-15, py: python3 }
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install
+      - run: |
+          mkdir dist
+          version=$(sed -n 's/^version = "\([^"]*\)"$/\1/p' crates/natamux-app/Cargo.toml | head -n 1)
+          target=$(rustc -vV | sed -n 's/^host: //p')
+          cargo metadata --locked --format-version 1 --filter-platform "$target" |
+            ${{ matrix.py }} scripts/sbom.py "$version" "$target" > "dist/Natamux-$target.cdx.json"
+          ${{ matrix.py }} - "dist/Natamux-$target.cdx.json" <<'PY'
+          import json, sys
+          d = json.load(open(sys.argv[1], encoding="utf-8"))
+          c = d["components"]
+          print("SBOM", d["metadata"]["component"], "components", len(c), "with hash", sum("hashes" in x for x in c), "with license", sum("licenses" in x for x in c), "git", sum("vcs_url" in x["purl"] for x in c), "deps", len(d["dependencies"]))
+          print("SAMPLE", json.dumps(c[0]), json.dumps(next(x for x in c if "vcs_url" in x["purl"])))
+          PY
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sbom-${{ matrix.os }}
+          path: dist

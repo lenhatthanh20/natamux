@@ -12,7 +12,8 @@ set -euo pipefail
 
 # The files of a release besides SHA256SUMS.txt, as .github/workflows/release.yml checks them.
 FILES="Natamux-mac-arm64.dmg Natamux-mac-x64.dmg Natamux-win-x64.exe Natamux-linux-x86_64.AppImage
-  Natamux-linux-amd64.deb Natamux-linux-x64.tar.gz"
+  Natamux-linux-amd64.deb Natamux-linux-x64.tar.gz Natamux-mac-arm64.cdx.json
+  Natamux-mac-x64.cdx.json Natamux-win-x64.cdx.json Natamux-linux-x64.cdx.json"
 
 fail() {
   echo "sign-release: $1" >&2
