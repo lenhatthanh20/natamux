@@ -19,6 +19,23 @@ function Test-Signature($sums, $sig, $signer, $tag) {
   }
 }
 
+# The CPU type of Windows itself. RuntimeInformation.OSArchitecture is empty in Windows
+# PowerShell 5.1 on some Windows 11 PCs. PROCESSOR_ARCHITEW6432 is set in a 32-bit PowerShell.
+function Get-OSArch {
+  if ($env:PROCESSOR_ARCHITEW6432) { return $env:PROCESSOR_ARCHITEW6432 }
+  $env:PROCESSOR_ARCHITECTURE
+}
+
+# Smart App Control blocks every unsigned program, with no "Run anyway". 1 = on.
+function Get-SmartAppControl {
+  try { (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\CI\Policy' -ErrorAction Stop).VerifiedAndReputablePolicyState }
+  catch { $null }
+}
+
+$SmartAppControlHelp = 'Natamux is not code signed yet, and Smart App Control blocks unsigned apps. ' +
+  'Turn it off in Windows Security > App & browser control > Smart App Control, then run the command again. ' +
+  'See https://natamux.github.io/docs/help/troubleshooting/#smart-app-control-blocks-natamux'
+
 function Install-Natamux {
   $ErrorActionPreference = 'Stop'
   # Windows PowerShell 5.1 downloads many times slower while it draws the progress bar.
@@ -31,9 +48,10 @@ function Install-Natamux {
 
   $build = [Environment]::OSVersion.Version.Build
   if ($build -lt 17763) { throw "Natamux needs Windows 10 version 1809 or later. This is build $build." }
-  $arch = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture
-  if ($arch -eq 'Arm64') { Write-Warning 'Windows on Arm runs the x64 app. It is not tested.' }
-  elseif ($arch -ne 'X64') { throw "Natamux needs 64-bit Windows. This is $arch." }
+  $arch = Get-OSArch
+  if ($arch -eq 'ARM64') { Write-Warning 'Windows on Arm runs the x64 app. It is not tested.' }
+  elseif ($arch -ne 'AMD64') { throw "Natamux needs 64-bit Windows. This is $arch." }
+  if ((Get-SmartAppControl) -eq 1) { throw "Smart App Control is on. $SmartAppControlHelp" }
   if (Get-Process natamux-app -ErrorAction SilentlyContinue) { throw 'Quit Natamux, then run the command again.' }
 
   # One tag for every file, so a release published during the run cannot mix two versions.
@@ -64,7 +82,11 @@ function Install-Natamux {
     Write-Host 'Checksum checked.'
     # The Windows twin of the macOS quarantine flag: SmartScreen stops a file that has it.
     Unblock-File $exe
-    $run = Start-Process -FilePath $exe -ArgumentList '/S' -Wait -PassThru
+    try { $run = Start-Process -FilePath $exe -ArgumentList '/S' -Wait -PassThru }
+    catch {
+      if ("$_" -match 'Application Control') { throw "Windows blocked the installer. $SmartAppControlHelp" }
+      throw
+    }
     if ($run.ExitCode -ne 0) { throw "The installer stopped with exit code $($run.ExitCode)." }
     $app = Join-Path $env:LOCALAPPDATA 'Programs\Natamux\natamux-app.exe'
     Write-Host "Natamux $tag is installed in $app. Start it from the Start menu."
@@ -73,5 +95,6 @@ function Install-Natamux {
   }
 }
 
-# All code above is functions, so a download cut short runs nothing.
-Install-Natamux
+# All code above is functions, so a download cut short runs nothing. CI sets
+# NATAMUX_INSTALL_DRY to test the functions.
+if ($env:NATAMUX_INSTALL_DRY -ne '1') { Install-Natamux }
