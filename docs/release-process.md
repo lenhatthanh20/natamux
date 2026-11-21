@@ -34,7 +34,7 @@ It does steps 2 to 5: it asks before it makes and pushes the signed tag, waits f
    It checks that:
    - the tag is `vX.Y.Z`, signed by a key in your allowed signers file (`git verify-tag`), and the same object here and on GitHub. It trusts your local, signed tag, not GitHub's: someone who can push could move the tag there, and a `git fetch` can bring their tag here, but they cannot sign it with your key;
    - the tag's commit is on `main`;
-   - the release is a draft, not marked as a pre-release, with exactly the six files and `SHA256SUMS.txt`, and `SHA256SUMS.txt` lists them with the SHA-256 digests GitHub computed;
+   - the release is a draft, not marked as a pre-release, with exactly the six download files, the four SBOM files (`Natamux-<platform>.cdx.json`) and `SHA256SUMS.txt`, and `SHA256SUMS.txt` lists them with the SHA-256 digests GitHub computed;
    - the push Release run of the tag succeeded and built that commit;
    - the build artifacts of that run hash to exactly the lines of `SHA256SUMS.txt`. A stolen token can replace release files and `SHA256SUMS.txt` together, but not the artifacts of a finished run. The artifacts last 3 days (`retention-days` in `release.yml`). After that the script stops; re-run the Release workflow, then sign within 3 days.
 

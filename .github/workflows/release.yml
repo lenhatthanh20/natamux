@@ -263,6 +263,14 @@ jobs:
           test -f "$RUNNER_TEMP/unpacked/natamux.exe"
           scripts/release-smoke.sh "$RUNNER_TEMP/unpacked/natamux-app.exe" \
             "$(cygpath -u "$APPDATA")/Natamux"
+      # The third-party crates of this build, for people who must list what they install.
+      - name: Write the SBOM
+        run: |
+          version=$(sed -n 's/^version = "\([^"]*\)"$/\1/p' crates/natamux-app/Cargo.toml | head -n 1)
+          target=$(rustc -vV | sed -n 's/^host: //p')
+          cargo metadata --locked --format-version 1 --filter-platform "$target" |
+            ${{ matrix.py }} scripts/sbom.py "$version" "$target" > "dist/Natamux-${{ matrix.name }}.cdx.json"
+          test -s "dist/Natamux-${{ matrix.name }}.cdx.json"
       - name: Keep startup logs on failure
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -296,13 +304,15 @@ jobs:
           path: artifacts
           pattern: natamux-*
           merge-multiple: true
-      - name: Check the six assets
+      - name: Check the assets
         run: |
           for file in Natamux-mac-arm64.dmg Natamux-mac-x64.dmg Natamux-win-x64.exe \
-            Natamux-linux-x86_64.AppImage Natamux-linux-amd64.deb Natamux-linux-x64.tar.gz; do
+            Natamux-linux-x86_64.AppImage Natamux-linux-amd64.deb Natamux-linux-x64.tar.gz \
+            Natamux-mac-arm64.cdx.json Natamux-mac-x64.cdx.json Natamux-win-x64.cdx.json \
+            Natamux-linux-x64.cdx.json; do
             test -s "artifacts/$file" || { echo "missing $file" >&2; exit 1; }
           done
-          test "$(find artifacts -maxdepth 1 -type f -name 'Natamux-*' | wc -l)" -eq 6
+          test "$(find artifacts -maxdepth 1 -type f -name 'Natamux-*' | wc -l)" -eq 10
           cd artifacts
           sha256sum Natamux-* > SHA256SUMS.txt
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
