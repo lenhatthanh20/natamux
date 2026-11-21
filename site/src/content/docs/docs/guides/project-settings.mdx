@@ -44,7 +44,7 @@ Under the choices, the tab says what the issue is made of. With `tracker.type` s
 | Field | Shown for | Meaning |
 |---|---|---|
 | **Name** | Every stage | The name in the dashboard. |
-| **Wait for my approval** | Every stage | A dot shows whether it is the default (outline) or changed (filled). When changed, the reset icon (**Use default**) goes back. A `review` or `manual` stage is always on, with "Always on for this kind of stage." For `release` the label is **Open the pull request when I click**. |
+| **Wait for my approval** | Every stage | A dot shows whether it is the default (outline) or changed (filled). When changed, the reset icon (**Use default**) goes back. A `review` or `manual` stage is always on, with "Always on for this kind of stage." For `release` the label is **Open the pull request when I click**, and it is always on. |
 | **Tasks can run it as a workflow** | Agent stages | Gives each task a **Run with a workflow** checkbox on this stage. On by default for Plan and Implement. See [Run a stage as a workflow](/docs/concepts/stages/#run-a-stage-as-a-workflow). |
 | **Tasks can check it on CI** | Testing stages and agent stages without an output file | Gives each task a **Check on CI** checkbox on this stage. On by default for Implement and Automated tests. See [Check a stage on CI](/docs/concepts/stages/#check-a-stage-on-ci). |
 | **End the agent when done** | Context, agent and testing stages outside Terminal 1 | Off by default. When the stage is done, Natamux ends its agent or command and closes its terminal. A stage in Terminal 1 shows "This stage runs in Terminal 1, which cannot be closed." instead. See [End a stage's terminal](/docs/concepts/stages/#end-a-stages-terminal). |

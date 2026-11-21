@@ -4,7 +4,7 @@
 //! help 11, to fit the 296 px column.
 
 use gpui::{AnyElement, Entity};
-use natamux_proto::stages::schema::{Gate, Stage, Step};
+use natamux_proto::stages::schema::{Gate, Stage, StageKind, Step};
 use ui::{Switch, ToggleState, prelude::*};
 
 use super::editor_fields::{
@@ -99,9 +99,10 @@ fn gate_set(on: bool) -> Gate {
 }
 
 /// "Wait for my approval" ("Open the pull request when I click" on the release stage). A stage
-/// that always waits shows it on and off limits.
+/// that always waits shows it on and off limits. So does the release stage: its gate changes
+/// nothing, because only a click opens the pull request.
 pub fn approval_row(stage: &Stage, pipeline: &Entity<PipelineEditor>, cx: &App) -> AnyElement {
-    let always = always_waits(stage);
+    let always = always_waits(stage) || stage.kind == StageKind::Release;
     let (label, help) = approval_text(stage);
     let flag = Flag {
         key: "gate",

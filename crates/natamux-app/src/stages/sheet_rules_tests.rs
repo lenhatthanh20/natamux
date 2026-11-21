@@ -29,7 +29,10 @@ fn the_first_line_names_the_kind_and_the_catalog_sentence() {
 fn the_release_stage_and_a_manual_stage_have_their_own_approval_words() {
     let (label, help) = approval_text(&stage("release", StageKind::Release, Gate::Manual));
     assert_eq!(label, "Open the pull request when I click");
-    assert!(help.is_some());
+    assert_eq!(
+        help,
+        Some("Always on: Natamux never opens a pull request by itself.")
+    );
     let (label, help) = approval_text(&stage("qa", StageKind::Manual, Gate::Manual));
     assert_eq!(label, "Wait for my approval");
     assert_eq!(help, Some("Always on for this kind of stage."));
