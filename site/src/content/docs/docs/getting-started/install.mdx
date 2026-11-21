@@ -7,14 +7,14 @@ sidebar:
 
 import { Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components'
 
-Natamux is a desktop app for macOS (Apple silicon and Intel), Windows and Linux, all on 64-bit. The macOS and Linux apps [update themselves](/docs/guides/desktop-app/#updates); on Windows the app tells you about a new version and you run the new installer.
+Natamux is a desktop app for macOS (Apple silicon and Intel), Windows and Linux, all on 64-bit. The macOS app, the AppImage and the `.deb` [update themselves](/docs/guides/desktop-app/#updates); on Windows and with the `.tar.gz` the app tells you about a new version and you install it.
 
 ## Requirements
 
 - **git.** Natamux makes a git worktree for each task. On Windows, install [Git for Windows](https://git-scm.com/download/win).
 - **Windows only:** Windows 10 version 1809 or later, or Windows 11, on x64. Windows on Arm may run the x64 app, but it is not tested.
 - **At least one coding agent**, installed and logged in: `claude`, `codex`, `gemini`, `copilot`, `cursor-agent`, `opencode`, `qwen`, `droid`, `amp`, `kimi`, `goose`, `aider`, `crush`, `cline`, `kiro-cli` or `muse`. See [Agents](/docs/agents/claude-code/).
-- **`gh` (GitHub CLI)**, optional. Needed for opening pull requests, importing issues and CI status. Run `gh auth login` once.
+- **`gh` (GitHub CLI)**, optional. Needed for opening pull requests, pull request status, importing issues and CI status. Run `gh auth login` once.
 
 ## Install with one command
 

@@ -2,6 +2,8 @@
 
 The desktop app finds a new release, downloads it in the background, and installs it when you restart, the way other desktop apps do. Build order step 11, the update part. Signing comes later.
 
+> History: the sections below were written for the Electron app. The Rust app keeps the flow but not those parts: it starts the system `curl` (found through `PATH`, reads `~/.curlrc` and proxy variables) instead of `net.request` and `net.fetch`, shows the state in the status bar and in **Settings → General → Updates** instead of a popup, and has no `pnpm start` or `NATAMUX_DESKTOP_SMOKE` case. Offline mode (`NATAMUX_OFFLINE=1`) refuses every check, also the manual one. See `crates/natamux-update/src/transport.rs` and `crates/natamux-app/src/app/update.rs`.
+
 ## Why not electron-updater
 
 - On macOS, electron-updater installs through Squirrel.Mac. Squirrel installs a new bundle only when it satisfies the code requirement of the running app. An ad hoc signature (the app has no Developer ID yet) names the hash of one build, so no later build satisfies it. Updates would fail on every Mac.
@@ -10,7 +12,7 @@ The desktop app finds a new release, downloads it in the background, and install
 
 ## Where the update comes from
 
-- Feed: `HEAD https://github.com/lenhatthanh20/natamux/releases/latest`. GitHub redirects it to `/releases/tag/<tag>` of the newest release that is not a draft and not a pre-release. The app stops at each redirect (`net.request` with `redirect: 'manual'`; `net.fetch` leaves `Response.url` empty) and reads the tag from its address. When the repository moves, GitHub redirects the old address too.
+- Feed: `HEAD https://github.com/lenhatthanh20/natamux/releases/latest`. GitHub redirects it to `/releases/tag/<tag>` of the newest release that is not a draft and not a pre-release. The Rust app sends the `HEAD` request through `curl` and reads the tag from the redirect address (Electron used `net.request` with `redirect: 'manual'`). When the repository moves, GitHub redirects the old address too.
 - Not the REST API (`api.github.com`): it allows 60 requests an hour for each address without a login, and shared networks and CI runners reach that. The dry run in CI got `403` from it.
 - Files: `https://github.com/<owner>/<repo>/releases/download/<tag>/<name>`, from the owner and repository in the address the redirect ends at.
 - The release must carry `SHA256SUMS.txt` (`release.yml` writes it), `SHA256SUMS.txt.minisig` (`scripts/sign-release.sh` adds it, see `docs/release-process.md`) and the file for the platform:
@@ -30,8 +32,8 @@ The desktop app finds a new release, downloads it in the background, and install
 - When **Check for Updates Automatically** is ticked: 30 seconds after the app starts, then every 6 hours while it runs.
 - **Check for Updates…** in the menu checks now. It is on the app menu on macOS and on the **Help** menu on Linux and Windows.
 - A manual check opens a small popup over the window at once (see Popup below). Timed checks show none.
-- **Check for Updates Automatically** (a tick in the same menu, and in the dashboard's Settings dialog) turns the timed checks off and on. It is saved as `autoUpdate` in `<user data>/settings.json`, off by default: only `true` turns it on. A manual check always works.
-- No check when the app is not packaged (`pnpm start`) or in smoke mode (`NATAMUX_DESKTOP_SMOKE=1`).
+- **Check for Updates Automatically** (a tick in the same menu, and in the dashboard's Settings dialog) turns the timed checks off and on. It is saved as `autoUpdate` in `<user data>/settings.json`, off by default: only `true` turns it on. A manual check works unless offline mode is on.
+- Electron only: no check when the app was not packaged or in smoke mode. The Rust app has neither case.
 
 ## What counts as newer
 
@@ -57,6 +59,8 @@ idle → checking → up-to-date
 
 ## Popup
 
+Electron only. The Rust app has no popup; the status bar shows **Checking for updates…** and the download.
+
 A manual check shows a small frameless window over the main window (on the screen when the main window is closed) until the first dialog:
 
 - `checking`: a spinner, **Checking for updates…** and the running version.
@@ -70,7 +74,7 @@ A manual check shows a small frameless window over the main window (on the scree
 
 - First the app downloads `SHA256SUMS.txt` and `SHA256SUMS.txt.minisig` (each refused above 64 KB) and checks the signature (`fetchSignedSums` in `release-signature.ts`): by `RELEASE_SIGNER`, trusted comment exactly `natamux <tag>` of the release the redirect led to, and that version newer than the running one. A missing signature or any failed check stops here, with the reason in the log and, for a manual check, in the dialog. There is no unsigned fallback. `docs/release-process.md` lists every check.
 - Folder: `<user data>/updates/<version>/`. Before a download the app removes the other version folders there.
-- The file downloads to `<name>.part` with `net.fetch`, which uses the system proxy, then is renamed.
+- The file downloads to `<name>.part` with `curl`, which uses the system proxy settings, then is renamed.
 - The app compares the SHA-256 of the file with its line in the signed `SHA256SUMS.txt`. A missing line or a different hash removes the file and fails.
 - `mac` only:
   1. `hdiutil attach -nobrowse -readonly -mountpoint <folder>/mnt <dmg>`;

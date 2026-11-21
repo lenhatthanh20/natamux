@@ -212,7 +212,7 @@ The pull request needs the GitHub CLI (`gh`) logged in on the machine that runs 
 
 The **Pull request** section in the details panel shows the pull request link and a summary such as `open, checks pass`. The states are open, draft, merged and closed. The checks are **checks pass**, **checks fail** and **checks running**. A pull request with no checks shows only its state.
 
-While a dashboard is open, Natamux asks GitHub about open pull requests once a minute, or every 5 minutes once all checks have finished. Click **Check now** to ask at once. When the pull request is merged and the task is at review or later, the task moves to Done.
+While a dashboard or the app is connected, Natamux asks GitHub about open and draft pull requests and pushed branches every 60 seconds while checks are pending or a pushed branch has no pull request, and every 5 minutes otherwise, and when an agent stops. Click **Check now** to ask at once. When the pull request is merged and the task is at review or later, the task moves to Done.
 
 ## History tab
 

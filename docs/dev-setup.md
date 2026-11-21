@@ -24,7 +24,7 @@ pnpm --dir site install --ignore-workspace --frozen-lockfile
 pnpm --dir site build
 ```
 
-`.github/workflows/rust.yml` checks Rust, operating systems, the daemon image and the live daemon tests. `.github/workflows/release.yml` builds six native release assets, and runs a dry run on pull requests that change packaging and on release pull requests. Rust pull requests target `main`. Only a push to `main` saves Cargo caches. `rust-ok` must be green to merge into `main`.
+`.github/workflows/rust.yml` checks Rust, operating systems, the daemon image and the live daemon tests. `.github/workflows/release.yml` builds six native release assets and four SBOM files. It runs only for `v*` tags and by hand (`tag=main` for a dry run), never on pull requests. Rust pull requests target `main`. Only a push to `main` saves Cargo caches. `rust-ok` must be green to merge into `main`.
 
 Every action in `.github/workflows/` is pinned to a full commit SHA. When adding an action, pin it the same way.
 

@@ -11,14 +11,15 @@ This page summarizes [SECURITY.md](https://github.com/lenhatthanh20/natamux/blob
 
 - Natamux has no account, no server of its own and no telemetry. It sends no usage data, crash reports or analytics.
 - Your data stays on your machine:
-  - Tasks, history and stage files: `.natamux/` in each repository.
-  - Worktrees: `.natamux/worktrees/`, or the folder you set.
-  - Desktop app token, update setting, downloaded updates and logs: its user data folder (`~/Library/Application Support/Natamux` on macOS, `%APPDATA%\Natamux` on Windows, `~/.config/Natamux` on Linux).
-- Data leaves your machine when you or an agent you start makes it happen, and when the daemon reads pull request status:
+  - Tasks, history and stage files: `data/` of the desktop app's user data folder. Only a daemon started by hand in a repository uses `.natamux/` there.
+  - Worktrees: `data/worktrees/`, or the folder you set.
+  - Desktop app token, update and offline settings (`settings.json`), downloaded updates and logs: its user data folder (`~/Library/Application Support/Natamux` on macOS, `%APPDATA%\Natamux` on Windows, `~/.config/Natamux` on Linux).
+- Data leaves your machine when you or an agent you start makes it happen, and for the automatic items below:
   - Coding agents send your prompts and code to their own companies, under their terms. Natamux does not see or change that.
-  - GitHub actions (push, pull request, issue import) use your own `git` and `gh` login.
-  - While the app is open and a task has an open pull request or a pushed branch, the daemon runs your `gh` every 1 to 5 minutes to read pull request status.
-  - When you tick **Check for Updates Automatically** (off by default), the desktop app asks `github.com` for the latest release about 30 seconds after it starts and every 6 hours, and downloads a new version from GitHub. The request carries no data about you or your tasks; GitHub sees your IP address and the app version. Untick it to stop the timed checks. See [Updates](/docs/guides/desktop-app/#updates).
+  - GitHub actions (push, pull request, issue import) use your own `git` and `gh` login, with `gh auth git-credential` as the credential helper for github.com. Some run by themselves: `git fetch` when a workspace is made, `git ls-remote` when the New workspace dialog lists remote branches, `git pull --ff-only` before a stage that follows a merged subtask, and `gh issue create` when `tracker.createIssue` is `on-spec-approved` or `on-pr`.
+  - While a dashboard or the app is connected and a task has an open or draft pull request or a pushed branch, the daemon runs `gh api graphql` every 60 seconds (checks pending, or a pushed branch without a pull request) or every 5 minutes, and `gh pr list` and `gh pr view` when an agent stops.
+  - For a task with **Check on CI** ticked (off by default), each CI round force-pushes a snapshot commit of all files git does not ignore, also uncommitted ones, to `natamux-ci/<branch>` on `origin`. Natamux deletes that branch when the task ends or is deleted.
+  - When you tick **Check for Updates Automatically** (off by default), the desktop app starts the system `curl` to ask `https://github.com/lenhatthanh20/natamux/releases/...` for the latest release about 30 seconds after it starts and every 6 hours, and downloads a new version from GitHub. The request carries no data about you or your tasks; GitHub sees your IP address and the app version. Untick it to stop the timed checks. See [Updates](/docs/guides/desktop-app/#updates).
 
 Every connection, and how to turn them off with offline mode, is in [For a security review](/docs/help/security-review/).
 
@@ -26,15 +27,15 @@ Every connection, and how to turn them off with offline mode, is in [For a secur
 
 An agent can read and change files and run commands as your user. Natamux does not sandbox agents. Treat an agent like a person typing in your terminal, and use each agent's own permission settings.
 
-Each task works in its own git worktree. Natamux never pushes, merges or deletes a branch unless you click the button or run the command.
+Each task works in its own git worktree. Natamux pushes, merges or deletes a branch only when you click the button or run the command. The exceptions are the automatic git and `gh` commands and the CI snapshot push listed above.
 
 ## The daemon
 
-- It listens on `127.0.0.1` (loopback) by default. Only the CI test container listens on all interfaces inside its container, and `compose.prod.yaml` publishes the port to loopback only.
-- Every API request needs a token in an `Authorization: Bearer` header. `/health` is the only exception.
+- It listens on `127.0.0.1` (loopback) by default. `NATAMUX_HOST` is not checked: any address works, including `0.0.0.0`. The Docker image sets `0.0.0.0` inside its container, and `compose.prod.yaml` publishes the port on `${NATAMUX_BIND:-127.0.0.1}`, which is loopback unless you change it.
+- Every API request needs a token in an `Authorization: Bearer` header. `GET /health` needs no token, and a terminal WebSocket uses a one-time ticket.
 - Without `NATAMUX_TOKEN`, the daemon makes a random token for each run and prints it once.
-- The token travels in a header, never a cookie, so other websites cannot use your session. Terminals open with a one-time ticket that expires after 30 seconds.
-- The daemon checks the `Host` header against an allow-list (`127.0.0.1`, `localhost`, `::1`, plus `NATAMUX_ALLOWED_HOSTS`) and the `Origin` of WebSocket handshakes. A web page on another site cannot reach it, not even by DNS rebinding.
+- The token travels in a header, never a cookie, so other websites cannot use your session. `/events` also accepts the token as `?token=` in the address; a reverse proxy can log it. Terminals open with a one-time ticket that expires after 30 seconds.
+- The daemon checks the `Host` header against an allow-list (`127.0.0.1`, `localhost`, `::1`, plus a non-wildcard `NATAMUX_HOST` and `NATAMUX_ALLOWED_HOSTS`) and the `Origin` of WebSocket handshakes. A web page on another site cannot reach it, not even by DNS rebinding.
 - Do not run the daemon on a network address without TLS. Put a reverse proxy with TLS in front of it.
 - Task terminals get an [agent token](/docs/reference/http-api/#the-agent-token), not the daemon's token. It is per task and lives in memory only. An agent cannot approve, skip or pass a stage, change project settings or approve repo commands, and what it does is recorded as the agent's. The `natamux` command in a task terminal uses it too. This stops an agent that follows bad instructions, for example from a web page or an issue. A subtask stays in its parent's project, and an agent cannot fan out a task, send the events only the daemon sends (`stage.checked`, `stage.started`, `stage.reopened`, `pr.merged`) or report a command stage done. Every send-back by an agent counts for `maxSendBacks`. It is not a sandbox: an agent runs as your user, so it can still read the daemon's token file.
 
@@ -52,6 +53,7 @@ Each task works in its own git worktree. Natamux never pushes, merges or deletes
 - The app folder and the daemon data folder are private to your user (mode `0700`).
 - The desktop app keeps its token in its user data folder, readable only by your user (mode `0600`).
 - The scripts that start agents are written with mode `0600`.
+- Modes `0700` and `0600` are set on macOS and Linux only. On Windows the folders keep their default permissions.
 - The desktop app is native: it has no web page and no Sign out.
 
 ## Updates
@@ -63,17 +65,17 @@ Each task works in its own git worktree. Natamux never pushes, merges or deletes
   RWSgtwsXHppEP5n4kgg1Q3yNIYODQNGsMQBKF93tjSRwzL1BrjeGoBpo
   ```
 
-- Before it downloads an update, the app checks that signature, and that it was made for that release (`natamux <tag>`) and for a version newer than its own. A missing or wrong signature stops the update. The Linux `.deb` update checks the hash again as root before it installs. Then the app compares the SHA-256 of the download with `SHA256SUMS.txt`. On macOS it also checks the new app's signature and version before the swap.
+- Before it downloads an update, the app checks that signature, and that it was made for that release (`natamux <tag>`) and for a version newer than its own. A missing or wrong signature stops the update. The Linux `.deb` update checks the hash again as root before it installs. Then the app compares the SHA-256 of the download with `SHA256SUMS.txt`. On macOS it also runs `codesign --verify --deep --strict`, which checks that the new app's code signature is intact, not who signed it (the minisign signature proves who published), and its version, before the swap.
 - If the signing key leaks, [SECURITY.md](https://github.com/lenhatthanh20/natamux/blob/main/SECURITY.md) has the plan: an advisory, a new key, and a manual reinstall for users. A second key kept offline is planned to avoid the reinstall.
 - Versions up to v0.1.23 do not check the signature, so update to a newer version. Until the app is signed with a Developer ID, a manual download is checked as in [Verify the download](/docs/getting-started/install/#verify-the-download).
 
 ## Hooks
 
-For each agent it starts, Natamux adds hook settings that call `natamux hook` or the daemon's local address, with the task id and the token from the terminal's environment. For most agents the hook file goes into the task's worktree and is kept out of git; the file of each agent is in the table of [Agents and hooks](/docs/concepts/agents-and-hooks/). For Codex, Natamux passes `--dangerously-bypass-hook-trust`. See [Agents and hooks](/docs/concepts/agents-and-hooks/).
+For each agent it starts, Natamux adds hook settings that call `natamux hook` or the daemon's local address, with the task id and the token from the terminal's environment. For most agents the hook file goes into the task's worktree and is kept out of git; the file of each agent is in the table of [Agents and hooks](/docs/concepts/agents-and-hooks/). For Codex, Natamux passes `--dangerously-bypass-hook-trust`; Codex then also skips its trust review of the session's other hooks. See [Agents and hooks](/docs/concepts/agents-and-hooks/).
 
 ## Folder trust
 
-In an approved repo, Natamux marks each task's worktree as trusted for the agent it starts, so the agent does not ask and the repo's own agent config (`.codex`, `.cursor`, `.claude`, MCP servers) runs. For two agents this writes files outside the worktree:
+In an approved repo, Natamux marks each task's worktree as trusted for the agent it starts, so the agent does not ask and the repo's own agent config (`.codex`, `.cursor`, `.claude`, MCP servers) runs. For two agents this writes files outside the worktree. Gemini CLI gets `GEMINI_CLI_TRUST_WORKSPACE=true` and Muse Code gets `--trust-workspace`, with no file written:
 
 - Cursor CLI: `~/.cursor/projects/<folder>/.workspace-trusted` (under `$CURSOR_DATA_DIR` when it is set).
 - Copilot CLI: `~/.copilot/config.json`, or `$COPILOT_HOME/config.json` when it is set. Natamux adds the worktree to its `trustedFolders`.
@@ -92,7 +94,7 @@ In an approved repo, by default Natamux starts each agent with a flag that skips
 
 ## The desktop app is not notarized
 
-The apps are not signed with an Apple Developer ID or a Windows certificate, and the macOS app is not notarized, so macOS warns on first open. Release macOS apps are signed with a Natamux self-signed certificate; only dry runs are ad hoc. Windows and Linux builds are not signed. Download them only from the repository's Releases page.
+The apps are not signed with an Apple Developer ID or a Windows certificate, and the macOS app is not notarized, so macOS warns on first open. Release macOS apps are signed with a self-made certificate; only dry runs are ad hoc. Windows and Linux builds are not signed. Download them only from the repository's Releases page. The install script removes the macOS quarantine flag. It checks the signature of `SHA256SUMS.txt` only when `minisign` is installed; otherwise it prints a warning and checks the hash alone.
 
 ## Report a vulnerability
 

@@ -7,7 +7,7 @@ sidebar:
 
 ## Does Natamux send my code anywhere?
 
-No. Natamux has no account, no server of its own and no telemetry. Your code leaves your machine only when something you start makes it happen: the coding agents send prompts and code to their own companies, and git and `gh` talk to GitHub when you push or open a pull request. See [Security and privacy](/docs/help/security-and-privacy/).
+No. Natamux has no account, no server of its own and no telemetry. Your code leaves your machine when something you start makes it happen: the coding agents send prompts and code to their own companies, and git and `gh` talk to GitHub when you push or open a pull request. Natamux also runs your `gh` by itself to read pull request status. For a task with **Check on CI** ticked, each CI round force-pushes a snapshot of all files git does not ignore, also uncommitted ones, to `natamux-ci/<branch>` on `origin`. Offline mode turns these off. See [Security and privacy](/docs/help/security-and-privacy/).
 
 ## Which agents does it support?
 
@@ -72,7 +72,7 @@ Worktrees are in `worktrees/` inside the data folder, unless you set `NATAMUX_WO
 
 ## Does it change my main checkout?
 
-No. Each task works in its own git worktree and branch. Natamux never pushes, merges or deletes a branch unless you click the button or run the command.
+No. Each task works in its own git worktree and branch. Natamux pushes, merges or deletes a branch only when you click the button or run the command. The exception is the CI snapshot push of a task with **Check on CI** ticked.
 
 ## What happens when I quit the app?
 
@@ -80,7 +80,7 @@ Quitting stops the daemon and every agent and terminal. The app asks first. Task
 
 ## Does it update itself?
 
-Yes, from version 0.1.2. The desktop app checks GitHub for a new release, downloads it in the background and installs it when you restart. Version 0.1.1 and older cannot update, so install 0.1.2 by hand once. See [Updates](/docs/guides/desktop-app/#updates).
+Yes, from version 0.1.2, for the macOS app, the AppImage and the `.deb`. The `.tar.gz` and Windows do not update themselves. Timed checks are off by default: tick **Check for Updates Automatically**, or choose **Check for Updates…**. The app then asks GitHub through the system `curl`, downloads a new release and installs it when you restart. Offline mode turns the update check off, also the manual one. Version 0.1.1 and older cannot update, so install 0.1.2 by hand once. See [Updates](/docs/guides/desktop-app/#updates).
 
 ## How do I uninstall it?
 

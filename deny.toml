@@ -10,9 +10,9 @@ ignore = [
   { id = "RUSTSEC-2024-0436", reason = "paste unmaintained; gpui's dependency metal (macOS) uses it (macro only), no known hole. Review by 2026-12-31." },
   { id = "RUSTSEC-2026-0206", reason = "rustybuzz unmaintained; gpui uses it through usvg, no known hole. Review by 2026-12-31." },
   { id = "RUSTSEC-2026-0192", reason = "ttf-parser unmaintained; gpui uses it (also through fontdb and rustybuzz), no known hole. Review by 2026-12-31." },
-  { id = "RUSTSEC-2026-0371", reason = "zbus_names unmaintained; gpui_platform's Linux crates (accessibility, keyring) use it, no known hole. Review by 2026-12-31." },
-  { id = "RUSTSEC-2026-0370", reason = "zvariant unmaintained; gpui_platform's Linux crates (accessibility, keyring) use it, no known hole. Review by 2026-12-31." },
-  { id = "RUSTSEC-2026-0372", reason = "zvariant_derive unmaintained; gpui_platform's Linux crates (accessibility, keyring) use it, no known hole. Review by 2026-12-31." },
+  { id = "RUSTSEC-2026-0371", reason = "zbus_names unmaintained; gpui_platform's Linux crates (accessibility, portals, notifications) use it, no known hole. Review by 2026-12-31." },
+  { id = "RUSTSEC-2026-0370", reason = "zvariant unmaintained; gpui_platform's Linux crates (accessibility, portals, notifications) use it, no known hole. Review by 2026-12-31." },
+  { id = "RUSTSEC-2026-0372", reason = "zvariant_derive unmaintained; gpui_platform's Linux crates (accessibility, portals, notifications) use it, no known hole. Review by 2026-12-31." },
   { id = "RUSTSEC-2026-0543", reason = "chrono unmaintained, no maintained release exists; only gpui and scheduler use it, no known hole. Review by 2026-12-31." },
 ]
 

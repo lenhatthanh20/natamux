@@ -150,8 +150,8 @@ natamux-app (GPUI, desktop)   web dashboard (React, browser and phone)   natamux
 Each phase ends with a release, and the gate must pass before the next phase starts. Electron keeps shipping until phase 5; during the move it gets only bug fixes.
 
 Branches (owner, 2026-10-22):
-- `dev` holds the Rust work. Every Rust PR targets `dev`. It was made from `main` at e93dba6.
-- `main` stays the Electron app and keeps its releases from `scripts/release.sh`.
+- History: `dev` held the Rust work, and every Rust PR targeted `dev`. Today `main` is the Rust app and every Rust PR targets `main`.
+- History: `main` stayed the Electron app until the Rust app replaced it in v1.0.0.
 - Merge `main` into `dev` after each Electron release, so fixes reach both.
 - `dev` merges into `main` only at the phase 5 cut over.
 - CI of `dev` is Rust only (T-0165): `rust.yml`, `rust-cache.yml`, `native-beta.yml`, and `site.yml` for `site/`. The Node workflows (`ci.yml`, `e2e.yml`, `desktop.yml`, `release.yml`) are deleted on `dev` and stay on `main`. When a merge of `main` into `dev` brings a change to one of them, it is a modify/delete conflict: keep the delete. `rust-cache.yml` is on both branches, the same file.
@@ -209,7 +209,7 @@ Done 2026-10-24 (T-0156, its PR into `dev`): every screen built, the app restyle
 Decisions (owner, 2026-10-22):
 
 - The first task is the shared foundation and screen 1 only. Screens 2 to 7 each get their own task and spec.
-- Beta channel: a GitHub pre-release `native-beta.N` made by hand from a green run of `dev` (`.github/workflows/native-beta.yml`), with the attested CI build. macOS arm64, unsigned until the Apple account exists. `scripts/release.sh` and the releases of `main` do not change.
+- Beta channel: a GitHub pre-release `native-beta.N` made by hand from a green run of `dev` (`.github/workflows/native-beta.yml`), with the attested CI build. macOS arm64, not signed with an Apple Developer ID. `scripts/release.sh` and the releases of `main` do not change.
 - Fonts (Inter, JetBrains Mono) and the Lucide icons that a screen uses live in `crates/natamux-app/assets`, with their licenses. No new crate.
 - A screen's screenshot baselines come from a CI run's artifact, after the owner signs the screen off. The compare step only reports until then.
 
@@ -306,14 +306,14 @@ The owner's Mac is a company Mac (owner, 2026-10-22): MDM profiles, a VPN and en
 
 - **Default: CI builds, the owner runs them.** CI builds, tests and attests; the owner downloads the artifact, runs `gh attestation verify`, then runs the app. No build script or proc macro runs on the Mac.
 - Running the app still runs the runtime code of every crate in it, as the Electron app does with npm packages today. `cargo vet`, `cargo deny` and the 7-day cooldown lower that risk; they do not remove it.
-- The app is unsigned until the Apple account exists. After `gh attestation verify`, clear the quarantine flag (`xattr -dr com.apple.quarantine Natamux.app`). If MDM blocks unsigned apps, ask IT before going further.
+- The app is not signed with an Apple Developer ID. Release macOS apps use a self-made certificate and are not notarized. After `gh attestation verify`, clear the quarantine flag (`xattr -dr com.apple.quarantine Natamux.app`). If MDM blocks unsigned apps, ask IT before going further.
 - Optional: Docker for headless crates, with the hardened command below. The run step has no network, so the VPN is out of reach. Owner, 2026-10-24: Rust builds and checks run on CI only; this path stays written down but unused.
 - `natamux-dev` user: only on a personal Mac, or on the company Mac after IT says yes.
 
 | Where | What runs there | Keys |
 |---|---|---|
 | Owner account (today's login) | 1Password, `release.sh`, `sign-release.sh`, `gh attestation verify`, running verified CI builds | minisign key, SSH tag key, 1Password |
-| GitHub Actions | All builds and checks, the app artifact per PR (phase 1 on), release builds, `attest-build-provenance` | none of the owner's keys |
+| GitHub Actions | All builds and checks, the app artifact per PR (phase 1 on), release builds, `attest-build-provenance` | the macOS signing certificate (`MACOS_SIGN_P12`, `MACOS_SIGN_P12_PASSWORD`); not the minisign key or the tag key |
 | Docker, `rust@sha256:<pinned>` (optional) | `cargo test` of headless crates (L0–L3) and `xtask` | none |
 | `natamux-dev` macOS user, standard, not admin (personal Mac, or company Mac with IT's OK) | Xcode, rustup, `cargo build` / `cargo run` of the app with full Metal, Claude Code sessions that write Rust | none: no 1Password, no iCloud, no SSH signing key, own GitHub token with repo scope only |
 
@@ -342,9 +342,9 @@ Setup steps (each needs the owner's OK, because they install software):
    - Turn the VPN off while it builds, if the VPN allows it.
 3. Repo hygiene in CI:
    - commit `Cargo.lock`; build with `--locked`;
-   - `deny.toml` with `unknown-registry = "deny"`, `unknown-git = "deny"`, and an allow list of crates.io and `github.com/zed-industries/zed`;
+   - `deny.toml` with `unknown-registry = "deny"`, `unknown-git = "deny"`, and an allow list of crates.io and forks under `github.com/lenhatthanh20` (today);
    - `cargo audit`;
-   - `cargo vet` with audits imported from Mozilla, Google and the Bytecode Alliance. The list of checks today: `dev-setup.md`, "Dependencies".
+   - `cargo vet` with audits imported from nine organizations (today). The list of checks today: `dev-setup.md`, "Dependencies".
 4. Dependency updates: through Dependabot only, after a 7-day cooldown, one reviewed PR at a time. The 2026 bad versions were live for under two hours.
 5. Releases: the owner downloads CI artifacts only, runs `gh attestation verify`, then signs as today. `sign-release.sh` already re-checks every file against the run's artifacts.
 6. If a bad crate ever ran in the owner account: rotate the minisign key, the SSH tag key and 1Password items, and treat the Mac as compromised.
@@ -356,7 +356,7 @@ A macOS VM (Tart, UTM) gives stronger isolation, but GPU access in guests is lim
 | Risk | Plan |
 |---|---|
 | Vietnamese IME in GPUI | Phase 1 gate. Fix in a fork and upstream; stop the move if it cannot be fixed |
-| GPUI and Zed crates change without notice | One pinned rev, monthly upgrade PR, screenshot tests as the gate |
+| GPUI and Zed crates change without notice | One pinned rev of a frozen fork (no monthly upgrade), screenshot tests as the gate |
 | Zed's `terminal` assumes a local PTY | Phase 1 gate (item 3); adapter crate if needed |
 | xterm.js snapshot compatibility (web clients replay a snapshot) | `natamux-screen` writes the same escape sequence format; `terminal-cache` E2E specs as the gate |
 | Long feature freeze | Electron gets fixes only; the native app ships screen by screen as a beta |

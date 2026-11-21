@@ -1,4 +1,4 @@
-# The Zed crates Cargo.lock may hold, one per line. scripts/zed-lock-check.py reads it.
+# Cargo.lock must hold exactly these Zed crates, one per line. scripts/zed-lock-check.py reads it.
 collections
 derive_refineable
 gpui
