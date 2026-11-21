@@ -9,7 +9,7 @@ Find the problem, then follow the fix. If nothing helps, check the [daemon log](
 
 ## macOS says the app is blocked
 
-The app is not signed with an Apple certificate, so macOS blocks it the first time.
+The app has no Apple Developer ID signature and is not notarized, so macOS blocks it the first time.
 
 1. Open Natamux once.
 2. Open **System Settings → Privacy & Security** and click **Open Anyway**.
@@ -120,7 +120,7 @@ Natamux refuses to remove a worktree that has files not committed: "T-0001 has N
 2. Commit the changes, or discard them in the terminal (`git restore .` and `git clean -fd` inside the worktree).
 3. Remove the workspace again.
 
-The branch is deleted only when it is fully merged. Otherwise it stays, and you delete it with git when you are sure.
+The branch is deleted only when git says it is fully merged (`git branch -d`). A branch that GitHub merged with a squash or a rebase also goes, when the task's pull request is merged and origin has every commit of the branch. Otherwise it stays, and you delete it with git when you are sure. Deleting a task with the force choice deletes its branch, merged or not.
 
 ## Push or pull request fails
 

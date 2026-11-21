@@ -55,7 +55,7 @@ const files = [
             <p class="section-kicker">Download</p>
             <h2 id="download-title">Download Natamux as a file</h2>
             <p>
-              The fastest way is the <a href={`${base}#download`}>install command</a>: it checks the file and handles
+              The fastest way is the <a href={`${base}#download`}>install command</a>: it checks the signature of the checksums (when <code>minisign</code> is installed) and the file, and handles
               the first start for you. Download a file here when you cannot run it.
             </p>
           </div>
@@ -117,7 +117,7 @@ const files = [
 
           <div class="dl-all">
             <table>
-              <caption>Every file of the <a href={`${repo}/releases/latest`}>latest release</a></caption>
+              <caption>The download files of the <a href={`${repo}/releases/latest`}>latest release</a></caption>
               <thead><tr><th scope="col">System</th><th scope="col">File</th></tr></thead>
               <tbody>
                 {
@@ -134,6 +134,7 @@ const files = [
                 </tr>
               </tbody>
             </table>
+            <p>The signature <code>SHA256SUMS.txt.minisig</code> is next to the checksums on the release page. From the next release, each platform also has an SBOM file, <code>Natamux-&lt;platform&gt;.cdx.json</code>.</p>
             <ul class="dl-links">
               <li><a href={`${docs}getting-started/install/#verify-the-download`}>Verify the download</a> with its checksum and signature</li>
               <li><a href={`${docs}getting-started/install/`}>Install guide</a> and <a href={`${docs}help/changelog/`}>the changelog</a></li>

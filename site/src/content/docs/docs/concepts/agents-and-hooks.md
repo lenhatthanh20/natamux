@@ -111,7 +111,7 @@ Most agents ask whether you trust a folder the first time they start in it. Each
 | Qwen Code | Nothing: folder trust is off by default. Its approval of project hooks is a separate question, skipped by `--approval-mode yolo`. |
 | The others | Nothing. No trust question is documented. |
 
-If a file cannot be written, the agent starts and asks as before. Natamux does not remove these entries when it removes a task.
+If a file cannot be written, the agent starts and asks as before. Natamux sets trust only in an approved repo. When it removes the worktree, it removes the Cursor and Copilot trust entries again.
 
 ## Launch failures
 

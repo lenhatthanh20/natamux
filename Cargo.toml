@@ -77,14 +77,12 @@ unicode-segmentation = "1.13.3"
 url = "2.5.7"
 yaml-rust2 = "0.13.0"
 
-# Zed crates: all at one rev, the v1.24.2 release (2026-10-14) plus patches on the owner's fork
-# (branch natamux/display-only-input-v1.24.2): a display-only terminal gives its input to the app,
-# parses its output off the main thread, and wakes at a pace the app sets. Two more commits fetch
-# every git dependency from the owner's forks, as below. SQLite is updated to the same patched
-# library as rusqlite so both consumers link one copy.
-# One more commit (branch natamux/trim-deps-v1.24.2) cuts what Natamux does not use: image formats
-# other than gif, jpeg, png and webp, the screen capture crate, the wasm target and wgpu backends
-# other than gles and vulkan. A second one makes the Linux keyring client (oo7) and proptest opt-in.
+# Zed crates: all at one rev of the owner's fork (see the URL below), the v1.24.2 release
+# (2026-10-14) with Natamux patches. Natamux keeps only the 18 crates of scripts/zed-lock-crates.txt
+# from it; the terminal crate is not one of them. The patches fetch every git dependency from the
+# owner's forks, cut what Natamux does not use (image formats other than gif, jpeg, png and webp,
+# the screen capture crate, the wasm target, wgpu backends other than gles and vulkan) and make the
+# Linux keyring client (oo7) and proptest opt-in.
 # Frozen: the fork is Natamux's own copy, no routine upgrades to newer Zed releases. It changes only
 # for a security fix, an OS-forced fix or a Natamux patch: a fork commit and a new rev, in its own
 # PR, which checks again that the kept crates are Apache-2.0 (docs/plan-rust-migration.md).

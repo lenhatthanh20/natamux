@@ -23,7 +23,7 @@ If the daemon stops unexpectedly, the app shows an error and offers to restart t
 | **Settings…** (`Cmd/Ctrl+,`) | Opens Settings, including the automatic update switch |
 | **What's New** | Shows what changed in the running version. Above the item below |
 | **Check for Updates…** | Looks for a new version now. On the app menu on macOS, the **Help** menu on Windows and Linux |
-| **Check for Updates Automatically** | Off by default. Tick it to check every 6 hours. Next to the item above |
+| **Check for Updates Automatically** | Off by default. Tick it to check about 30 seconds after the app starts, then every 6 hours. Next to the item above. Also in **Settings → General → Updates** |
 
 The app also has View, Task and Tools menus. Links to release pages open in your browser.
 
@@ -57,7 +57,7 @@ The app updates itself, the way other desktop apps do. It looks for a new versio
 
 1. You choose **Check for Updates…**, or, with timed checks on, about 30 seconds after the app starts and then every 6 hours, the app asks GitHub for the latest release.
 2. The app checks the signed release and downloads the right file for an install it can update itself. The status bar shows what it does: **Checking for updates…** (for a check you asked for), then **Downloading 1.0.6 · 42 MB**. **Check for Updates…** is off while a check or download runs.
-3. It checks the signature of `SHA256SUMS.txt` of the release, then the download against `SHA256SUMS.txt`. On macOS it also checks the new app's signature and version. A release without a valid signature is not installed.
+3. It checks the signature of `SHA256SUMS.txt` of the release, then the download against `SHA256SUMS.txt`. On macOS it also runs `codesign --verify --deep --strict`, which checks that the code signature is intact, not who signed it; the signature of `SHA256SUMS.txt` proves who published. It checks the version too. A release without a valid signature is not installed.
 4. The status bar shows **Restart to update**, and the menu has **Restart to Update to 1.0.6**, while the downloaded update is ready. After **Check for Updates…**, a dialog also offers **Restart Now** or **Later**. A timed check never opens a dialog: it shows one message with **Restart Now** and **What's New** (the release page). A ready update is not checked or downloaded again; **Check for Updates…** shows its dialog again.
 5. **Restart Now**, or a click on **Restart to update**, asks first if an editor has unsaved drafts. Then the app installs the new version and opens again. Tasks, worktrees and settings stay.
 6. The first start of the new version shows **What's new in Natamux 1.0.6**: the release notes of that version, with a link to the full changelog. It shows once. **What's New** in the menu, the command palette or Settings shows it again.
@@ -92,7 +92,7 @@ The app keeps its files in the user data folder.
 
 | Path in that folder | Holds |
 |---|---|
-| `settings.json` | Whether timed update checks are on. An older version also kept its repository here |
+| `settings.json` | Whether timed update checks are on (`autoUpdate`), and `offline`. An older version also kept its repository here |
 | `daemon-token` | The daemon token, readable only by you. It stays the same between runs |
 | `daemon-port` | The running daemon's loopback port, for the Rust CLI |
 | `data/` | Tasks, the task index and worktrees (`data/tasks`, `data/worktrees`) |
@@ -117,6 +117,7 @@ Open `logs/daemon.log` to read the daemon's output. If it stops, the app shows a
 | Variable | Use |
 |---|---|
 | `--smoke` | Starts the app and daemon, checks the window and quits. For CI, not daily use |
+| `NATAMUX_OFFLINE` | `1` turns [offline mode](/docs/help/security-review/#offline-mode) on: no update check, no `gh`, no `git` network call. Restart to change it |
 | `NATAMUX_<AGENT>_COMMAND` | The program that starts an agent, for example `NATAMUX_CLAUDE_COMMAND`. Set it in the environment the app starts from. See [Environment variables](/docs/reference/environment-variables/) |
 
 ## Limits

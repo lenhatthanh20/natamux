@@ -128,7 +128,7 @@ These are the real rules:
 | **You can always send it back.** | **Send back** in the stage card, or `natamux stage back T-0001 --reason "..."`, has no limit. |
 | **A check that fails twice waits for you.** | When `review.md` is missing, empty or has no **Findings** section, the reasons go to the agent once. The second failure moves the task to **Needs input**. |
 | **Agents do not commit.** | Implement and Automated tests leave their changes for you to read in the **Changes** tab. Commit them before you open the pull request, or let [Generate](/docs/guides/changes-and-history/#commit) draft the message. |
-| **Release waits for you.** | The pipeline never pushes or opens a pull request by itself. **Release** waits until you open the pull request, and the task is done when it is merged. |
+| **Release waits for you.** | The pipeline never pushes the work or opens a pull request by itself. The one push it makes is the CI snapshot, to `natamux-ci/<branch>`, for a task with **Check on CI** ticked. **Release** waits until the pull request is open, and the task is done when it is merged. |
 
 When the task waits for you after the last send back the limit allows, you decide: fix the code yourself and press **Mark as done** on Review, **Send back** with your own reason, or **Approve anyway**. Each of these starts the count again, so the agent may send the task back up to the limit once more.
 

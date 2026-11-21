@@ -1,4 +1,5 @@
-# Same list and reasons as [advisories] in deny.toml; each one OK'd by the owner (T-0143).
+# The two vulnerability ids of the nine ignores in deny.toml. The other seven are unmaintained
+# notices, which cargo audit only warns about. Each one OK'd by the owner (T-0143).
 [advisories]
 ignore = [
   "RUSTSEC-2026-0194",
