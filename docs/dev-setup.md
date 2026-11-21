@@ -33,3 +33,14 @@ Every action in `.github/workflows/` is pinned to a full commit SHA. When adding
 Ask before adding a package or Rust crate. `site/` has its own pnpm project, pinned in `site/package.json`; use pnpm only there.
 
 See [Rust migration](plan-rust-migration.md) for the safe local setup and the reason for the CI-only Rust build rule.
+
+What guards the Rust crates:
+
+- `Cargo.lock` is committed and every build uses `--locked`.
+- `deny.toml` allows crates.io and the owner's forks only. Each fork has a `natamux/pin-<sha12>` branch at the locked commit, and a ruleset `natamux pins` on the fork that blocks a delete or a change of it. A new fork gets the same ruleset.
+- The `supply-chain` job of `rust.yml` runs `cargo deny`, `scripts/audit.sh` and `cargo vet` when a change touches the lock or these files.
+- `cargo audit` and `cargo deny` skip a crate that comes from git. `scripts/audit.sh` runs `cargo audit` a second time on a copy of the lock that names crates.io for those crates.
+- `advisories.yml` runs the advisory checks on `main` every day. It also runs `scripts/audit.sh zed`, which fails on a Zed security advisory that `supply-chain/zed-advisories.txt` does not list. Read the advisory, patch the Zed fork when the bug is in a kept crate, then add the id.
+- `cargo vet` imports the audits of every organization in the cargo-vet registry (`supply-chain/config.toml`). A crate with no audit there is in the exemptions list: trusted, not reviewed. Never add an audit for code that nobody read.
+- An advisory that cannot be fixed gets an ignore in `deny.toml` with a reason and a review date. `scripts/advisory-dates.py` fails when the date has passed.
+- Updates come through Dependabot after a 7-day cooldown. Take a version by hand only when it is 7 days old.

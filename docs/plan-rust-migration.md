@@ -344,7 +344,7 @@ Setup steps (each needs the owner's OK, because they install software):
    - commit `Cargo.lock`; build with `--locked`;
    - `deny.toml` with `unknown-registry = "deny"`, `unknown-git = "deny"`, and an allow list of crates.io and `github.com/zed-industries/zed`;
    - `cargo audit`;
-   - `cargo vet` with audits imported from Mozilla, Google and the Bytecode Alliance.
+   - `cargo vet` with audits imported from Mozilla, Google and the Bytecode Alliance. The list of checks today: `dev-setup.md`, "Dependencies".
 4. Dependency updates: through Dependabot only, after a 7-day cooldown, one reviewed PR at a time. The 2026 bad versions were live for under two hours.
 5. Releases: the owner downloads CI artifacts only, runs `gh attestation verify`, then signs as today. `sign-release.sh` already re-checks every file against the run's artifacts.
 6. If a bad crate ever ran in the owner account: rotate the minisign key, the SSH tag key and 1Password items, and treat the Mac as compromised.

@@ -1004,7 +1004,7 @@ jobs:
       - run: python3 scripts/advisory-dates.test.py
       - run: python3 scripts/advisory-dates.py
       - run: cargo deny --locked check
-      - run: cargo audit
+      - run: scripts/audit.sh
       - run: cargo vet --locked
 
   # The one required check of this workflow (ruleset of main): red when any job failed or was

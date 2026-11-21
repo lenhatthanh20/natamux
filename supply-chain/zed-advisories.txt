@@ -1,0 +1,16 @@
+# Security advisories of zed-industries/zed that were read for the frozen Zed fork (Cargo.toml).
+# scripts/audit.sh zed fails on an id that is not here. A new id: read it, check whether the bug
+# is in a crate of scripts/zed-lock-crates.txt, patch the fork if so, then add the id with the
+# verdict. Verdicts below are from the advisory text.
+GHSA-x34m-39xw-g2wr 2025-08-11 agent panel; not in the kept crates
+GHSA-29cp-2hmh-hcxj 2025-12-17 LSP settings; not in the kept crates
+GHSA-cv6g-cmxc-vw8j 2025-12-17 MCP server settings; not in the kept crates
+GHSA-f2g4-87h6-4pxq 2026-02-10 MCP tool call view; not in the kept crates
+GHSA-786m-x2vc-5235 2026-02-25 agent file tools; not in the kept crates
+GHSA-59p4-3mhm-qm3r 2026-02-25 extension install; not in the kept crates
+GHSA-v385-xh3h-rrfr 2026-02-25 extension install; not in the kept crates
+GHSA-c99f-97vf-4h5h 2026-05-08 agent terminal tool; not in the kept crates
+GHSA-c3g6-c3ff-69cg 2026-05-08 agent terminal tool; not in the kept crates
+GHSA-63qj-jc2q-7hg5 2026-05-08 SSH and WSL remote; not in the kept crates
+GHSA-fj2r-rmw6-h222 2026-05-08 git integration; not in the kept crates
+GHSA-rqq3-p6x4-q866 2026-05-08 agent terminal tool; not in the kept crates

@@ -2650,7 +2650,7 @@ Used by:
 - wayland-protocols-plasma 0.3.9 (https://github.com/smithay/wayland-rs)
 - wayland-protocols-wlr 0.3.9 (https://github.com/smithay/wayland-rs)
 - wayland-protocols 0.32.9 (https://github.com/smithay/wayland-rs)
-- wayland-scanner 0.31.7 (https://github.com/smithay/wayland-rs)
+- wayland-scanner 0.31.11 (https://github.com/smithay/wayland-rs)
 - wayland-sys 0.31.11 (https://github.com/smithay/wayland-rs)
 
 ```
@@ -5479,7 +5479,7 @@ DEALINGS IN THE SOFTWARE.
 
 Used by:
 
-- memmap2 0.9.8 (https://github.com/RazrFalcon/memmap2-rs)
+- memmap2 0.9.12 (https://github.com/RazrFalcon/memmap2-rs)
 
 ```
 Copyright (c) 2020 Yevhenii Reizner
@@ -7851,6 +7851,7 @@ Copyright 2010-2014 Rich Geldreich and Tenacious Software LLC
 Copyright (c) 2017 Frommi
 Copyright (c) 2017-2024 oyvindln
 
+
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
 in the Software without restriction, including without limitation the rights
@@ -8128,7 +8129,7 @@ Used by:
 - endi 1.1.0 (https://github.com/zeenix/endi)
 - enumn 0.1.14 (https://github.com/dtolnay/enumn)
 - event-listener-strategy 0.5.4 (https://github.com/smol-rs/event-listener-strategy)
-- event-listener 5.4.1 (https://github.com/smol-rs/event-listener)
+- event-listener 5.4.2 (https://github.com/smol-rs/event-listener)
 - fastrand 2.3.0 (https://github.com/smol-rs/fastrand)
 - futures-lite 2.6.1 (https://github.com/smol-rs/futures-lite)
 - hermit-abi 0.5.2 (https://github.com/hermit-os/hermit-rs)
@@ -8156,7 +8157,7 @@ Used by:
 - ref-cast 1.0.25 (https://github.com/dtolnay/ref-cast)
 - rustc-hash 1.1.0 (https://github.com/rust-lang-nursery/rustc-hash)
 - rustix-openpty 0.2.0 (https://github.com/sunfishcode/rustix-openpty)
-- rustix 1.1.4 (https://github.com/bytecodealliance/rustix)
+- rustix 1.1.6 (https://github.com/bytecodealliance/rustix)
 - rustversion 1.0.22 (https://github.com/dtolnay/rustversion)
 - semver 1.0.28 (https://github.com/dtolnay/semver)
 - serde 1.0.229 (https://github.com/serde-rs/serde)
@@ -8429,8 +8430,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 Used by:
 
-- spin 0.10.0 (https://github.com/mvdnes/spin-rs.git)
-- spin 0.9.8 (https://github.com/mvdnes/spin-rs.git)
+- spin 0.10.1 (https://github.com/mvdnes/spin-rs.git)
+- spin 0.9.9 (https://github.com/mvdnes/spin-rs.git)
 
 ```
 The MIT License (MIT)
@@ -9771,8 +9772,8 @@ SOFTWARE.
 
 Used by:
 
-- quick-xml 0.37.5 (https://github.com/tafia/quick-xml)
 - quick-xml 0.39.3 (https://github.com/tafia/quick-xml)
+- quick-xml 0.41.0 (https://github.com/tafia/quick-xml)
 
 ```
 The MIT License (MIT)
