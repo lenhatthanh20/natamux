@@ -15,7 +15,7 @@ It does steps 2 to 5: it asks before it makes and pushes the signed tag, waits f
 
 ## Steps
 
-1. On a branch: set the version in every `crates/*/Cargo.toml`, `Cargo.lock`, the macOS app bundle, and the homepage. Write `docs/releases/vX.Y.Z.md` and the changelog section (the docs skill says how). `scripts/release.test.sh` and the required Rust and web checks must pass on the pull request. Merge to `main`.
+1. On a branch: set the version in every `crates/*/Cargo.toml`, `Cargo.lock`, the macOS app bundle, and the homepage. Write `docs/releases/vX.Y.Z.md` and the changelog section (the docs skill says how). `scripts/release.test.sh` and the required Rust checks must pass on the pull request. Merge to `main`.
    The `main` push with the new release note warms the Intel macOS build cache. Run `gh workflow run release.yml --ref main -f tag=main -f publish=false`, then wait for that Release run to pass before tagging. The workflow reuses compiled output from the Intel and Windows caches when available. A cache miss builds from scratch; the release build still embeds its own web output and runs every platform check.
 2. A release tag must be on `main`: the Release run fails when the tagged commit is not on `main`. Tag the merge commit with a tag signed by your SSH key (see [The tag key](#the-tag-key)) and push it:
 
@@ -24,7 +24,7 @@ It does steps 2 to 5: it asks before it makes and pushes the signed tag, waits f
    git push origin vX.Y.Z
    ```
 
-3. The Release workflow (`.github/workflows/release.yml`) builds the app on every system, starts the Linux build for about 12 seconds under `strace` to check its network calls, writes `SHA256SUMS.txt` and the SBOM files (`Natamux-<platform>.cdx.json`, from the first release after they were added), gives each download and SBOM file a build provenance attestation, and makes a **draft** release with every file. The workflow runs only for `v*` tags and by hand (`tag=main` for a dry run), never on pull requests. `/releases/latest` skips drafts, so no app and no download link sees it yet.
+3. The Release workflow (`.github/workflows/release.yml`) builds the app on every system, starts the Linux build for about 12 seconds under `strace` to check its network calls, writes `SHA256SUMS.txt` and the SBOM files (`Natamux-<platform>.cdx.json`, from v1.0.31), gives each download and SBOM file a build provenance attestation, and makes a **draft** release with every file. The workflow runs only for `v*` tags and by hand (`tag=main` for a dry run), never on pull requests. `/releases/latest` skips drafts, so no app and no download link sees it yet.
 4. On the Mac that holds the secret key and the tag you made, after the run is green and **within 3 days** of it:
 
    ```sh

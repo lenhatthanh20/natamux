@@ -65,9 +65,9 @@ Offline mode covers Natamux's own code and the programs it starts by itself. It 
 
 ## What a release is built from
 
-- From the next release, every release has one SBOM per platform, in CycloneDX 1.5 JSON: `Natamux-mac-arm64.cdx.json`, `Natamux-mac-x64.cdx.json`, `Natamux-win-x64.cdx.json` and `Natamux-linux-x64.cdx.json`. Each lists the third-party Rust crates that the app, the daemon and the CLI build with for that platform, without dev dependencies: name, version, license when the crate gives one, the SHA-256 for crates.io crates, and for a git crate the fork and commit in its package URL. Each SBOM file has a build provenance attestation.
+- From v1.0.31, every release has one SBOM per platform, in CycloneDX 1.5 JSON: `Natamux-mac-arm64.cdx.json`, `Natamux-mac-x64.cdx.json`, `Natamux-win-x64.cdx.json` and `Natamux-linux-x64.cdx.json`. Each lists the third-party Rust crates that the app, the daemon and the CLI build with for that platform, without dev dependencies: name, version, license when the crate gives one, the SHA-256 for crates.io crates, and for a git crate the fork and commit in its package URL. Each SBOM file has a build provenance attestation.
 - The SBOM files are in `SHA256SUMS.txt`, so the release signature covers them.
-- The latest published release (v1.0.30) has no SBOM yet. SBOM files start with the first release after this change.
+- Releases before v1.0.31 have no SBOM.
 - License texts are in `THIRD-PARTY-RUST.md` and `THIRD-PARTY-NOTICES.md`, in the repository and in every package. `THIRD-PARTY-RUST.md` is made by `cargo about` without dev dependencies and without the Zed crates, which `THIRD-PARTY-NOTICES.md` lists by hand. Together they list every third-party crate that a shipped build uses, not every package of `Cargo.lock`.
 
 ## How the dependencies are controlled
