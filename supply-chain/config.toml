@@ -1980,7 +1980,7 @@ version = "0.1.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.xxhash-rust]]
-version = "0.8.15"
+version = "0.8.16"
 criteria = "safe-to-deploy"
 
 [[exemptions.y4m]]
