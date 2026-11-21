@@ -23,10 +23,7 @@ fn watcher(
     calls: &Arc<AtomicUsize>,
     scheduler: &Arc<Scheduler>,
 ) -> PullRequestWatcher {
-    let dir = std::env::temp_dir().join(format!(
-        "natamux-offline-{label}-{}",
-        std::process::id()
-    ));
+    let dir = std::env::temp_dir().join(format!("natamux-offline-{label}-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let tasks = TaskService::new(TaskServiceOptions {
         data_dir: dir,
