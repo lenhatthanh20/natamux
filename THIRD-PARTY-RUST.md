@@ -5,10 +5,10 @@ Other notices are in `THIRD-PARTY-NOTICES.md`.
 
 ## Licenses used
 
-- [MIT License](#MIT) (571 crates)
+- [MIT License](#MIT) (559 crates)
 - [Unicode License v3](#Unicode-3.0) (19 crates)
 - [Apache License 2.0](#Apache-2.0) (16 crates)
-- [BSD 3-Clause "New" or "Revised" License](#BSD-3-Clause) (7 crates)
+- [BSD 3-Clause "New" or "Revised" License](#BSD-3-Clause) (5 crates)
 - [ISC License](#ISC) (5 crates)
 - [Creative Commons Zero v1.0 Universal](#CC0-1.0) (3 crates)
 - [Mozilla Public License 2.0](#MPL-2.0) (3 crates)
@@ -1515,43 +1515,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Used by:
 
-- lebe 0.5.3 (https://github.com/johannesvollmer/lebe)
-
-```
-Copyright (c) 2022 Contributors to the lebe Project. All rights reserved.
-
-Redistribution and use in source and binary forms, with or without modification,
-are permitted provided that the following conditions are met:
-
-1. Redistributions of source code must retain the above copyright notice,
-this list of conditions and the following disclaimer.
-
-2. Redistributions in binary form must reproduce the above copyright notice,
-this list of conditions and the following disclaimer in the documentation
-and/or other materials provided with the distribution.
-
-3. Neither the name of the copyright holder nor the names of its contributors
-may be used to endorse or promote products derived from this software without
-specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
-USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-```
-
-## BSD 3-Clause "New" or "Revised" License {#BSD-3-Clause}
-
-Used by:
-
-- exr 1.74.0 (https://github.com/johannesvollmer/exrs)
 - sha1_smol 1.0.1 (https://github.com/mitsuhiko/sha1-smol)
 
 ```
@@ -2232,7 +2195,6 @@ Used by:
 - rustc-demangle 0.1.26 (https://github.com/rust-lang/rustc-demangle)
 - scoped-tls 1.0.1 (https://github.com/alexcrichton/scoped-tls)
 - socket2 0.6.5 (https://github.com/rust-lang/socket2)
-- wasm-bindgen-futures 0.4.70 (https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/futures)
 - wasm-bindgen-macro-support 0.2.120 (https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/macro-support)
 - wasm-bindgen-macro 0.2.120 (https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/macro)
 - wasm-bindgen-shared 0.2.120 (https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/shared)
@@ -4423,41 +4385,6 @@ DEALINGS IN THE SOFTWARE.
 
 Used by:
 
-- console_error_panic_hook 0.1.7 (https://github.com/rustwasm/console_error_panic_hook)
-
-```
-Copyright (c) 2018 Nick Fitzgerald
-
-Permission is hereby granted, free of charge, to any
-person obtaining a copy of this software and associated
-documentation files (the "Software"), to deal in the
-Software without restriction, including without
-limitation the rights to use, copy, modify, merge,
-publish, distribute, sublicense, and/or sell copies of
-the Software, and to permit persons to whom the Software
-is furnished to do so, subject to the following
-conditions:
-
-The above copyright notice and this permission notice
-shall be included in all copies or substantial portions
-of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
-ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
-TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
-PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
-SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
-CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
-IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-
-```
-
-## MIT License {#MIT}
-
-Used by:
-
 - kurbo 0.13.1 (https://github.com/linebender/kurbo)
 - polycool 0.4.0 (https://github.com/linebender/kurbo)
 
@@ -5705,41 +5632,6 @@ DEALINGS IN THE SOFTWARE.
 
 Used by:
 
-- qoi 0.4.1 (https://github.com/aldanor/qoi-rust)
-
-```
-Copyright (c) 2022 Ivan Smirnov
-
-Permission is hereby granted, free of charge, to any
-person obtaining a copy of this software and associated
-documentation files (the "Software"), to deal in the
-Software without restriction, including without
-limitation the rights to use, copy, modify, merge,
-publish, distribute, sublicense, and/or sell copies of
-the Software, and to permit persons to whom the Software
-is furnished to do so, subject to the following
-conditions:
-
-The above copyright notice and this permission notice
-shall be included in all copies or substantial portions
-of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
-ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
-TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
-PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
-SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
-CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
-IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-
-```
-
-## MIT License {#MIT}
-
-Used by:
-
 - atspi-common 0.13.0 (https://github.com/odilia-app/atspi)
 - atspi-proxies 0.13.0 (https://github.com/odilia-app/atspi)
 - atspi 0.29.0 (https://github.com/odilia-app/atspi)
@@ -6768,37 +6660,6 @@ SOFTWARE.
 
 Used by:
 
-- tiff 0.11.3 (https://github.com/image-rs/image-tiff)
-
-```
-MIT License
-
-Copyright (c) 2018 PistonDevelopers
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-```
-
-## MIT License {#MIT}
-
-Used by:
-
 - crc32fast 1.5.0 (https://github.com/srijs/rust-crc32fast)
 
 ```
@@ -7526,9 +7387,7 @@ SOFTWARE.
 Used by:
 
 - naga 29.0.4 (https://github.com/gfx-rs/wgpu)
-- wgpu-core-deps-apple 29.0.4 (https://github.com/gfx-rs/wgpu)
 - wgpu-core-deps-emscripten 29.0.4 (https://github.com/gfx-rs/wgpu)
-- wgpu-core-deps-wasm 29.0.4 (https://github.com/gfx-rs/wgpu)
 - wgpu-core-deps-windows-linux-android 29.0.4 (https://github.com/gfx-rs/wgpu)
 - wgpu-core 29.0.4 (https://github.com/gfx-rs/wgpu)
 - wgpu-hal 29.0.4 (https://github.com/gfx-rs/wgpu)
@@ -7607,8 +7466,6 @@ Used by:
 - block 0.1.6 (http://github.com/SSheldon/rust-block)
 - chrono 0.4.42 (https://github.com/chronotope/chrono)
 - dispatch2 0.3.1 (https://github.com/madsmtm/objc2)
-- fax 0.2.6 (https://github.com/pdf-rs/fax)
-- fax_derive 0.2.0 (https://github.com/pdf-rs/fax)
 - gpu-descriptor-types 0.2.0 (https://github.com/zakarumych/gpu-descriptor)
 - gpu-descriptor 0.3.2 (https://github.com/zakarumych/gpu-descriptor)
 - leak 0.1.2 (https://github.com/jmesmon/leak.git)
@@ -7688,7 +7545,6 @@ Used by:
 - windows_x86_64_gnu 0.52.6 (https://github.com/microsoft/windows-rs)
 - windows_x86_64_gnullvm 0.52.6 (https://github.com/microsoft/windows-rs)
 - windows_x86_64_msvc 0.52.6 (https://github.com/microsoft/windows-rs)
-- zune-inflate 0.2.54
 
 ```
 MIT License
@@ -8042,37 +7898,6 @@ SOFTWARE.
 
 Used by:
 
-- range-alloc 0.1.4 (https://github.com/gfx-rs/range-alloc)
-
-```
-MIT License
-
-Copyright (c) 2023 The gfx-rs developers
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-```
-
-## MIT License {#MIT}
-
-Used by:
-
 - async-recursion 1.1.1 (https://github.com/dcchut/async-recursion)
 - flume 0.12.0 (https://github.com/zesterer/flume)
 - rustc-hash 2.1.1 (https://github.com/rust-lang/rustc-hash)
@@ -8110,7 +7935,6 @@ Used by:
 - async-process 2.5.0 (https://github.com/smol-rs/async-process)
 - async-task 4.7.1 (https://github.com/smol-rs/async-task)
 - zed-font-kit 0.14.1-zed (https://github.com/servo/font-kit)
-- wasm_thread 0.3.3 (https://github.com/chemicstry/wasm_thread)
 - adler2 2.0.1 (https://github.com/oyvindln/adler2)
 - anyhow 1.0.104 (https://github.com/dtolnay/anyhow)
 - async-channel 2.5.0 (https://github.com/smol-rs/async-channel)
@@ -8915,37 +8739,6 @@ Used by:
 The MIT License (MIT)
 
 Copyright (c) 2016 Max Brunsfeld
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-```
-
-## MIT License {#MIT}
-
-Used by:
-
-- bit_field 0.10.3 (https://github.com/phil-opp/rust-bit-field)
-
-```
-The MIT License (MIT)
-
-Copyright (c) 2016 Philipp Oppermann
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
