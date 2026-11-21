@@ -24,6 +24,12 @@ xattr -dr com.apple.quarantine /Applications/Natamux.app
 
 The installer is not signed with a Windows certificate, so SmartScreen shows **Windows protected your PC**. Click **More info**, then **Run anyway**. Check the file against `SHA256SUMS.txt` first if you like; see [Verify the download](/docs/getting-started/install/#verify-the-download).
 
+## Windows says VCRUNTIME140.dll was not found
+
+Natamux 1.0.30 and older need the Microsoft Visual C++ runtime, which a new Windows install may not have. Then the app does not start after install, and Windows says **The code execution cannot proceed because VCRUNTIME140.dll was not found**.
+
+Install the newest version of Natamux: it has the runtime built in. To keep an older version, install the [Visual C++ Redistributable for x64](https://aka.ms/vs/17/release/vc_redist.x64.exe), then start Natamux again.
+
 ## The AppImage does not start
 
 An AppImage mounts itself with FUSE, which some systems do not have. Either install the `.deb`, or start the AppImage without FUSE:
