@@ -77,7 +77,7 @@ On Windows, use PowerShell:
 irm https://natamux.github.io/install.ps1 | iex
 ```
 
-Then add a git project, create a task, and choose an agent. Natamux creates its worktree and starts the task workflow. You need git and an installed, signed-in coding agent. See the [install guide](https://natamux.github.io/docs/getting-started/install/) for supported systems and setup details.
+Then add a git project, create a task, and choose an agent. Natamux creates its worktree and starts the task workflow. You need git and an installed, signed-in coding agent. The apps are not signed with an Apple Developer ID or a Windows certificate; see [SECURITY.md](SECURITY.md). See the [install guide](https://natamux.github.io/docs/getting-started/install/) for supported systems and setup details.
 
 ## Workflow
 
@@ -91,7 +91,7 @@ Learn how to [build a workflow](https://natamux.github.io/docs/guides/workflows/
 
 ## Privacy
 
-Natamux has no account or telemetry. Task data stays in each repository's `.natamux/` folder. Agents connect to their own providers using your sign-in. Natamux does not sandbox agents; review the [security notes](SECURITY.md) before use.
+Natamux has no account or telemetry. Task data stays in the app's user data folder. Agents connect to their own providers using your sign-in. The app checks GitHub for updates only when you turn that on, and the daemon runs your `gh` to read pull request status. Offline mode turns both off. See [PRIVACY.md](PRIVACY.md) for every connection. Natamux does not sandbox agents; review the [security notes](SECURITY.md) before use.
 
 ## Project
 

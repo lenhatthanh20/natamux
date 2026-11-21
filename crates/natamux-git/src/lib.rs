@@ -12,6 +12,7 @@ pub mod exec;
 pub mod file_diff;
 pub mod gh;
 pub mod graph;
+pub mod offline;
 pub mod process;
 pub mod rollback;
 #[cfg(any(test, feature = "test-support"))]

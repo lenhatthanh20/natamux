@@ -511,6 +511,7 @@ use natamux_client::{Client, ClientError, Config};
 fn main() -> ExitCode {
     perf::report::mark_start();
     daemon::process::make_folder_private();
+    app::update::init_offline();
     perf::report::timed("log_trim_ms", app::app_log::trim_at_start);
     let options = match Options::parse(std::env::args().skip(1)) {
         Ok(options) => options,

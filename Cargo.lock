@@ -3051,6 +3051,7 @@ name = "natamux-update"
 version = "1.0.30"
 dependencies = [
  "base64",
+ "natamux-core",
  "ring",
  "serde_json",
  "sha2",

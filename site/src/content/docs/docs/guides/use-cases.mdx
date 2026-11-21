@@ -63,7 +63,7 @@ Before you start:
 
 - Install and sign in to the [agent CLIs](/docs/concepts/agents-and-hooks/) you choose. A stage without an `agent` uses the task's agent. The recipes with Codex need Codex as well as the task's agent.
 - Adapt test commands to your repository. The command recipes below assume Python 3 and a `tests/` directory containing `unittest` tests. Approve repository commands in **Project settings** before running them.
-- For a Release stage, configure a GitHub remote and sign in to `gh`. Release pushes the branch and opens a pull request after approval. It does not deploy your service. See [GitHub](/docs/guides/github/).
+- For a Release stage, configure a GitHub remote and sign in to `gh`. Release waits until you push the branch and open the pull request. It does not deploy your service. See [GitHub](/docs/guides/github/).
 - Commit the settings file to share the process. Each developer still has local tasks and workspaces. The file shares the sequence; it does not synchronize live task state or assign reviewer roles.
 
 Parallel stages of one task share its worktree. Let one stage edit code while the other writes a separate report. Separate tasks and fan-out attempts have separate worktrees when you create their workspaces. More agents also need more memory and agent capacity.

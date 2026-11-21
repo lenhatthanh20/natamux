@@ -15,7 +15,7 @@ It does steps 2 to 5: it asks before it makes and pushes the signed tag, waits f
 
 ## Steps
 
-1. On a branch: set the version in every `crates/*/Cargo.toml`, `Cargo.lock`, `packages/{core,web}/package.json`, the macOS app bundle, and the homepage. Write `docs/releases/vX.Y.Z.md` and the changelog section (the docs skill says how). `scripts/release.test.sh` and the required Rust and web checks must pass on the pull request. Merge to `main`.
+1. On a branch: set the version in every `crates/*/Cargo.toml`, `Cargo.lock`, the macOS app bundle, and the homepage. Write `docs/releases/vX.Y.Z.md` and the changelog section (the docs skill says how). `scripts/release.test.sh` and the required Rust and web checks must pass on the pull request. Merge to `main`.
    The `main` push with the new release note warms the Intel macOS build cache. Run `gh workflow run release.yml --ref main -f tag=main -f publish=false`, then wait for that Release run to pass before tagging. The workflow reuses compiled output from the Intel and Windows caches when available. A cache miss builds from scratch; the release build still embeds its own web output and runs every platform check.
 2. A release tag must be on `main`: the Release run fails when the tagged commit is not on `main`. Tag the merge commit with a tag signed by your SSH key (see [The tag key](#the-tag-key)) and push it:
 
@@ -24,7 +24,7 @@ It does steps 2 to 5: it asks before it makes and pushes the signed tag, waits f
    git push origin vX.Y.Z
    ```
 
-3. The Release workflow (`.github/workflows/release.yml`) builds and starts the app on every system, writes `SHA256SUMS.txt`, and makes a **draft** release with every file. `/releases/latest` skips drafts, so no app and no download link sees it yet.
+3. The Release workflow (`.github/workflows/release.yml`) builds the app on every system, starts the Linux build for about 12 seconds under `strace` to check its network calls, writes `SHA256SUMS.txt` and the SBOM files (`Natamux-<platform>.cdx.json`, from the first release after they were added), gives each download and SBOM file a build provenance attestation, and makes a **draft** release with every file. The workflow runs only for `v*` tags and by hand (`tag=main` for a dry run), never on pull requests. `/releases/latest` skips drafts, so no app and no download link sees it yet.
 4. On the Mac that holds the secret key and the tag you made, after the run is green and **within 3 days** of it:
 
    ```sh
@@ -34,13 +34,12 @@ It does steps 2 to 5: it asks before it makes and pushes the signed tag, waits f
    It checks that:
    - the tag is `vX.Y.Z`, signed by a key in your allowed signers file (`git verify-tag`), and the same object here and on GitHub. It trusts your local, signed tag, not GitHub's: someone who can push could move the tag there, and a `git fetch` can bring their tag here, but they cannot sign it with your key;
    - the tag's commit is on `main`;
-   - the release is a draft, not marked as a pre-release, with exactly the six files and `SHA256SUMS.txt`, and `SHA256SUMS.txt` lists them with the SHA-256 digests GitHub computed;
+   - the release is a draft, not marked as a pre-release, with exactly the six download files, the four SBOM files (`Natamux-<platform>.cdx.json`) and `SHA256SUMS.txt`, and `SHA256SUMS.txt` lists them with the SHA-256 digests GitHub computed;
    - the push Release run of the tag succeeded and built that commit;
    - the build artifacts of that run hash to exactly the lines of `SHA256SUMS.txt`. A stolen token can replace release files and `SHA256SUMS.txt` together, but not the artifacts of a finished run. The artifacts last 3 days (`retention-days` in `release.yml`). After that the script stops; re-run the Release workflow, then sign within 3 days.
 
    It shows the commit, the run, `SHA256SUMS.txt`, and from your local repository the commits and the changed files since the previous release tag. Read them, then answer. On `y` it signs `SHA256SUMS.txt` in minisign's legacy form (`-l`) with the trusted comment `natamux vX.Y.Z`, checks the signature against `RELEASE_SIGNER`, uploads `SHA256SUMS.txt.minisig`, and publishes the draft as the latest release. minisign asks for the key's password. It works in a new `mktemp -d` folder and leaves it there.
 5. Check the published release: `scripts/release.test.sh --published` (needs `minisign`).
-6. The first Rust release only: on a Mac that runs the last Electron app (v0.1.43), choose **Check for Updates…**. It must find the new release, install the Rust app over `Natamux.app`, and restart into it with the same tasks and sign-in. CI checks the DMG name and the bundle the Electron updater expects, but only a signed release shows the whole update.
 
 The install scripts `site/public/install.sh` and `install.ps1` download the release files by name, with `SHA256SUMS.txt` and `SHA256SUMS.txt.minisig`. Renaming a file means changing the scripts; `scripts/install.test.sh` checks the names against `release.yml`.
 
@@ -102,4 +101,4 @@ The comment check ties a signature to one release. An old signed `SHA256SUMS.txt
 - Windows copies do not update themselves; users check their download as the [install page](https://natamux.github.io/docs/getting-started/install/#verify-the-download) says.
 - The signature proves the files are what the Release run built from the tagged commit. It does not prove the build is clean: a bad action or a bad dependency inside the build makes artifacts that pass every check. Only an independent rebuild would catch that. Read the change list the script shows.
 - Freeze: GitHub, or someone who controls the repository, can keep serving an older signed release as the latest. Apps then see no update. They never go back to an older version, but they can miss a fix.
-- `main` and the `v*` tags have no branch or tag protection today. Turn on branch protection for `main` and a tag rule for `v*` in the repository settings, so a stolen token cannot push to `main` or move a release tag. The script's signed-tag check covers the tag, not what is on `main`.
+- The `main` ruleset blocks delete and force-push and requires the status check `rust-ok` to merge. No review is required (one maintainer). The tag ruleset "Release tags" covers `v*`: an existing tag cannot be deleted or moved, and creating a new tag is allowed. Secret scanning push protection is on. Still missing: a required review, so a stolen token with the right to merge can still change `main` through a pull request. The script's signed-tag check covers the tag, not what is on `main`.

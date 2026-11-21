@@ -12,9 +12,10 @@ Set these in the environment where the daemon starts.
 | Variable | Default | Meaning |
 |---|---|---|
 | `NATAMUX_PORT` | `4317` | Port. Must be 0 to 65535 |
-| `NATAMUX_HOST` | `127.0.0.1` | Address to bind. Only a container sets it, with its port published to loopback |
+| `NATAMUX_HOST` | `127.0.0.1` | Address to bind. It is not checked: any address works, including `0.0.0.0`. A non-wildcard value is added to the `Host` allow-list. The Docker image sets `0.0.0.0` inside its container, and `compose.prod.yaml` publishes on `${NATAMUX_BIND:-127.0.0.1}` |
 | `NATAMUX_ALLOWED_HOSTS` | none | Comma list of host names a request may use in its `Host` header, besides `127.0.0.1`, `localhost`, `::1` and `NATAMUX_HOST`. Names only, no ports. Other hosts get 403. A WebSocket `Origin` must use an allowed name too |
 | `NATAMUX_TOKEN` | A random token for each run, printed at start | The token every request needs |
+| `NATAMUX_OFFLINE` | none | Only the value `1` turns on [offline mode](/docs/help/security-review/#offline-mode): no update check, no `gh`, and no `git` command that reaches a remote. `"offline": true` in the app's `settings.json` or in the settings file of the machine turns it on too, for every user in the second case. Read once at start: restart to change it. The desktop app reads it and passes it to the daemon it starts |
 | `NATAMUX_DATA_DIR` | `<current folder>/.natamux` | Task files and the SQLite index |
 | `NATAMUX_REPO_DIR` | none | A git repository to add once as the first project, with the id `default`. Without it the daemon starts with no project. A project removed later does not come back |
 | `NATAMUX_WORKTREES_DIR` | `<data dir>/worktrees` | Where worktrees go, one folder per task |
@@ -44,7 +45,7 @@ See [Agents](/docs/agents/claude-code/) for how each agent is started. **Generat
 | Variable | Default | Meaning |
 |---|---|---|
 | `NATAMUX_TOKEN` | The desktop app's saved token, if present | The daemon's token. Set it for another daemon; `hooks claude-code` does not need one |
-| `NATAMUX_URL` | The desktop app's saved daemon port, then `http://127.0.0.1:4317` | The daemon's address |
+| `NATAMUX_URL` | The desktop app's saved daemon port, then `http://127.0.0.1:4317` | The daemon's address. It must start with `http://` (`https://` is refused). It can name any host, and the token then goes there in clear text |
 | `NATAMUX_TASK_ID` | none | The task for `ask`, `done`, `task show` and `hook` |
 | `NATAMUX_TERMINAL` | none | The terminal of the task |
 | `NATAMUX_DEBUG` | none | `natamux hook` prints problems to stderr when set |
@@ -56,7 +57,7 @@ Every terminal of a task gets the daemon's environment plus:
 | Variable | Value |
 |---|---|
 | `NATAMUX_TOKEN` | The task's own agent token. It reaches only this task, and may not approve, skip or pass a stage, or change settings. See [The agent token](/docs/reference/http-api/#the-agent-token) |
-| `NATAMUX_URL` | `http://127.0.0.1:<daemon port>` |
+| `NATAMUX_URL` | `http://127.0.0.1:<daemon port>` (the address the daemon listens on) |
 | `NATAMUX_TASK_ID` | The task id, such as `T-42` |
 | `NATAMUX_TERMINAL` | The terminal's name (`1`, `2`, ...). The agent runs in `1` |
 | `NATAMUX_PORT` | The first port of the task's own block of 10 ports, from 20000 |

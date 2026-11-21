@@ -104,7 +104,7 @@ When the task is linked to an issue and `tracker.linkInPr` is true (the default)
 
 ### Checks and status
 
-While a dashboard is open, Natamux asks GitHub about each open or draft pull request once a minute, with one request per repository. Once the checks of all of them have finished, it asks every 5 minutes. The **Pull request** section of the details panel shows:
+While a dashboard or the app is connected, Natamux runs `gh api graphql` for open or draft pull requests and pushed branches every 60 seconds while checks are pending or a pushed branch has no pull request, and every 5 minutes otherwise. It also runs `gh pr list` and `gh pr view` when an agent stops. In [offline mode](/docs/help/security-review/#offline-mode) none of this runs. The **Pull request** section of the details panel shows:
 
 - The pull request link.
 - A summary such as `open, checks pass`, `open, checks fail` or `draft, checks running`.

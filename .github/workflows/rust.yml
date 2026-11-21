@@ -167,6 +167,8 @@ jobs:
       - run: python3 scripts/compare-shots.test.py
       - run: python3 scripts/shots-exact.test.py
       - run: python3 scripts/zed-lock-check.test.py
+      - run: python3 scripts/sbom.test.py
+      - run: python3 scripts/net-trace.test.py
       # For the MIT move: no Zed crate may come back into Cargo.lock unlisted.
       - run: python3 scripts/zed-lock-check.py
       - run: bash scripts/sign-release.test.sh

@@ -123,6 +123,9 @@ pub(super) fn release_url(url: &str) -> bool {
 }
 
 pub(super) fn curl(url: &str, timeout_seconds: u32, head: bool) -> Result<Command, String> {
+    if crate::offline::offline() {
+        return Err(crate::offline::UPDATES_OFF.into());
+    }
     if !release_url(url) {
         return Err("The update URL is not a GitHub release address".into());
     }

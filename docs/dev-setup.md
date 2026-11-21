@@ -24,7 +24,7 @@ pnpm --dir site install --ignore-workspace --frozen-lockfile
 pnpm --dir site build
 ```
 
-`.github/workflows/rust.yml` checks Rust, operating systems, the daemon image and the live daemon tests. `.github/workflows/release.yml` builds six native release assets, and runs a dry run on pull requests that change packaging and on release pull requests. Rust pull requests target `main`. Only a push to `main` saves Cargo caches. `rust-ok` must be green to merge into `main`.
+`.github/workflows/rust.yml` checks Rust, operating systems, the daemon image and the live daemon tests. `.github/workflows/release.yml` builds six native release assets and four SBOM files. It runs only for `v*` tags and by hand (`tag=main` for a dry run), never on pull requests. Rust pull requests target `main`. Only a push to `main` saves Cargo caches. `rust-ok` must be green to merge into `main`.
 
 Every action in `.github/workflows/` is pinned to a full commit SHA. When adding an action, pin it the same way.
 
@@ -42,5 +42,6 @@ What guards the Rust crates:
 - `cargo audit` and `cargo deny` skip a crate that comes from git. `scripts/audit.sh` runs `cargo audit` a second time on a copy of the lock that names crates.io for those crates.
 - `advisories.yml` runs the advisory checks on `main` every day. It runs `scripts/audit.sh osv`, which fails when OSV lists a crate of the lock as malicious (`osv-scanner`, pinned by its SHA-256). It also runs `scripts/audit.sh zed`, which fails on a Zed security advisory that `supply-chain/zed-advisories.txt` does not list. Read the advisory, patch the Zed fork when the bug is in a kept crate, then add the id.
 - `cargo vet` imports the audits of every organization in the cargo-vet registry (`supply-chain/config.toml`). A crate with no audit there is in the exemptions list: trusted, not reviewed. Never add an audit for code that nobody read.
+- `supply-chain/audits.toml` also trusts 64 crates of nine publishers (`[[trusted.*]]`), each trusted by at least three of those organizations, such as David Tolnay and Alex Crichton. That is trust in who published the crate, not an audit of its code. It ends on the `end` date and must be renewed by hand. Add a publisher only by the same rule.
 - An advisory that cannot be fixed gets an ignore in `deny.toml` with a reason and a review date. `scripts/advisory-dates.py` fails when the date has passed.
 - Updates come through Dependabot after a 7-day cooldown. Take a version by hand only when it is 7 days old.

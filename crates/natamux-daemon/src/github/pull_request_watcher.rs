@@ -212,6 +212,10 @@ impl PullRequestWatcher {
     /// The timer looks every `interval_ms`; whether it asks GitHub depends on the dashboards, the
     /// checks and the failures (see `due`). Does nothing when it runs already.
     pub fn start(&self) {
+        // Offline, there is nothing to ask: no timer, no wake-ups, no error lines.
+        if natamux_core::offline::offline() {
+            return;
+        }
         let inner = &self.inner;
         let mut spawn_error = None;
         {
