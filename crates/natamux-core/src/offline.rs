@@ -33,7 +33,9 @@ pub fn setting(text: &str) -> bool {
 // ask the system for the folder if that has to be closed.
 pub fn machine_file_for(os: &str, program_data: Option<OsString>) -> Option<PathBuf> {
     match os {
-        "macos" => Some(PathBuf::from("/Library/Application Support/Natamux/settings.json")),
+        "macos" => Some(PathBuf::from(
+            "/Library/Application Support/Natamux/settings.json",
+        )),
         "windows" => Some(
             PathBuf::from(program_data.filter(|value| !value.is_empty())?)
                 .join("Natamux")
@@ -95,7 +97,9 @@ mod tests {
     fn the_machine_file_is_in_a_folder_only_an_administrator_writes() {
         assert_eq!(
             machine_file_for("macos", None),
-            Some(PathBuf::from("/Library/Application Support/Natamux/settings.json"))
+            Some(PathBuf::from(
+                "/Library/Application Support/Natamux/settings.json"
+            ))
         );
         assert_eq!(
             machine_file_for("linux", None),
@@ -103,7 +107,11 @@ mod tests {
         );
         assert_eq!(
             machine_file_for("windows", Some("C:\\ProgramData".into())),
-            Some(PathBuf::from("C:\\ProgramData").join("Natamux").join("settings.json"))
+            Some(
+                PathBuf::from("C:\\ProgramData")
+                    .join("Natamux")
+                    .join("settings.json")
+            )
         );
         assert_eq!(machine_file_for("windows", None), None);
         assert_eq!(machine_file_for("windows", Some("".into())), None);
