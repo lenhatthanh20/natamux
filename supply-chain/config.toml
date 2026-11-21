@@ -75,10 +75,6 @@ criteria = "safe-to-deploy"
 version = "1.0.104"
 criteria = "safe-to-deploy"
 
-[[exemptions.approx]]
-version = "0.5.1"
-criteria = "safe-to-deploy"
-
 [[exemptions.as-raw-xcb-connection]]
 version = "1.0.1"
 criteria = "safe-to-deploy"
@@ -165,10 +161,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.blocking]]
 version = "1.6.2"
-criteria = "safe-to-deploy"
-
-[[exemptions.by_address]]
-version = "1.2.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.bytemuck]]
@@ -349,10 +341,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.event-listener-strategy]]
 version = "0.5.4"
-criteria = "safe-to-deploy"
-
-[[exemptions.fast-srgb8]]
-version = "1.0.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.filedescriptor]]
@@ -801,14 +789,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.ordered-stream]]
 version = "0.2.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.palette]]
-version = "0.7.6"
-criteria = "safe-to-deploy"
-
-[[exemptions.palette_derive]]
-version = "0.7.6"
 criteria = "safe-to-deploy"
 
 [[exemptions.parking_lot]]

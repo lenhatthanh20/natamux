@@ -8,9 +8,6 @@ publish.workspace = true
 [dependencies]
 anyhow.workspace = true
 gpui.workspace = true
-# The colour path of the theme files (src/loader.rs): the version in Cargo.lock, with the
-# features Zed's theme crate takes.
-palette = { version = "0.7.6", default-features = false, features = ["std"] }
 serde.workspace = true
 serde_json.workspace = true
 
