@@ -1,2 +1,6 @@
 [alias]
 xtask = "run --locked --package xtask --"
+
+# A clean Windows has no VCRUNTIME140.dll (scripts/windows-crt-check.py).
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

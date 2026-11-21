@@ -266,6 +266,7 @@ jobs:
           7z x -y -o"$RUNNER_TEMP/unpacked" dist/Natamux-win-x64.exe >/dev/null
           test -f "$RUNNER_TEMP/unpacked/natamux-app.exe"
           test -f "$RUNNER_TEMP/unpacked/natamux.exe"
+          ${{ matrix.py }} scripts/windows-crt-check.py "$RUNNER_TEMP"/unpacked/{natamux-app,natamux-daemon,natamux,nmx}.exe
           scripts/release-smoke.sh "$RUNNER_TEMP/unpacked/natamux-app.exe" \
             "$(cygpath -u "$APPDATA")/Natamux"
       # The third-party crates of this build, for people who must list what they install.
