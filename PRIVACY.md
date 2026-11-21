@@ -28,7 +28,7 @@ When you or an agent you start makes it happen, and for the pull request status 
 
 ## Offline mode
 
-Set `NATAMUX_OFFLINE=1`, or `"offline": true` in `settings.json` of the desktop app's user data folder. Natamux then makes no update check and runs no `gh` and no `git` command that reaches a remote. It does not limit the coding agents or what you type in a terminal. The full list is in [For a security review](https://natamux.github.io/docs/help/security-review/).
+Off by default. Set `NATAMUX_OFFLINE=1`, or `"offline": true` in `settings.json` of the desktop app's user data folder. An administrator can set it for every user in the settings file of the machine. Natamux then makes no update check and runs no `gh` and no `git` command that reaches a remote. It does not limit the coding agents or what you type in a terminal. The full list is in [For a security review](https://natamux.github.io/docs/help/security-review/).
 
 ## The website
 

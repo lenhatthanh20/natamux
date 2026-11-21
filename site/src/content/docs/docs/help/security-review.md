@@ -40,7 +40,15 @@ Natamux links no TLS library. `curl` does the HTTPS, with the proxy settings and
 
 ## Offline mode
 
-Set `NATAMUX_OFFLINE=1` for the app or the daemon, or put `"offline": true` in `settings.json` of the app's user data folder. Then:
+Offline mode is off by default: without it Natamux cannot open a pull request or read its status. Turn it on in one of three ways:
+
+| Where | Who sets it |
+|---|---|
+| The settings file of the machine, with `{ "offline": true }`: `/Library/Application Support/Natamux/settings.json` on macOS, `/etc/natamux/settings.json` on Linux, `%ProgramData%\Natamux\settings.json` on Windows | An administrator. A user cannot turn it off again: the app, the daemon and the `natamux` command all read this file |
+| `"offline": true` in `settings.json` of the app's user data folder | The user |
+| `NATAMUX_OFFLINE=1` in the environment of the app or the daemon | The user, or a start script |
+
+Any one of them turns offline mode on. None of them can turn it off when another one is on. With offline mode on:
 
 - no update check and no update download;
 - no `gh` call: no pull request status, no issue import, no pull request from the app;

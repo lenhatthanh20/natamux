@@ -14,10 +14,7 @@ pub fn auto_update(text: &str) -> bool {
 
 /// The `offline` key: only `true` turns it on.
 pub fn offline(text: &str) -> bool {
-    serde_json::from_str::<Value>(text)
-        .ok()
-        .and_then(|value| value.get("offline").and_then(Value::as_bool))
-        == Some(true)
+    natamux_core::offline::setting(text)
 }
 
 pub fn set_auto_update(text: &str, enabled: bool) -> Result<String, String> {
