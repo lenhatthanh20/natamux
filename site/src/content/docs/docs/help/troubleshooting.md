@@ -24,6 +24,12 @@ xattr -dr com.apple.quarantine /Applications/Natamux.app
 
 The installer is not signed with a Windows certificate, so SmartScreen shows **Windows protected your PC**. Click **More info**, then **Run anyway**. Check the file against `SHA256SUMS.txt` first if you like; see [Verify the download](/docs/getting-started/install/#verify-the-download).
 
+## Smart App Control blocks Natamux
+
+Windows 11 can have **Smart App Control** on. It blocks every app that has no code signature, with no **Run anyway** button. Natamux is not code signed yet, so the installer and the app are blocked. The install command then says **An Application Control policy has blocked this file**.
+
+To install Natamux, turn Smart App Control off: open **Windows Security → App & browser control → Smart App Control settings** and choose **Off**. On some Windows 11 versions you cannot turn it back on without a reset of Windows.
+
 ## Windows says VCRUNTIME140.dll was not found
 
 Natamux 1.0.30 and older need the Microsoft Visual C++ runtime, which a new Windows install may not have. Then the app does not start after install, and Windows says **The code execution cannot proceed because VCRUNTIME140.dll was not found**.

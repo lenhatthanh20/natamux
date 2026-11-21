@@ -75,6 +75,21 @@ jobs:
         with:
           persist-credentials: false
       # Windows PowerShell 5.1, the way users run it: irm ... | iex.
+      # Windows 11 PCs where RuntimeInformation.OSArchitecture is empty failed with
+      # "needs 64-bit Windows" (T-0360).
+      - name: Test the script functions
+        shell: powershell
+        run: |
+          $env:NATAMUX_INSTALL_DRY = '1'
+          Get-Content -Raw site/public/install.ps1 | Invoke-Expression
+          function Expect($want, $have, $case) { if ($have -ne $want) { throw "${case}: want '$want', have '$have'" } }
+          $env:PROCESSOR_ARCHITEW6432 = ''; $env:PROCESSOR_ARCHITECTURE = 'AMD64'
+          Expect 'AMD64' (Get-OSArch) '64-bit PowerShell'
+          $env:PROCESSOR_ARCHITEW6432 = 'AMD64'; $env:PROCESSOR_ARCHITECTURE = 'x86'
+          Expect 'AMD64' (Get-OSArch) '32-bit PowerShell on 64-bit Windows'
+          $env:PROCESSOR_ARCHITEW6432 = ''; $env:PROCESSOR_ARCHITECTURE = 'ARM64'
+          Expect 'ARM64' (Get-OSArch) 'Windows on Arm'
+          Expect $true ((Get-SmartAppControl) -ne 1) 'Smart App Control is off on the runner'
       - shell: powershell
         run: Get-Content -Raw site/public/install.ps1 | Invoke-Expression
       - name: Check the install
