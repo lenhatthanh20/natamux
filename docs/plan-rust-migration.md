@@ -119,7 +119,7 @@ natamux-app (GPUI, desktop)   web dashboard (React, browser and phone)   natamux
 - `cargo xtask layers` fails if a crate below L4 uses `gpui`.
 - Every user action is a command in one registry (ArtCraft): menus, shortcuts, the palette, the CLI and a loopback control channel all call it. Agents and tests then drive the app the same way people do.
 - Pin Zed crates and `gpui` to one Zed git rev. Upgrade on a schedule (once a month), in its own PR, with the screenshot tests as the gate.
-- Update 2026-11-19: frozen. The owner does not want to depend on Zed. Natamux keeps `gpui` until a replacement toolkit passes a trial, and the other ties are being cut. The fork `github.com/lenhatthanh20/zed` at rev `4ed651a85ea9a6189f03af6e0716b4ba447645f9` is Natamux's own copy: no routine upgrades to newer Zed releases, so the monthly upgrade above no longer applies. It changes only for a security fix, a fix an OS update forces, or a patch Natamux needs. Each change is a commit on the fork and a new rev in `Cargo.toml`, in its own PR, and checks again that the kept crates are Apache-2.0.
+- Update 2026-11-19: frozen. The owner does not want to depend on Zed. Natamux keeps `gpui` until a replacement toolkit passes a trial, and the other ties are being cut. The fork `github.com/lenhatthanh20/zed` at rev `13f04b04021a0538801df109794a0df2c4490ca2` is Natamux's own copy: no routine upgrades to newer Zed releases, so the monthly upgrade above no longer applies. It changes only for a security fix, a fix an OS update forces, or a patch Natamux needs. Each change is a commit on the fork and a new rev in `Cargo.toml`, in its own PR, and checks again that the kept crates are Apache-2.0.
 
 ### Smooth by construction
 

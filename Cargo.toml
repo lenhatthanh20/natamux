@@ -81,8 +81,10 @@ yaml-rust2 = "0.13.0"
 # (2026-10-14) with Natamux patches. Natamux keeps only the 18 crates of scripts/zed-lock-crates.txt
 # from it; the terminal crate is not one of them. The patches fetch every git dependency from the
 # owner's forks, cut what Natamux does not use (image formats other than gif, jpeg, png and webp,
-# the screen capture crate, the wasm target, wgpu backends other than gles and vulkan) and make the
-# Linux keyring client (oo7) and proptest opt-in.
+# the screen capture crate, the wasm target, wgpu backends other than gles and vulkan) and make
+# these opt-in: the credential stores of all three platforms (Linux keyring client oo7, macOS
+# Keychain, Windows Credential Manager), proptest, and http_client's GitHub helpers, which send
+# GITHUB_TOKEN.
 # Frozen: the fork is Natamux's own copy, no routine upgrades to newer Zed releases. It changes only
 # for a security fix, an OS-forced fix or a Natamux patch: a fork commit and a new rev, in its own
 # PR, which checks again that the kept crates are Apache-2.0 (docs/plan-rust-migration.md).
@@ -92,8 +94,8 @@ yaml-rust2 = "0.13.0"
 # A new git dependency gets the same: fork it, add the pin branch, use the fork's URL here, in the
 # Zed fork's manifests and in deny.toml. Cargo also fetches its submodules: point each one at a fork
 # too (the tree-sitter-yaml fork does it for yaml-test-suite).
-gpui = { version = "0.2.2", git = "https://github.com/lenhatthanh20/zed", rev = "4ed651a85ea9a6189f03af6e0716b4ba447645f9" }
-gpui_platform = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "4ed651a85ea9a6189f03af6e0716b4ba447645f9", features = ["font-kit", "wayland", "x11"] }
+gpui = { version = "0.2.2", git = "https://github.com/lenhatthanh20/zed", rev = "13f04b04021a0538801df109794a0df2c4490ca2" }
+gpui_platform = { version = "0.1.0", git = "https://github.com/lenhatthanh20/zed", rev = "13f04b04021a0538801df109794a0df2c4490ca2", features = ["font-kit", "wayland", "x11"] }
 
 [workspace.lints.clippy]
 unwrap_used = "deny"

@@ -28,9 +28,11 @@ package of the lock.
   `gpui_linux`, `gpui_platform` and `gpui_wgpu`, and the workspace manifest, cut dependencies that
   Natamux does not use: image formats other than gif, jpeg, png and webp, the screen capture
   crate, the wasm target and the wgpu backends other than gles and vulkan. The Linux keyring
-  client (`oo7`) and `proptest` are opt-in features: `crates/gpui_linux/src/linux/platform.rs`
-  has the three credentials methods behind the `credentials` feature, and `crates/gpui/src/gpui.rs`
-  and `crates/gpui/src/test.rs` have the proptest items behind the `proptest` feature.
+  client (`oo7`) and `proptest` are opt-in features: the `platform.rs` of `gpui_linux`,
+  `gpui_macos` and `gpui_windows` has the three credentials methods behind the `credentials`
+  feature, `crates/gpui/src/gpui.rs` and `crates/gpui/src/test.rs` have the proptest items behind
+  the `proptest` feature, and `crates/http_client/src/http_client.rs` has the `github` module
+  behind the `github` feature.
 - License: Apache-2.0 (<https://www.apache.org/licenses/LICENSE-2.0>).
 - Copyright 2022 - 2025 Zed Industries, Inc. Zed has no NOTICE file.
 
