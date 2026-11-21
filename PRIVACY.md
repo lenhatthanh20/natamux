@@ -4,7 +4,7 @@ Natamux runs on your machine. It has no account, no server of its own, and no te
 
 ## What Natamux collects
 
-Nothing. Natamux sends no usage data, crash reports or analytics anywhere. The only request it can make on its own is the update check of the desktop app, below, and only when you turn it on.
+Nothing. Natamux sends no usage data, crash reports or analytics anywhere. Its own code makes one kind of request to the internet: the update check of the desktop app, below, and only when you turn it on. It also runs your `gh` to read pull request status from GitHub, below.
 
 ## What stays on your machine
 
@@ -17,12 +17,18 @@ You can delete any of these folders at any time.
 
 ## When data leaves your machine
 
-Only when you or an agent you start makes it happen:
+When you or an agent you start makes it happen, and for the pull request status below:
 
 - **Coding agents.** Claude Code, Codex, Gemini CLI, Copilot CLI and Cursor send your prompts and code to their own companies, under those companies' terms. Natamux starts them; it does not see or change what they send.
 - **GitHub.** Pushing a branch, opening a pull request, importing issues, or a GitHub issue as task context uses your own `git` and `gh` login to talk to GitHub.
+- **Pull request status.** While the app is open and a task has an open pull request or a pushed branch, the daemon runs your `gh` every 1 to 5 minutes, and when an agent stops, to read the state of pull requests. It sends what `gh` sends for that: your GitHub login and the names of the repository and the branch.
+- **Agents after a restart.** When the daemon starts, it starts again the agents of unfinished tasks.
 - **Links.** Links in the dashboard open in your browser.
 - **Update check (desktop app).** Off by default. When you tick **Check for Updates Automatically** in the app menu (macOS) or the **Help** menu (Linux), about 30 seconds after the app starts, and every 6 hours, the app asks `github.com` for the latest Natamux release. The request has no data about you, your repositories or your tasks. GitHub sees your IP address and the app's version. When a new version exists, the app downloads it and its signature from GitHub. Untick it to turn the timed checks off. **Check for Updates…** checks once, when you choose it.
+
+## Offline mode
+
+Off by default. Set `NATAMUX_OFFLINE=1`, or `"offline": true` in `settings.json` of the desktop app's user data folder. An administrator can set it for every user in the settings file of the machine. Natamux then makes no update check and runs no `gh` and no `git` command that reaches a remote. It does not limit the coding agents or what you type in a terminal. The full list is in [For a security review](https://natamux.github.io/docs/help/security-review/).
 
 ## The website
 

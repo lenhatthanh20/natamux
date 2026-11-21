@@ -12,6 +12,11 @@ pub fn auto_update(text: &str) -> bool {
         == Some(true)
 }
 
+/// The `offline` key: only `true` turns it on.
+pub fn offline(text: &str) -> bool {
+    natamux_core::offline::setting(text)
+}
+
 pub fn set_auto_update(text: &str, enabled: bool) -> Result<String, String> {
     let mut value: Value = serde_json::from_str(text).unwrap_or_else(|_| json!({}));
     let object = value
@@ -27,6 +32,11 @@ pub fn load(file: &Path) -> io::Result<bool> {
         Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
         Err(error) => Err(error),
     }
+}
+
+/// A missing or unreadable file is off.
+pub fn load_offline(file: &Path) -> bool {
+    fs::read_to_string(file).is_ok_and(|text| offline(&text))
 }
 
 pub fn save(file: &Path, enabled: bool) -> io::Result<()> {

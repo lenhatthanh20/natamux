@@ -15,6 +15,7 @@ Set these in the environment where the daemon starts.
 | `NATAMUX_HOST` | `127.0.0.1` | Address to bind. Only a container sets it, with its port published to loopback |
 | `NATAMUX_ALLOWED_HOSTS` | none | Comma list of host names a request may use in its `Host` header, besides `127.0.0.1`, `localhost`, `::1` and `NATAMUX_HOST`. Names only, no ports. Other hosts get 403. A WebSocket `Origin` must use an allowed name too |
 | `NATAMUX_TOKEN` | A random token for each run, printed at start | The token every request needs |
+| `NATAMUX_OFFLINE` | none | `1` turns on [offline mode](/docs/help/security-review/#offline-mode): no update check, no `gh`, and no `git` command that reaches a remote. The desktop app reads it too, and passes it to the daemon it starts. The settings file of the machine turns it on for every user |
 | `NATAMUX_DATA_DIR` | `<current folder>/.natamux` | Task files and the SQLite index |
 | `NATAMUX_REPO_DIR` | none | A git repository to add once as the first project, with the id `default`. Without it the daemon starts with no project. A project removed later does not come back |
 | `NATAMUX_WORKTREES_DIR` | `<data dir>/worktrees` | Where worktrees go, one folder per task |

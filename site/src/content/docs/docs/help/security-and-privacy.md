@@ -14,10 +14,13 @@ This page summarizes [SECURITY.md](https://github.com/lenhatthanh20/natamux/blob
   - Tasks, history and stage files: `.natamux/` in each repository.
   - Worktrees: `.natamux/worktrees/`, or the folder you set.
   - Desktop app token, update setting, downloaded updates and logs: its user data folder (`~/Library/Application Support/Natamux` on macOS, `%APPDATA%\Natamux` on Windows, `~/.config/Natamux` on Linux).
-- Data leaves your machine only when you or an agent you start makes it happen:
+- Data leaves your machine when you or an agent you start makes it happen, and when the daemon reads pull request status:
   - Coding agents send your prompts and code to their own companies, under their terms. Natamux does not see or change that.
   - GitHub actions (push, pull request, issue import) use your own `git` and `gh` login.
+  - While the app is open and a task has an open pull request or a pushed branch, the daemon runs your `gh` every 1 to 5 minutes to read pull request status.
   - When you tick **Check for Updates Automatically** (off by default), the desktop app asks `github.com` for the latest release about 30 seconds after it starts and every 6 hours, and downloads a new version from GitHub. The request carries no data about you or your tasks; GitHub sees your IP address and the app version. Untick it to stop the timed checks. See [Updates](/docs/guides/desktop-app/#updates).
+
+Every connection, and how to turn them off with offline mode, is in [For a security review](/docs/help/security-review/).
 
 ## Agents run with your rights
 

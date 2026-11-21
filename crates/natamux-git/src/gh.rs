@@ -63,6 +63,9 @@ pub fn run_gh_with_timeout(
     args: &[String],
     timeout: Duration,
 ) -> Result<String, GitHubError> {
+    if natamux_core::offline::offline() {
+        return Err(GitHubError::new("offline mode: GitHub is not reached"));
+    }
     let mut command = Command::new("gh");
     command
         .args(args)

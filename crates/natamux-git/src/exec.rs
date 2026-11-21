@@ -115,6 +115,9 @@ fn run(
     timeout: Option<Duration>,
     env: &[(String, String)],
 ) -> Result<Vec<u8>, GitError> {
+    if let Some(refused) = crate::offline::refusal(args) {
+        return Err(refused);
+    }
     let mut command = Command::new("git");
     command
         .args(args)

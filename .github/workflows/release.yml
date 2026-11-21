@@ -176,7 +176,12 @@ jobs:
         timeout-minutes: 5
         run: |
           if [ "$RUNNER_OS" = Linux ]; then
-            xvfb-run -a scripts/release-smoke.sh target/release/natamux-app "$HOME/.config/Natamux"
+            # The same start, with every address the app and its daemon reach written down: a
+            # release build must not reach past loopback when it starts (scripts/net-trace.py).
+            command -v strace >/dev/null || sudo apt-get install --yes --no-install-recommends strace
+            strace -f -qq --seccomp-bpf -e trace=connect,sendto,sendmsg -o "$RUNNER_TEMP/net.trace" \
+              xvfb-run -a scripts/release-smoke.sh target/release/natamux-app "$HOME/.config/Natamux"
+            python3 scripts/net-trace.py "$RUNNER_TEMP/net.trace"
           elif [ "$RUNNER_OS" = Windows ]; then
             scripts/release-smoke.sh target/release/natamux-app.exe "$(cygpath -u "$APPDATA")/Natamux"
           else
