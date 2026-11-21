@@ -21,12 +21,15 @@ license text, is in `THIRD-PARTY-RUST.md`, which `cargo about` makes from `Cargo
   gpui_platform, gpui_shared_string, gpui_util, gpui_wgpu, gpui_windows, http_client,
   refineable, scheduler, sum_tree, ztracing, ztracing_macro
   (`scripts/zed-lock-crates.txt`, checked by `scripts/zed-lock-check.py`).
-  The fork changes only manifests inside their folders. `crates/gpui_linux/Cargo.toml` takes the
+  The fork changes these files inside their folders. `crates/gpui_linux/Cargo.toml` takes the
   `xim` crates from <https://github.com/lenhatthanh20/xim-rs>. The manifests of `gpui`,
   `gpui_linux`, `gpui_platform` and `gpui_wgpu`, and the workspace manifest, cut dependencies that
   Natamux does not use: image formats other than gif, jpeg, png and webp, the screen capture
-  crate, the wasm target and the wgpu backends other than gles and vulkan. No `.rs` source of
-  the 18 crates is changed.
+  crate, the wasm target and the wgpu backends other than gles and vulkan. The Linux keyring
+  client (`oo7`) and `proptest` are opt-in features: `crates/gpui_linux/src/linux/platform.rs`
+  has the three credentials methods behind the `credentials` feature, and `crates/gpui/src/gpui.rs`
+  and `crates/gpui/src/test.rs` have the proptest items behind the `proptest` feature. No other
+  `.rs` source of the 18 crates is changed.
 - License: Apache-2.0 (<https://www.apache.org/licenses/LICENSE-2.0>).
 - Copyright 2022 - 2025 Zed Industries, Inc. Zed has no NOTICE file.
 
