@@ -8,7 +8,6 @@ use std::sync::{Arc, OnceLock};
 
 use anyhow::{Context as _, Result, bail};
 use gpui::{FontStyle, FontWeight, HighlightStyle, Hsla, Rgba, WindowBackgroundAppearance, hsla};
-use palette::FromColor;
 use serde::Deserialize;
 use serde::de::{Deserializer, MapAccess, Visitor};
 use serde_json::Value;
@@ -116,18 +115,36 @@ impl SyntaxEntry {
     }
 }
 
-/// A `#rgb`, `#rgba`, `#rrggbb` or `#rrggbbaa` colour. The hue goes through palette's HSL and is
-/// made positive, so blues and purples keep the values the app has always drawn.
+/// A `#rgb`, `#rgba`, `#rrggbb` or `#rrggbbaa` colour, as HSL with a positive hue.
 pub(crate) fn parse_color(text: &str) -> Option<Hsla> {
     let rgba = Rgba::try_from(text).ok()?;
-    let srgba: palette::rgb::Srgba = palette::rgb::Srgba::new(rgba.r, rgba.g, rgba.b, rgba.a);
-    let color: palette::Hsla = palette::Hsla::from_color(srgba);
-    Some(hsla(
-        color.hue.into_positive_degrees() / 360.,
-        color.saturation,
-        color.lightness,
-        color.alpha,
-    ))
+    let (hue, saturation, lightness) = rgb_to_hsl(rgba.r, rgba.g, rgba.b);
+    Some(hsla(hue, saturation, lightness, rgba.a))
+}
+
+/// sRGB to HSL, the hue as a turn in `0..1`. The same arithmetic, step for step, as the palette
+/// crate that did this before: equal bit for bit on every 8-bit colour, so no colour moved.
+fn rgb_to_hsl(r: f32, g: f32, b: f32) -> (f32, f32, f32) {
+    let (max, min, sep, coeff) = if r > g {
+        (r, g, g - b, 0.)
+    } else {
+        (g, r, b - r, 2.)
+    };
+    let (max, min, sep, coeff) = if b > max {
+        (b, min, r - g, 4.)
+    } else {
+        (max, min.min(b), sep, coeff)
+    };
+    let sum = max + min;
+    let lightness = sum / 2.;
+    if max == min {
+        return (0., 0., lightness);
+    }
+    let d = max - min;
+    let saturation = (if sum > 1. { d / (2. - sum) } else { d / sum }).min(1.);
+    let degrees = (sep / d + coeff) * 60.;
+    let degrees = degrees - (degrees / 360.).floor() * 360.;
+    (degrees / 360., saturation, lightness)
 }
 
 /// Every theme of one theme file.
@@ -299,6 +316,30 @@ mod tests {
         assert!(purple.h > 0.8 && purple.h < 0.9, "{purple:?}");
         assert_eq!(parse_color("#12345"), None);
         assert_eq!(parse_color("red"), None);
+    }
+
+    /// Values that the palette crate gave for these colours (T-0359). A CI run compared the
+    /// two on all 16 777 216 colours and found no difference.
+    #[test]
+    fn hsl_values_are_the_ones_palette_gave() {
+        let golden: [(&str, f32, f32, f32); 12] = [
+            ("#808080", 0.0, 0.0, 0.5019608),
+            ("#1e1e2e", 0.6666667, 0.21052632, 0.14901961),
+            ("#7aa2f7", 0.6133333, 0.8865248, 0.7235294),
+            ("#bb9af7", 0.72580653, 0.8532111, 0.78627455),
+            ("#f7768e", 0.9689923, 0.8896552, 0.71568626),
+            ("#9ece6a", 0.24666667, 0.50505054, 0.6117647),
+            ("#e0af68", 0.09861111, 0.6593407, 0.6431373),
+            ("#0d1117", 0.6, 0.27777776, 0.07058824),
+            ("#58a6ff", 0.58882236, 1.0, 0.672549),
+            ("#d2a8ff", 0.74712646, 0.9999998, 0.82941175),
+            ("#ec4899", 0.9176829, 0.8118812, 0.6039216),
+            ("#fefdfc", 0.083333336, 0.5, 0.99215686),
+        ];
+        for (hex, h, s, l) in golden {
+            let color = parse_color(hex).unwrap();
+            assert_eq!((color.h, color.s, color.l), (h, s, l), "{hex}");
+        }
     }
 
     #[test]
