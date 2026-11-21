@@ -16,15 +16,17 @@ license text, is in `THIRD-PARTY-RUST.md`, which `cargo about` makes from `Cargo
 
 - Used by: the app's window and drawing layer (`gpui`, `gpui_platform` and the crates they need).
 - Source: <https://github.com/zed-industries/zed>, through the fork
-  <https://github.com/lenhatthanh20/zed>. The source of the 19 crates is used without changes:
+  <https://github.com/lenhatthanh20/zed>. The source of the 18 crates is used without changes:
   collections, derive_refineable, gpui, gpui_apple, gpui_linux, gpui_macos, gpui_macros,
-  gpui_platform, gpui_shared_string, gpui_util, gpui_web, gpui_wgpu, gpui_windows, http_client,
+  gpui_platform, gpui_shared_string, gpui_util, gpui_wgpu, gpui_windows, http_client,
   refineable, scheduler, sum_tree, ztracing, ztracing_macro
   (`scripts/zed-lock-crates.txt`, checked by `scripts/zed-lock-check.py`).
-  The fork changes two files inside their folders, both manifests: `crates/gpui_linux/Cargo.toml`
-  takes the `xim` crates from <https://github.com/lenhatthanh20/xim-rs>, and
-  `crates/gpui_web/examples/hello_web/Cargo.toml` takes `wasm_thread` from
-  <https://github.com/lenhatthanh20/wasm_thread>. No `.rs` source of the 19 crates is changed.
+  The fork changes only manifests inside their folders. `crates/gpui_linux/Cargo.toml` takes the
+  `xim` crates from <https://github.com/lenhatthanh20/xim-rs>. The manifests of `gpui`,
+  `gpui_linux`, `gpui_platform` and `gpui_wgpu`, and the workspace manifest, cut dependencies that
+  Natamux does not use: image formats other than gif, jpeg, png and webp, the screen capture
+  crate, the wasm target and the wgpu backends other than gles and vulkan. No `.rs` source of
+  the 18 crates is changed.
 - License: Apache-2.0 (<https://www.apache.org/licenses/LICENSE-2.0>).
 - Copyright 2022 - 2025 Zed Industries, Inc. Zed has no NOTICE file.
 
