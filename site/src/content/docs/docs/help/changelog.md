@@ -7,6 +7,15 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v1.0.31 (2026-11-22)
+
+- Offline mode: `NATAMUX_OFFLINE=1`, or `"offline": true` in `settings.json`, turns off every network call that Natamux makes by itself: no update check, no `gh`, no `git` network command. See [Offline mode](/docs/help/security-review/#offline-mode).
+- A new page, [For a security review](/docs/help/security-review/), lists every connection Natamux makes and how the dependencies are controlled.
+- Each release has one SBOM file per platform, `Natamux-<platform>.cdx.json`. `SHA256SUMS.txt` lists them, so the release signature covers them.
+- Natamux depends on 107 fewer third-party crates. The code of the UI library for the system credential store and for a GitHub token is no longer built into the app.
+- Fix: the app did not start on a Windows with no Microsoft Visual C++ runtime ("VCRUNTIME140.dll was not found"). The runtime is now built into the app. See [Troubleshooting](/docs/help/troubleshooting/#windows-says-vcruntime140dll-was-not-found).
+- Fix: the pipeline editor said that a release stage "Opens the pull request by itself". The label is now "Opens the pull request when you click", and the approval box of a release stage is on and locked.
+
 ## v1.0.30 (2026-11-20)
 
 - The **Progress** icon on the rail also shows the terminals again when **Changes**, **History**, **Docs** or a file covers them. It has a dot in the colour of the task's state. See [Dashboard](/docs/guides/dashboard/).
