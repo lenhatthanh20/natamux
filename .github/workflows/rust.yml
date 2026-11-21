@@ -169,6 +169,7 @@ jobs:
       - run: python3 scripts/zed-lock-check.test.py
       - run: python3 scripts/sbom.test.py
       - run: python3 scripts/net-trace.test.py
+      - run: python3 scripts/readme.test.py
       - run: python3 scripts/windows-crt-check.test.py
       # For the MIT move: no Zed crate may come back into Cargo.lock unlisted.
       - run: python3 scripts/zed-lock-check.py

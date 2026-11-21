@@ -76,7 +76,7 @@ class ReadmeAcceptance(unittest.TestCase):
         self.assertEqual(len(re.findall(r"^# |<h1[ >]", self.readme, re.MULTILINE)), 1)
         self.assertIn('<h1 align="center">Natamux</h1>', opening)
         text = strip_html(opening)
-        for word in ("coding agents", "worktree", "dashboard"):
+        for word in ("coding agents", "worktree", "one app"):
             self.assertIn(word, text.lower())
         self.assertLess(len(text.split()), 150, "entry points should appear near the top")
 
