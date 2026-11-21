@@ -5,7 +5,7 @@ Other notices are in `THIRD-PARTY-NOTICES.md`.
 
 ## Licenses used
 
-- [MIT License](#MIT) (559 crates)
+- [MIT License](#MIT) (540 crates)
 - [Unicode License v3](#Unicode-3.0) (19 crates)
 - [Apache License 2.0](#Apache-2.0) (16 crates)
 - [BSD 3-Clause "New" or "Revised" License](#BSD-3-Clause) (5 crates)
@@ -2336,14 +2336,7 @@ Used by:
 - bitflags 1.3.2 (https://github.com/bitflags/bitflags)
 - bitflags 2.13.1 (https://github.com/bitflags/bitflags)
 - log 0.4.29 (https://github.com/rust-lang/log)
-- num-bigint-dig 0.9.1 (https://github.com/dignifiedquire/num-bigint)
-- num-bigint 0.4.8 (https://github.com/rust-num/num-bigint)
-- num-complex 0.4.6 (https://github.com/rust-num/num-complex)
-- num-integer 0.1.46 (https://github.com/rust-num/num-integer)
-- num-iter 0.1.45 (https://github.com/rust-num/num-iter)
-- num-rational 0.4.2 (https://github.com/rust-num/num-rational)
 - num-traits 0.2.19 (https://github.com/rust-num/num-traits)
-- num 0.4.3 (https://github.com/rust-num/num)
 - regex-automata 0.4.18 (https://github.com/rust-lang/regex)
 - regex-syntax 0.8.11 (https://github.com/rust-lang/regex)
 - regex 1.12.3 (https://github.com/rust-lang/regex)
@@ -3084,42 +3077,6 @@ SOFTWARE.
 
 Used by:
 
-- hkdf 0.12.4 (https://github.com/RustCrypto/KDFs/)
-
-```
-Copyright (c) 2015-2018 Vlad Filippov
-Copyright (c) 2018-2021 RustCrypto Developers
-
-Permission is hereby granted, free of charge, to any
-person obtaining a copy of this software and associated
-documentation files (the "Software"), to deal in the
-Software without restriction, including without
-limitation the rights to use, copy, modify, merge,
-publish, distribute, sublicense, and/or sell copies of
-the Software, and to permit persons to whom the Software
-is furnished to do so, subject to the following
-conditions:
-
-The above copyright notice and this permission notice
-shall be included in all copies or substantial portions
-of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
-ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
-TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
-PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
-SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
-CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
-IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-
-```
-
-## MIT License {#MIT}
-
-Used by:
-
 - httparse 1.10.1 (https://github.com/seanmonstar/httparse)
 - num_cpus 1.17.0 (https://github.com/seanmonstar/num_cpus)
 
@@ -3670,41 +3627,6 @@ DEALINGS IN THE SOFTWARE.
 
 Used by:
 
-- cipher 0.4.4 (https://github.com/RustCrypto/traits)
-
-```
-Copyright (c) 2016-2020 RustCrypto Developers
-
-Permission is hereby granted, free of charge, to any
-person obtaining a copy of this software and associated
-documentation files (the "Software"), to deal in the
-Software without restriction, including without
-limitation the rights to use, copy, modify, merge,
-publish, distribute, sublicense, and/or sell copies of
-the Software, and to permit persons to whom the Software
-is furnished to do so, subject to the following
-conditions:
-
-The above copyright notice and this permission notice
-shall be included in all copies or substantial portions
-of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
-ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
-TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
-PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
-SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
-CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
-IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-
-```
-
-## MIT License {#MIT}
-
-Used by:
-
 - tungstenite 0.28.0 (https://github.com/snapview/tungstenite-rs)
 
 ```
@@ -3736,46 +3658,9 @@ THE SOFTWARE.
 Used by:
 
 - digest 0.10.7 (https://github.com/RustCrypto/traits)
-- hmac 0.12.1 (https://github.com/RustCrypto/MACs)
 
 ```
 Copyright (c) 2017 Artyom Pavlov
-
-Permission is hereby granted, free of charge, to any
-person obtaining a copy of this software and associated
-documentation files (the "Software"), to deal in the
-Software without restriction, including without
-limitation the rights to use, copy, modify, merge,
-publish, distribute, sublicense, and/or sell copies of
-the Software, and to permit persons to whom the Software
-is furnished to do so, subject to the following
-conditions:
-
-The above copyright notice and this permission notice
-shall be included in all copies or substantial portions
-of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
-ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
-TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
-PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
-SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
-CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
-IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-
-```
-
-## MIT License {#MIT}
-
-Used by:
-
-- pbkdf2 0.12.2 (https://github.com/RustCrypto/password-hashes/tree/master/pbkdf2)
-
-```
-Copyright (c) 2017 Artyom Pavlov
-Copyright (c) 2018-2023 The RustCrypto Project Developers
 
 Permission is hereby granted, free of charge, to any
 person obtaining a copy of this software and associated
@@ -4245,41 +4130,6 @@ DEALINGS IN THE SOFTWARE.
 
 Used by:
 
-- aes 0.8.4 (https://github.com/RustCrypto/block-ciphers)
-
-```
-Copyright (c) 2018 Artyom Pavlov
-
-Permission is hereby granted, free of charge, to any
-person obtaining a copy of this software and associated
-documentation files (the "Software"), to deal in the
-Software without restriction, including without
-limitation the rights to use, copy, modify, merge,
-publish, distribute, sublicense, and/or sell copies of
-the Software, and to permit persons to whom the Software
-is furnished to do so, subject to the following
-conditions:
-
-The above copyright notice and this permission notice
-shall be included in all copies or substantial portions
-of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
-ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
-TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
-PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
-SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
-CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
-IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-
-```
-
-## MIT License {#MIT}
-
-Used by:
-
 - bytes 1.11.1 (https://github.com/tokio-rs/bytes)
 
 ```
@@ -4582,7 +4432,6 @@ THE SOFTWARE.
 Used by:
 
 - block-buffer 0.10.4 (https://github.com/RustCrypto/utils)
-- block-padding 0.3.3 (https://github.com/RustCrypto/utils)
 
 ```
 Copyright (c) 2018-2019 The RustCrypto Project Developers
@@ -4640,42 +4489,6 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
-```
-
-## MIT License {#MIT}
-
-Used by:
-
-- cbc 0.1.2 (https://github.com/RustCrypto/block-modes)
-
-```
-Copyright (c) 2018-2022 RustCrypto Developers
-Copyright (c) 2018 Artyom Pavlov
-
-Permission is hereby granted, free of charge, to any
-person obtaining a copy of this software and associated
-documentation files (the "Software"), to deal in the
-Software without restriction, including without
-limitation the rights to use, copy, modify, merge,
-publish, distribute, sublicense, and/or sell copies of
-the Software, and to permit persons to whom the Software
-is furnished to do so, subject to the following
-conditions:
-
-The above copyright notice and this permission notice
-shall be included in all copies or substantial portions
-of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
-ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
-TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
-PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
-SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
-CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
-IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
 
 ```
 
@@ -5656,42 +5469,6 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
-
-```
-
-## MIT License {#MIT}
-
-Used by:
-
-- inout 0.1.4 (https://github.com/RustCrypto/utils)
-
-```
-Copyright (c) 2022 The RustCrypto Project Developers
-Copyright (c) 2022 Artyom Pavlov
-
-Permission is hereby granted, free of charge, to any
-person obtaining a copy of this software and associated
-documentation files (the "Software"), to deal in the
-Software without restriction, including without
-limitation the rights to use, copy, modify, merge,
-publish, distribute, sublicense, and/or sell copies of
-the Software, and to permit persons to whom the Software
-is furnished to do so, subject to the following
-conditions:
-
-The above copyright notice and this permission notice
-shall be included in all copies or substantial portions
-of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
-ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
-TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
-PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
-SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
-CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
-IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
 
 ```
 
@@ -6722,37 +6499,6 @@ SOFTWARE.
 
 Used by:
 
-- zeroize 1.8.2 (https://github.com/RustCrypto/utils)
-
-```
-MIT License
-
-Copyright (c) 2018-2021 The RustCrypto Project Developers
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-```
-
-## MIT License {#MIT}
-
-Used by:
-
 - bytemuck 1.24.0 (https://github.com/Lokathor/bytemuck)
 - bytemuck_derive 1.10.2 (https://github.com/Lokathor/bytemuck)
 
@@ -6906,37 +6652,6 @@ MIT License
 
 Copyright (c) 2019 Yoshua Wuyts
 Copyright (c) Tokio Contributors
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-```
-
-## MIT License {#MIT}
-
-Used by:
-
-- zeroize_derive 1.4.2 (https://github.com/RustCrypto/utils/tree/master/zeroize/derive)
-
-```
-MIT License
-
-Copyright (c) 2019-2023 The RustCrypto Project Developers
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -7206,37 +6921,6 @@ Used by:
 MIT License
 
 Copyright (c) 2021 Michael Davis
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-```
-
-## MIT License {#MIT}
-
-Used by:
-
-- oo7 0.6.0 (https://github.com/linux-credentials/oo7)
-
-```
-MIT License
-
-Copyright (c) 2022 Bilal Elmoussaoui, Sophie Herold, Maximiliano Sandoval, Dhanuka Warusadura
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -7985,7 +7669,6 @@ Used by:
 - rustversion 1.0.22 (https://github.com/dtolnay/rustversion)
 - semver 1.0.28 (https://github.com/dtolnay/semver)
 - serde 1.0.229 (https://github.com/serde-rs/serde)
-- serde_bytes 0.11.19 (https://github.com/serde-rs/bytes)
 - serde_core 1.0.229 (https://github.com/serde-rs/serde)
 - serde_derive 1.0.229 (https://github.com/serde-rs/serde)
 - serde_derive_internals 0.29.1 (https://github.com/serde-rs/serde)

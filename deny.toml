@@ -54,7 +54,6 @@ allow-git = [
   "https://github.com/lenhatthanh20/async-task.git",
   "https://github.com/lenhatthanh20/calloop",
   "https://github.com/lenhatthanh20/font-kit",
-  "https://github.com/lenhatthanh20/proptest",
   "https://github.com/lenhatthanh20/tree-sitter",
   "https://github.com/lenhatthanh20/tree-sitter-cpp",
   "https://github.com/lenhatthanh20/tree-sitter-git-commit",
