@@ -119,6 +119,9 @@ impl OwnedDaemon {
             .stdout(Stdio::from(log.try_clone()?))
             .stderr(Stdio::from(log))
             .stdin(Stdio::piped());
+        if natamux_update::offline::offline() {
+            command.env("NATAMUX_OFFLINE", "1");
+        }
         #[cfg(unix)]
         command.env("NATAMUX_PATH_PENDING", "1");
         #[cfg(windows)]

@@ -20,6 +20,9 @@ use crate::workspaces::branch_sync::sync_branch;
 impl StageRun {
     /// A CI check that ran when the daemon stopped goes on: it pushes the work again and waits.
     pub fn resume_ci_checks(&self) {
+        if natamux_core::offline::offline() {
+            return;
+        }
         for task in self.all_tasks() {
             if task.state.is_finished() {
                 continue;

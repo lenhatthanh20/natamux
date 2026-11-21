@@ -3,6 +3,7 @@
 pub mod check;
 pub mod download;
 pub mod install;
+pub mod offline;
 pub mod preferences;
 pub mod signature;
 pub mod transport;

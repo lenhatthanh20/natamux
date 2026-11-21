@@ -104,10 +104,17 @@ fn settings_file() -> Option<PathBuf> {
     view_state::folder().map(|folder| folder.join("settings.json"))
 }
 
+/// Reads the `offline` setting once; the variable is read by `natamux_update::offline`.
+pub fn init_offline() {
+    let on = settings_file().is_some_and(|file| preferences::load_offline(&file));
+    natamux_update::offline::set_setting(on);
+}
+
 pub fn automatic() -> bool {
-    settings_file()
-        .and_then(|file| preferences::load(&file).ok())
-        .unwrap_or(false)
+    !natamux_update::offline::offline()
+        && settings_file()
+            .and_then(|file| preferences::load(&file).ok())
+            .unwrap_or(false)
 }
 
 pub fn toggle_automatic(cx: &mut App) {

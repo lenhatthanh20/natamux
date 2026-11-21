@@ -93,6 +93,7 @@ export default defineConfig({
             { slug: 'docs/help/troubleshooting' },
             { slug: 'docs/help/faq' },
             { slug: 'docs/help/security-and-privacy' },
+            { slug: 'docs/help/security-review' },
             { slug: 'docs/help/changelog' },
           ],
         },

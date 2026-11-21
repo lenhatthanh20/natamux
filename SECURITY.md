@@ -12,6 +12,10 @@ You get an answer within 7 days. A fix goes out in a new release, and the adviso
 
 Natamux is young. Only the latest release gets security fixes.
 
+## For a company's security review
+
+[For a security review](https://natamux.github.io/docs/help/security-review/) lists every network connection, offline mode (`NATAMUX_OFFLINE=1`), the SBOM of each release, how the dependencies are controlled, how to check a download, and what is missing today.
+
 ## How Natamux is built to be safe
 
 Natamux runs coding agents on your machine. An agent can read and change files and run commands with **your** user's rights. Natamux does not sandbox agents. Treat an agent like a person who types in your terminal, and use each agent's own permission settings.
