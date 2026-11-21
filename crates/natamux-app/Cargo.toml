@@ -53,6 +53,14 @@ image = { version = "0.25", default-features = false }
 [lints]
 workspace = true
 
+# The exe icon and version info (build.rs). The version gpui uses for its manifest.
+[target.'cfg(windows)'.build-dependencies]
+embed-resource = "3.0"
+
+# Decodes the X11 window icon (app/window_icon.rs). The version and format gpui builds.
+[target.'cfg(target_os = "linux")'.dependencies]
+image = { version = "0.25", default-features = false, features = ["png"] }
+
 [target.'cfg(unix)'.dependencies]
 nix = { workspace = true, features = ["process", "signal"] }
 

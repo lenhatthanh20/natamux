@@ -2846,6 +2846,7 @@ dependencies = [
  "alacritty_terminal",
  "anyhow",
  "block2 0.6.2",
+ "embed-resource",
  "futures",
  "getrandom 0.3.4",
  "gpui",
