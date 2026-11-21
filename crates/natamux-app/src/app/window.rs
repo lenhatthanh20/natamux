@@ -443,6 +443,9 @@ mod settings_commands;
 #[path = "window_watch.rs"]
 mod watch;
 
+#[path = "window_icon.rs"]
+mod icon;
+
 #[path = "window_follow.rs"]
 mod follow;
 
@@ -484,6 +487,9 @@ pub fn open(
                 traffic_light_position: mac.then(|| point(px(9.), px(9.))),
             }),
             app_owns_titlebar_drag: mac,
+            app_id: Some(icon::APP_ID.into()),
+            #[cfg(target_os = "linux")]
+            icon: icon::window_icon(),
             ..Default::default()
         },
         |window, cx| {

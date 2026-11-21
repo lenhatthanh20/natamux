@@ -24,7 +24,7 @@ It does steps 2 to 5: it asks before it makes and pushes the signed tag, waits f
    git push origin vX.Y.Z
    ```
 
-3. The Release workflow (`.github/workflows/release.yml`) builds the app on every system, starts the Linux build for about 12 seconds under `strace` to check its network calls, writes `SHA256SUMS.txt` and the SBOM files (`Natamux-<platform>.cdx.json`, from v1.0.31), gives each download and SBOM file a build provenance attestation, and makes a **draft** release with every file. The workflow runs only for `v*` tags and by hand (`tag=main` for a dry run), never on pull requests. `/releases/latest` skips drafts, so no app and no download link sees it yet.
+3. The Release workflow (`.github/workflows/release.yml`) builds the app on every system, starts the Linux build for about 12 seconds under `strace` to check its network calls, checks the app icons (the Windows exe has its icon resource; the deb, AppImage and tar.gz carry `natamux.desktop` with `StartupWMClass=natamux` and a 256 px icon), writes `SHA256SUMS.txt` and the SBOM files (`Natamux-<platform>.cdx.json`, from v1.0.31), gives each download and SBOM file a build provenance attestation, and makes a **draft** release with every file. The workflow runs only for `v*` tags and by hand (`tag=main` for a dry run), never on pull requests. `/releases/latest` skips drafts, so no app and no download link sees it yet.
 4. On the Mac that holds the secret key and the tag you made, after the run is green and **within 3 days** of it:
 
    ```sh

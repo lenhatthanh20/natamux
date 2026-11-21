@@ -254,6 +254,13 @@ jobs:
           dist/Natamux-linux-x86_64.AppImage --appimage-extract >/dev/null
           test -f squashfs-root/usr/bin/natamux-daemon
           dpkg-deb -c dist/Natamux-linux-amd64.deb | grep natamux-daemon >/dev/null
+          # Icons: the window matches the desktop file by app id (app/window_icon.rs).
+          file squashfs-root/usr/share/icons/hicolor/256x256/apps/natamux.png | grep '256 x 256' >/dev/null
+          grep -qx StartupWMClass=natamux squashfs-root/natamux.desktop
+          dpkg-deb -c dist/Natamux-linux-amd64.deb | grep 'hicolor/256x256/apps/natamux.png' >/dev/null
+          dpkg-deb --fsys-tarfile dist/Natamux-linux-amd64.deb |
+            tar -xO ./usr/share/applications/natamux.desktop | grep -qx StartupWMClass=natamux
+          tar -tzf dist/Natamux-linux-x64.tar.gz | grep -x './natamux.desktop' >/dev/null
       - name: Package Windows
         if: runner.os == 'Windows'
         run: |
@@ -266,6 +273,8 @@ jobs:
           7z x -y -o"$RUNNER_TEMP/unpacked" dist/Natamux-win-x64.exe >/dev/null
           test -f "$RUNNER_TEMP/unpacked/natamux-app.exe"
           test -f "$RUNNER_TEMP/unpacked/natamux.exe"
+          # The icon gpui loads for the window and taskbar, and Explorer shows (build.rs).
+          7z l "$RUNNER_TEMP/unpacked/natamux-app.exe" | grep GROUP_ICON >/dev/null
           ${{ matrix.py }} scripts/windows-crt-check.py "$RUNNER_TEMP"/unpacked/{natamux-app,natamux-daemon,natamux,nmx}.exe
           scripts/release-smoke.sh "$RUNNER_TEMP/unpacked/natamux-app.exe" \
             "$(cygpath -u "$APPDATA")/Natamux"

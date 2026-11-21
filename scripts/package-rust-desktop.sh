@@ -26,17 +26,20 @@ case "$platform" in
     for name in natamux-app natamux-daemon natamux nmx; do
       cp "$binary/$name" "$appdir/usr/bin/$name"
     done
-    cp crates/natamux-app/resources/icon.png "$appdir/natamux.png"
+    # 256 px to match the hicolor folder; the window icon uses the same file (app/window_icon.rs).
+    cp crates/natamux-app/resources/icon-256.png "$appdir/natamux.png"
     cp "$appdir/natamux.png" "$appdir/usr/share/icons/hicolor/256x256/apps/natamux.png"
     cp LICENSE THIRD-PARTY-NOTICES.md THIRD-PARTY-RUST.md "$appdir/"
     cat > "$appdir/natamux.desktop" <<'DESKTOP'
 [Desktop Entry]
 Type=Application
 Name=Natamux
+Comment=Agent development environment
 Exec=natamux-app
 Icon=natamux
 Categories=Development;
 Terminal=false
+StartupWMClass=natamux
 DESKTOP
     cat > "$appdir/AppRun" <<'RUN'
 #!/bin/sh
@@ -45,6 +48,7 @@ exec "${APPDIR:-$here}/usr/bin/natamux-app" "$@"
 RUN
     chmod +x "$appdir/AppRun"
     cp LICENSE THIRD-PARTY-NOTICES.md THIRD-PARTY-RUST.md "$appdir/usr/bin/"
+    cp "$appdir/natamux.desktop" "$appdir/natamux.png" "$appdir/usr/bin/"
     tar -czf "$out/Natamux-linux-x64.tar.gz" -C "$appdir/usr/bin" .
     deb="$out/deb"
     mkdir -p "$deb/DEBIAN" "$deb/opt/Natamux" "$deb/usr/share/applications" \
