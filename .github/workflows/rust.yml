@@ -170,6 +170,7 @@ jobs:
       - run: python3 scripts/sbom.test.py
       - run: python3 scripts/net-trace.test.py
       - run: python3 scripts/readme.test.py
+      - run: python3 scripts/windows-crt-check.test.py
       # For the MIT move: no Zed crate may come back into Cargo.lock unlisted.
       - run: python3 scripts/zed-lock-check.py
       - run: bash scripts/sign-release.test.sh
@@ -751,6 +752,11 @@ jobs:
           gh cache list --ref refs/heads/main --key "rust-app-${{ runner.os }}-" --json id,createdAt \
             --jq 'sort_by(.createdAt) | reverse | .[1:] | .[].id' |
             while read -r id; do gh cache delete "$id"; done
+      # A clean Windows has no VCRUNTIME140.dll: the exes must link the C runtime statically.
+      - name: Check the exes need no Visual C++ runtime
+        run: |
+          python scripts/windows-crt-check.py target/release/natamux-app.exe \
+            target/release/natamux-daemon.exe target/release/natamux.exe target/release/nmx.exe
       - name: Smoke test
         run: target/release/natamux-app.exe --smoke
       - name: Screenshots
