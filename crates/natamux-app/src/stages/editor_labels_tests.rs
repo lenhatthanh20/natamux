@@ -99,9 +99,10 @@ fn labels_the_kind_and_the_approval_of_a_stage() {
         approval_label(&release(Gate::Manual)),
         "Opens the pull request when you click"
     );
+    // Regression: the auto gate once said "Opens the pull request by itself", which nothing does.
     assert_eq!(
         approval_label(&release(Gate::Auto)),
-        "Opens the pull request by itself"
+        "Opens the pull request when you click"
     );
     assert_eq!(
         approval_label(&Stage::new("qa", StageKind::Manual, Gate::Auto)),

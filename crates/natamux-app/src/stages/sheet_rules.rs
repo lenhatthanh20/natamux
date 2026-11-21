@@ -41,7 +41,7 @@ pub fn approval_text(stage: &Stage) -> (&'static str, Option<&'static str>) {
     if stage.kind == StageKind::Release {
         return (
             "Open the pull request when I click",
-            Some("Unchecked, the pull request opens when the stage starts."),
+            Some("Always on: Natamux never opens a pull request by itself."),
         );
     }
     let help = always_waits(stage).then_some("Always on for this kind of stage.");

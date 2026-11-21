@@ -162,7 +162,8 @@ mod rows {
 
     const DRAFT: &str = r#"{ "stages": [
         { "id": "implement", "kind": "agent", "gate": "auto" },
-        { "id": "review", "kind": "review", "gate": "manual" }
+        { "id": "review", "kind": "review", "gate": "manual" },
+        { "id": "release", "kind": "release", "gate": "auto" }
     ] }"#;
 
     fn approval_of<'a>(
@@ -225,6 +226,15 @@ mod rows {
         click_switch(cx, "gate-review-switch");
         assert_eq!(*writes.borrow(), 0);
         assert_eq!(gate_of(&pipeline, "review", cx), before);
+    }
+
+    #[gpui::test]
+    fn the_release_stage_has_a_disabled_row(cx: &mut TestAppContext) {
+        let (pipeline, writes, cx) = approval_of("release", cx);
+        let before = gate_of(&pipeline, "release", cx);
+        click_switch(cx, "gate-release-switch");
+        assert_eq!(*writes.borrow(), 0);
+        assert_eq!(gate_of(&pipeline, "release", cx), before);
     }
 
     #[gpui::test]

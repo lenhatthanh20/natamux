@@ -27,8 +27,8 @@ pub fn approval_label(stage: &Stage) -> &'static str {
         return "Always waits for you";
     }
     match (stage.kind, stage.gate) {
-        (StageKind::Release, Gate::Manual) => "Opens the pull request when you click",
-        (StageKind::Release, Gate::Auto) => "Opens the pull request by itself",
+        // Natamux never opens a pull request by itself, whatever the gate says.
+        (StageKind::Release, _) => "Opens the pull request when you click",
         (_, Gate::Manual) => "Waits for your approval",
         (_, Gate::Auto) => "Moves on by itself",
     }
