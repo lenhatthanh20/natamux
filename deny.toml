@@ -5,8 +5,8 @@
 # crates the app keeps (Apache-2.0).
 # .cargo/audit.toml keeps the same vulnerability list for cargo audit.
 ignore = [
-  { id = "RUSTSEC-2026-0194", reason = "quick-xml, fixed only in 0.41 (breaking); only gpui's Linux crates (wayland-scanner at build time, xcb for screen capture, zbus_xml) use it, on local XML only. Review by 2026-12-31." },
-  { id = "RUSTSEC-2026-0195", reason = "quick-xml, fixed only in 0.41 (breaking); only gpui's Linux crates (wayland-scanner at build time, xcb for screen capture, zbus_xml) use it, on local XML only. Review by 2026-12-31." },
+  { id = "RUSTSEC-2026-0194", reason = "quick-xml 0.39, fixed only in 0.41 (breaking); only zbus_xml 5.1 (gpui_platform's Linux crates) still uses it, on local XML only; wayland-scanner and xcb are on 0.41. Review by 2026-12-31." },
+  { id = "RUSTSEC-2026-0195", reason = "quick-xml 0.39, fixed only in 0.41 (breaking); only zbus_xml 5.1 (gpui_platform's Linux crates) still uses it, on local XML only; wayland-scanner and xcb are on 0.41. Review by 2026-12-31." },
   { id = "RUSTSEC-2024-0436", reason = "paste unmaintained; gpui's dependencies metal (macOS) and rav1e use it (macro only), no known hole. Review by 2026-12-31." },
   { id = "RUSTSEC-2026-0206", reason = "rustybuzz unmaintained; gpui uses it through usvg, no known hole. Review by 2026-12-31." },
   { id = "RUSTSEC-2026-0192", reason = "ttf-parser unmaintained; gpui uses it (also through fontdb and rustybuzz), no known hole. Review by 2026-12-31." },

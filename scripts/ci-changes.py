@@ -75,7 +75,7 @@ CLIENT_PATHS = [
     *(f"crates/natamux-{name}/" for name in ("client", "cli", "proto")),
     *IMAGE_PATHS,
 ]
-LOCK_PATHS = ["Cargo.lock", "deny.toml", "supply-chain/", ".cargo/audit.toml"]
+LOCK_PATHS = ["Cargo.lock", "deny.toml", "supply-chain/", ".cargo/audit.toml", "scripts/audit.sh"]
 CHECK_PATHS = [
     "crates/", "xtask/", "scripts/", "Cargo.toml", "Cargo.lock", "rust-toolchain.toml",
     ".cargo/", "deny.toml", "supply-chain/", ".github/workflows/rust.yml",
