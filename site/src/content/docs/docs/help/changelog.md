@@ -7,6 +7,12 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v1.0.32 (2026-11-22)
+
+- Natamux has its own icon on Windows (window, taskbar, installer, shortcuts, and an entry in Settings → Apps) and on Linux (window, and the dock matches it to the menu entry).
+- Fix: on some 64-bit Windows 11 PCs, the install command said that Natamux needs 64-bit Windows.
+- Fix: when Smart App Control blocks the installer, the install command now says so. See [Troubleshooting](/docs/help/troubleshooting/#smart-app-control-blocks-natamux).
+
 ## v1.0.31 (2026-11-22)
 
 - Offline mode: `NATAMUX_OFFLINE=1`, or `"offline": true` in `settings.json`, turns off every network call that Natamux makes by itself: no update check, no `gh`, no `git` network command. See [Offline mode](/docs/help/security-review/#offline-mode).
