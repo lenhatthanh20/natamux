@@ -7,6 +7,11 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v1.0.36 (2026-11-22)
+
+- The Windows installer and the Linux `.tar.gz` (in a folder you can write) update themselves: **Restart Now** installs the new version and opens it. See [Desktop app](/docs/guides/desktop-app/#updates).
+- On Windows or with the `.tar.gz`, v1.0.35 and older open the release page, so install v1.0.36 by hand once.
+
 ## v1.0.35 (2026-11-22)
 
 - Fix: on Windows and Linux, the menu items did nothing after a task or Agents was opened while Settings was open. See [Desktop app](/docs/guides/desktop-app/#menu).
