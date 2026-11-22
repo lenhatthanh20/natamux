@@ -9,8 +9,10 @@ use natamux_proto::tasks::task::TaskState;
 use natamux_proto::workspaces::workspace::PreparingStep;
 
 use super::clock;
+use super::command_types::MenuName;
 use super::dashboard::Dashboard;
 use super::fake_daemon::{self, FakeLink, NOW, PINNED};
+use super::menu_bar::{force_menu_row, open_under};
 use super::options::Shot;
 use super::shortcuts::{FindInTerminal, OpenRowMenu};
 use super::shots_files;
@@ -299,6 +301,14 @@ fn enter(shot: Shot, root: &mut Root, window: &mut Window, cx: &mut gpui::Contex
         Shot::AddMenu => {
             let width = window.viewport_size().width;
             open_add_menu(point(width - px(24.), px(30.)), window, cx);
+        }
+        // The menu bar of Windows and Linux, shown on macOS too, with its first menu open. The
+        // menu opens under its button once the row has been drawn.
+        Shot::MenuBar => {
+            force_menu_row(cx);
+            window.on_next_frame(|window, _| {
+                window.on_next_frame(|window, cx| open_under(MenuName::App, window, cx));
+            });
         }
         // The dock open with no task picked: nothing to do, the list starts with none.
         Shot::DetailsEmpty => {}

@@ -130,6 +130,7 @@ pub enum Shot {
     SignIn,
     SignInError,
     AddMenu,
+    MenuBar,
     DetailsEmpty,
     RailClosedPanel,
     ChangesOverMain,
@@ -208,7 +209,7 @@ pub enum Shot {
 }
 
 impl Shot {
-    pub const ALL: [Shot; 173] = [
+    pub const ALL: [Shot; 174] = [
         Shot::TasksTable,
         Shot::TasksBoard,
         Shot::BoardHoverCard,
@@ -292,6 +293,7 @@ impl Shot {
         Shot::SignIn,
         Shot::SignInError,
         Shot::AddMenu,
+        Shot::MenuBar,
         Shot::DetailsEmpty,
         Shot::RailClosedPanel,
         Shot::ChangesOverMain,
@@ -469,6 +471,7 @@ impl Shot {
             Shot::SignIn => "sign-in",
             Shot::SignInError => "sign-in-error",
             Shot::AddMenu => "add-menu",
+            Shot::MenuBar => "menu-bar",
             Shot::DetailsEmpty => "details-empty",
             Shot::RailClosedPanel => "rail-closed-panel",
             Shot::ChangesOverMain => "changes-over-main",

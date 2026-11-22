@@ -494,7 +494,8 @@ jobs:
             settings-search projects project-settings
             project-settings-tab-general
             project-settings-tab-json project-settings-json-error project-settings-trust import-issues sign-in
-            sign-in-error add-menu details-empty rail-closed-panel changes-over-main stage-evidence
+            sign-in-error add-menu menu-bar details-empty rail-closed-panel changes-over-main
+            stage-evidence
             start-task-branch-menu start-task-filled start-task-filled-end start-task-no-worktree
             start-task-one-agent start-task-error sidebar-blurred remove-workspace-anyway
             update-downloading update-ready update-failed settings-update-ready
@@ -538,7 +539,8 @@ jobs:
             settings-search projects project-settings
             project-settings-tab-general
             project-settings-tab-json project-settings-json-error project-settings-trust import-issues sign-in
-            sign-in-error add-menu details-empty rail-closed-panel changes-over-main stage-evidence
+            sign-in-error add-menu menu-bar details-empty rail-closed-panel changes-over-main
+            stage-evidence
             start-task-branch-menu start-task-filled start-task-filled-end start-task-no-worktree
             start-task-one-agent start-task-error sidebar-blurred remove-workspace-anyway
             update-downloading update-ready update-failed settings-update-ready

@@ -18,6 +18,8 @@ If the daemon stops unexpectedly, the app shows an error and offers to restart t
 
 ## Menu
 
+On macOS the menus are in the menu bar at the top of the screen. On Windows and Linux they are at the left end of the app's title bar: click a menu name to open it. While one menu is open, move the pointer to another name to open that one.
+
 | Item | What it does |
 |---|---|
 | **Settings…** (`Cmd/Ctrl+,`) | Opens Settings, including the automatic update switch |
