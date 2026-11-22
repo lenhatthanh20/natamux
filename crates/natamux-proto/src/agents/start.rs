@@ -56,6 +56,34 @@ pub const DEFAULT_PROGRAMS: [(&str, &str); 16] = [
     ("muse", "muse"),
 ];
 
+/// The name each agent shows to the user, as the app's agent list shows it.
+pub const AGENT_LABELS: [(&str, &str); 16] = [
+    ("claude-code", "Claude Code"),
+    ("codex", "Codex"),
+    ("gemini", "Gemini CLI"),
+    ("copilot", "GitHub Copilot"),
+    ("cursor", "Cursor"),
+    ("opencode", "OpenCode"),
+    ("qwen", "Qwen Code"),
+    ("droid", "Factory Droid"),
+    ("amp", "Amp"),
+    ("kimi", "Kimi CLI"),
+    ("goose", "Goose"),
+    ("aider", "Aider"),
+    ("crush", "Crush"),
+    ("cline", "Cline CLI"),
+    ("kiro", "Kiro CLI"),
+    ("muse", "Muse Code (Meta)"),
+];
+
+/// The label of an agent; any other id (a custom agent) as it is.
+pub fn agent_label(id: &str) -> &str {
+    AGENT_LABELS
+        .iter()
+        .find(|(name, _)| *name == id)
+        .map_or(id, |(_, label)| label)
+}
+
 /// `prompt` of a start: at most this many characters.
 pub const MAX_START_PROMPT_LENGTH: usize = 20_000;
 
@@ -90,6 +118,14 @@ mod tests {
         for agent in LAUNCHABLE_AGENTS.iter().skip(1) {
             assert!(!agent.contains('-'), "{agent}");
         }
+    }
+
+    #[test]
+    fn has_a_label_for_each_agent_and_keeps_an_unknown_id() {
+        let names: Vec<&str> = AGENT_LABELS.iter().map(|(name, _)| *name).collect();
+        assert_eq!(names, LAUNCHABLE_AGENTS);
+        assert_eq!(agent_label("claude-code"), "Claude Code");
+        assert_eq!(agent_label("my-agent"), "my-agent");
     }
 
     #[test]

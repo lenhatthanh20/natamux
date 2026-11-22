@@ -8,7 +8,7 @@ use ui::{ContextMenu, prelude::*};
 
 use super::edit_rules::{parse_labels, parse_task_ids};
 use crate::app::dashboard::Dashboard;
-use crate::components::button_style::{action_button, key_hint, quiet_button};
+use crate::components::button_style::{action_button, busy, key_hint, quiet_button};
 use crate::components::form::{field, input_box, text_editor};
 use crate::components::menu::MenuLayer;
 use crate::components::settings_card::error_line;
@@ -183,7 +183,7 @@ impl Render for EditForm {
             .track_focus(&self.priority_focus)
             .on_click(cx.listener(|this, event, window, cx| this.open_priority(event, window, cx)));
         let off = self.busy || blank || model_error.is_some();
-        let save = action_button("edit-save", "Save")
+        let save = busy(action_button("edit-save", "Save"), self.busy)
             .key_binding(key_hint("mod-enter", off))
             .disabled(off)
             .on_click(cx.listener(|this, _, _, cx| this.save(cx)));

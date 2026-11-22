@@ -238,3 +238,48 @@ fn only_a_change_the_view_shows_draws_the_panel(cx: &mut TestAppContext) {
     activity("Edit b.rs", cx);
     assert_ne!(slices(cx), before);
 }
+
+// A regression test: Add subtask did not set `busy`, so it never spun and a double click made two
+// subtasks.
+#[gpui::test]
+fn add_subtask_spins_and_a_second_click_makes_no_second_subtask(cx: &mut TestAppContext) {
+    use crate::tasks::details_commands::PanelCommand;
+
+    test_views::init(cx);
+    let source = Arc::new(Source::FakeDaemon);
+    let dashboard = cx.new(|cx| Dashboard::new(Ok(source), Default::default(), cx));
+    cx.run_until_parked();
+    let (panel_dashboard, workspace_dashboard) = (dashboard.clone(), dashboard.clone());
+    let (panel, cx) = cx.add_window_view(move |window, cx| {
+        let workspace = cx.new(|cx| WorkspaceView::new(workspace_dashboard, cx));
+        DetailsPanel::new(panel_dashboard, workspace, window, cx)
+    });
+    dashboard.update(cx, |dashboard, cx| {
+        dashboard.select(Some("T-0137".into()), cx)
+    });
+    panel.update(cx, |panel, cx| panel.sync(cx));
+    let children = |cx: &mut gpui::VisualTestContext| {
+        dashboard.read_with(cx, |dashboard, _| {
+            let tasks = &dashboard.data.tasks;
+            tasks
+                .iter()
+                .filter(|task| task.parent_id.as_deref() == Some("T-0137"))
+                .count()
+        })
+    };
+    let before = children(cx);
+
+    panel.update_in(cx, |panel, window, cx| {
+        panel.subtask.set_text("Child", window, cx);
+        panel.run(PanelCommand::AddSubtask, window, cx);
+        assert!(panel.runs(&PanelCommand::AddSubtask));
+        panel.subtask.set_text("Child again", window, cx);
+        panel.run(PanelCommand::AddSubtask, window, cx);
+    });
+    cx.run_until_parked();
+
+    assert_eq!(children(cx), before + 1);
+    panel.read_with(cx, |panel, _| {
+        assert!(!panel.runs(&PanelCommand::AddSubtask));
+    });
+}

@@ -11,11 +11,13 @@ use natamux_proto::tasks::task::Task;
 use natamux_proto::workspaces::workspace::GitGraph;
 use ui::{ButtonLike, Tooltip, prelude::*};
 
-use super::workspace_rules::{GitButton, GitStep, needs_commit, pull_request_button, push_button};
+use super::workspace_rules::{
+    GitButton, GitStep, needs_commit, pull_request_button, push_button, runs_step,
+};
 use super::wrap_up_rules::is_finished_state;
 use crate::app::links::open_link;
+use crate::components::button_style::busy_icon;
 use crate::components::icons::icon_path;
-use crate::components::spinner::Spinner;
 
 type OnClick = Rc<dyn Fn(&mut Window, &mut App)>;
 
@@ -71,14 +73,13 @@ fn git_button(
     run: OnClick,
 ) -> AnyElement {
     let off = button.reason.is_some() || busy || other_running;
-    let icon = if busy {
-        Spinner::new(IconSize::Small).into_any_element()
-    } else {
+    let icon = busy_icon(
         Icon::from_path(icon_path(icon))
             .size(IconSize::Small)
-            .color(Color::Muted)
-            .into_any_element()
-    };
+            .color(Color::Muted),
+        IconSize::Small,
+        busy,
+    );
     let tip = button.reason.clone().or(button.tip.clone());
     ButtonLike::new(id)
         .style(ButtonStyle::Outlined)
@@ -123,7 +124,7 @@ impl GitButtons {
         let task = &self.task;
         let finished = is_finished_state(task.state);
         let graph = self.graph.as_ref();
-        let runs = |step| self.pending == Some(step);
+        let runs = |step| runs_step(self.pending, step);
         let other_runs = |step| self.pending.is_some() && self.pending != Some(step);
         let push_status = graph.and_then(|graph| graph.push.as_ref());
         let commit_first = !finished && needs_commit(push_status, self.uncommitted);

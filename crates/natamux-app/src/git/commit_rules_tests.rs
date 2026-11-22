@@ -84,7 +84,29 @@ fn labels_the_changes_tab_with_the_files_to_commit() {
 
 #[test]
 fn names_the_agent_in_the_tooltip_of_generate() {
-    assert_eq!(draft_tip("Claude Code"), "Draft a message with Claude Code");
+    assert_eq!(
+        draft_tip("claude-code", "Claude Code"),
+        "Draft a message with Claude Code"
+    );
+    assert_eq!(
+        draft_tip("codex", "my-codex"),
+        "Draft a message with my-codex"
+    );
+}
+
+#[test]
+fn names_no_agent_when_the_task_agent_cannot_answer_once() {
+    for base in ["aider", "opencode", "other", "shell"] {
+        assert_eq!(
+            draft_tip(base, "Aider"),
+            "Draft a message with an installed agent"
+        );
+    }
+}
+
+#[test]
+fn names_the_agent_that_drafted_in_its_toast() {
+    assert_eq!(drafted_with_text("Codex"), "Drafted with Codex.");
 }
 
 #[test]

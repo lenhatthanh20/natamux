@@ -38,6 +38,9 @@ pub type CloseTerminals = Arc<dyn Fn(&str) + Send + Sync>;
 pub type OnCreated = Arc<dyn Fn(&Task) + Send + Sync>;
 /// The command of an agent (by its id), for the run that drafts a commit message.
 pub type ProgramOf = Arc<dyn Fn(&str) -> String + Send + Sync>;
+/// Whether the program of an agent's command line is installed, for the pick of the agent that
+/// drafts a commit message.
+pub type IsInstalled = Arc<dyn Fn(&str) -> bool + Send + Sync>;
 /// The body of a task's pull request. Its error (an issue that could not be opened) refuses the
 /// pull request.
 pub type PullRequestBody = Arc<dyn Fn(&Task) -> WorkspaceResult<String> + Send + Sync>;
@@ -64,6 +67,7 @@ pub struct WorkspaceOptions {
     pub close_terminals: CloseTerminals,
     pub on_created: Option<OnCreated>,
     pub program_of: ProgramOf,
+    pub is_installed: IsInstalled,
     pub pull_request_body: PullRequestBody,
     pub run_gh: RunGh,
     pub run_agent_once: RunAgentOnce,
@@ -97,6 +101,8 @@ impl WorkspaceOptions {
             close_terminals: Arc::new(|_| {}),
             on_created: None,
             program_of: Arc::new(|agent| default_program(agent).to_string()),
+            // Every program counts as installed; the wiring sets the PATH check.
+            is_installed: Arc::new(|_| true),
             pull_request_body: Arc::new(|task| {
                 let notes = js_trim(&task.description);
                 Ok(if notes.is_empty() {
@@ -174,6 +180,7 @@ pub struct WorkspaceService {
     pub(crate) close_terminals: CloseTerminals,
     pub(crate) on_created: Option<OnCreated>,
     pub(crate) program_of: ProgramOf,
+    pub(crate) is_installed: IsInstalled,
     pub(crate) pull_request_body: PullRequestBody,
     pub(crate) run_gh: RunGh,
     pub(crate) run_agent_once: RunAgentOnce,
@@ -216,6 +223,7 @@ impl WorkspaceService {
             close_terminals: options.close_terminals,
             on_created: options.on_created,
             program_of: options.program_of,
+            is_installed: options.is_installed,
             pull_request_body: options.pull_request_body,
             run_gh: options.run_gh,
             run_agent_once: options.run_agent_once,

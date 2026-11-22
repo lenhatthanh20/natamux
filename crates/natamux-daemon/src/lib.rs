@@ -118,6 +118,7 @@ pub mod workspaces {
     pub mod create;
     pub mod diff_stats;
     pub mod dirty;
+    pub mod draft_agent;
     pub mod errors;
     pub mod fan_out;
     pub mod files;

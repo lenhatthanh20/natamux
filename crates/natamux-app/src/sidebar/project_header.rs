@@ -7,7 +7,7 @@ use gpui::{AnyElement, ClickEvent, Entity, FontWeight, Hsla, MouseButton, MouseD
 use ui::{Tooltip, prelude::*};
 
 use super::blur_bar::{BlurBar, private_text};
-use super::project_buttons::hover_button;
+use super::project_buttons::hover_button_busy;
 use super::sidebar::{lucide, private, small, state_dot};
 use super::workspace_tree::{Snapshot, WorkspaceTree};
 use crate::app::dashboard::Dashboard;
@@ -277,16 +277,16 @@ impl WorkspaceTree {
             .h_full()
             .child(pill)
             .into_any_element();
-        let button = hover_button(
+        let button = hover_button_busy(
             SharedString::from(format!("remove-finished-{}", repo.id)),
             "folder-minus",
             format!("Remove finished workspaces in {name}"),
             group_name.clone(),
+            removing,
             move |_, window, cx| {
                 remove_finished::open(&dashboard, remove_repo.clone(), window, cx);
             },
         )
-        .disabled(removing)
         .into_any_element();
         // The header's frame, so the hover covers the button too.
         header_row(

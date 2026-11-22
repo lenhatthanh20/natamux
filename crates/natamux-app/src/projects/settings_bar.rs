@@ -7,7 +7,7 @@ use ui::{ContextMenu, ContextMenuEntry, Tooltip, prelude::*};
 use super::project_settings_page::ProjectSettingsPage;
 use super::settings_tab_rules::{FileAction, FileMenuEntry, SaveStatus, file_menu, save_status};
 use super::settings_text::count_label;
-use crate::components::button_style::{button_icon, quiet_button};
+use crate::components::button_style::{busy, button_icon, quiet_button};
 use crate::components::colors::accent;
 use crate::components::dialog::primary_button;
 use crate::components::icons::icon_path;
@@ -139,11 +139,14 @@ impl ProjectSettingsPage {
     pub(super) fn render_bar(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         self.base.as_ref()?;
         let blocked = self.save_blocked(cx);
-        let save = primary_button(
-            "Save",
-            &self.submit,
-            blocked.is_some() || self.saving,
-            cx.listener(|this, _, window, cx| this.save(window, cx)),
+        let save = busy(
+            primary_button(
+                "Save",
+                &self.submit,
+                blocked.is_some() || self.saving,
+                cx.listener(|this, _, window, cx| this.save(window, cx)),
+            ),
+            self.saving,
         )
         .tooltip(Tooltip::text(blocked.unwrap_or("Save .natamux.json")));
         let dirty = self.dirty(cx);

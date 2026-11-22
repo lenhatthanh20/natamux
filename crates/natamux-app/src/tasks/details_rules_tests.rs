@@ -283,3 +283,22 @@ fn the_panel_waits_for_the_soonest_time_it_shows() {
     assert_eq!(details_wait(&done, [event], &[], now), Some(40_000));
     assert_eq!(details_wait(&done, [], &[], now), Some(40_000));
 }
+
+#[test]
+fn the_click_that_starts_a_call_is_the_one_that_spins() {
+    let approve = PanelCommand::Approve("review".into());
+    let skip = PanelCommand::Skip("review".into());
+    // Approve turned `busy` on.
+    let running = started_command(false, true, approve.clone(), None);
+    assert_eq!(running, Some(approve.clone()));
+    // A click while the call runs, or one that starts nothing, keeps Approve.
+    assert_eq!(
+        started_command(true, true, skip.clone(), running.clone()),
+        running
+    );
+    assert_eq!(started_command(false, false, skip.clone(), None), None);
+    assert!(command_runs(true, running.as_ref(), &approve));
+    assert!(!command_runs(true, running.as_ref(), &skip));
+    // Once the call answered, nothing spins.
+    assert!(!command_runs(false, running.as_ref(), &approve));
+}

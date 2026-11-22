@@ -17,7 +17,7 @@ use super::remove_dialog_rules::{
 };
 use crate::app::dashboard::Dashboard;
 use crate::app::source::reason;
-use crate::components::button_style::action_button;
+use crate::components::button_style::{action_button, busy as busy_button};
 use crate::components::colors::change_color;
 use crate::components::dialog::{
     DialogFrame, DialogLayer, DialogView, cancel_button, primary_button,
@@ -420,7 +420,10 @@ impl RemoveWorkspaceDialog {
                     .child(Label::new(error).size(LabelSize::Small).color(Color::Error))
             }))
             .footer(cancel_button("Cancel", &self.cancel, cancel).disabled(self.removing))
-            .footer(primary_button(label, &self.submit, waiting, submit))
+            .footer(busy_button(
+                primary_button(label, &self.submit, waiting, submit),
+                self.removing,
+            ))
             .into_any_element()
     }
 }

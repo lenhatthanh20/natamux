@@ -4,6 +4,7 @@
 //! tab row and the body of its tab: the terminal panes (or the wrap-up of a finished task),
 //! Changes, History, Docs, or the open file.
 
+use std::collections::BTreeSet;
 use std::rc::Rc;
 use std::time::Duration;
 
@@ -50,6 +51,8 @@ struct Shown {
     pending: Option<GitStep>,
     starting: bool,
     reopening: bool,
+    /// The terminals whose Stop is on its way: their button spins.
+    stopping: BTreeSet<String>,
     /// Open a new terminal of the wrap-up: the panes show in place of it.
     shells_wanted: bool,
     shown_screen: Option<String>,
@@ -284,6 +287,7 @@ impl WorkspaceView {
         shown.pending = None;
         shown.starting = false;
         shown.reopening = false;
+        shown.stopping.clear();
         let id = shown.task_id.clone();
         self.cache.put(id, shown);
     }

@@ -15,7 +15,7 @@ use super::repo_trust_dialog::review;
 use crate::app::dashboard::Dashboard;
 use crate::app::dashboard_data::{Part, Seen};
 use crate::app::source::reason;
-use crate::components::button_style::quiet_button;
+use crate::components::button_style::{busy, quiet_button};
 use crate::components::dialog::{DialogFrame, DialogLayer, DialogView, primary_button};
 use crate::components::form::{SettingsInput, text_editor};
 use crate::components::icons::icon_path;
@@ -363,11 +363,14 @@ impl Render for ProjectsDialog {
         }
         let (folder_problem, worktree_problem) = self.problems(cx);
         let empty = !self.can_add(cx);
-        let add = primary_button(
-            "Add project",
-            &self.submit_focus,
-            empty || self.busy,
-            cx.listener(|this, _, window, cx| this.add(window, cx)),
+        let add = busy(
+            primary_button(
+                "Add project",
+                &self.submit_focus,
+                empty || self.busy,
+                cx.listener(|this, _, window, cx| this.add(window, cx)),
+            ),
+            self.busy,
         )
         .tooltip(Tooltip::text(if self.folder.text(cx).trim().is_empty() {
             "Enter the folder first"

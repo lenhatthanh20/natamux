@@ -10,10 +10,10 @@ use natamux_proto::tasks::task::{Task, TaskState};
 use ui::{Tooltip, prelude::*};
 
 use super::remove_dialog_rules::remove_label;
-use super::workspace_rules::{GitStep, push_button};
+use super::workspace_rules::{GitStep, push_button, runs_step};
 use super::wrap_up_rules::{FinishedAction, FinishedBannerText, GitFacts, finished_banner};
 use crate::app::links::open_link;
-use crate::components::button_style::action_button;
+use crate::components::button_style::{action_button, busy};
 use crate::components::colors::state_colors;
 use crate::components::icons::icon_path;
 
@@ -58,9 +58,10 @@ fn button(
     id: &'static str,
     label: impl Into<SharedString>,
     disabled: bool,
+    running: bool,
     run: OnClick,
 ) -> Button {
-    action_button(id, label)
+    busy(action_button(id, label), running)
         .label_size(LabelSize::Small)
         .disabled(disabled)
         .on_click(move |_: &ClickEvent, window, cx| run(window, cx))
@@ -70,6 +71,7 @@ impl FinishedBanner {
     /// The next git step's button, the first that matches.
     fn main_button(&self, primary: Option<FinishedAction>) -> Option<AnyElement> {
         let busy = self.pending.is_some();
+        let step = |step: GitStep| runs_step(self.pending, step);
         let graph = self.facts.graph.as_ref();
         match primary? {
             FinishedAction::Push => {
@@ -80,7 +82,13 @@ impl FinishedBanner {
                 );
                 let off = busy || push.reason.is_some();
                 let tip = push.reason.or(push.tip);
-                let main = button("finished-push", push.label, off, self.actions.push.clone());
+                let main = button(
+                    "finished-push",
+                    push.label,
+                    off,
+                    step(GitStep::Push),
+                    self.actions.push.clone(),
+                );
                 Some(match tip {
                     Some(tip) => main.tooltip(Tooltip::text(tip)).into_any_element(),
                     None => main.into_any_element(),
@@ -88,25 +96,29 @@ impl FinishedBanner {
             }
             FinishedAction::CreatePullRequest => {
                 let run = self.actions.pull_request.clone();
-                Some(button("finished-create-pr", "Create PR", busy, run).into_any_element())
+                let running = step(GitStep::PullRequest);
+                let main = button("finished-create-pr", "Create PR", busy, running, run);
+                Some(main.into_any_element())
             }
             FinishedAction::OpenPullRequest => self.task.pr.clone().map(|url| {
                 let open: OnClick =
                     Rc::new(move |_: &mut Window, cx: &mut App| open_link(&url, cx));
-                button("finished-open-pr", "Open pull request", false, open).into_any_element()
+                let main = button("finished-open-pr", "Open pull request", false, false, open);
+                main.into_any_element()
             }),
             FinishedAction::Remove => {
                 let run = self.actions.remove.clone();
                 let label = remove_label(&self.task);
-                Some(button("finished-remove", label, busy, run).into_any_element())
+                Some(button("finished-remove", label, busy, false, run).into_any_element())
             }
             FinishedAction::Commit => {
                 let run = self.actions.commit.clone();
-                Some(button("finished-commit", "Commit…", busy, run).into_any_element())
+                Some(button("finished-commit", "Commit…", busy, false, run).into_any_element())
             }
             FinishedAction::ViewChanges => {
                 let run = self.actions.view_changes.clone();
-                Some(button("finished-view-changes", "View changes", false, run).into_any_element())
+                let main = button("finished-view-changes", "View changes", false, false, run);
+                Some(main.into_any_element())
             }
         }
     }
@@ -120,6 +132,7 @@ impl FinishedBanner {
             "finished-remove",
             remove_label(&self.task),
             self.pending.is_some(),
+            false,
             self.actions.remove.clone(),
         ))
     }

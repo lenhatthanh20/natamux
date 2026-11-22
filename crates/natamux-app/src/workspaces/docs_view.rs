@@ -8,7 +8,7 @@ use super::docs_rules::{EMPTY_TEXT, STALE_LINE, is_stale};
 use super::docs_tab::DocsTab;
 use crate::app::dashboard::Dashboard;
 use crate::app::view_rules::WorkspaceTab;
-use crate::components::button_style::{action_button, quiet_button};
+use crate::components::button_style::{action_button, busy as busy_button, quiet_button};
 use crate::components::colors::signal;
 use crate::components::segmented::Segmented;
 use crate::components::skeleton::{Loading, SkeletonList};
@@ -65,10 +65,8 @@ impl DocsTab {
                         .on_click(cx.listener(|this, _, window, cx| this.cancel(window, cx))),
                 )
                 .child(
-                    action_button("docs-save", "Save")
+                    busy_button(action_button("docs-save", "Save"), busy)
                         .label_size(LabelSize::Small)
-                        .loading(busy)
-                        .disabled(busy)
                         .on_click(cx.listener(|this, _, window, cx| this.save(window, cx))),
                 )
                 .child(terminals_to_main(&self.dashboard))

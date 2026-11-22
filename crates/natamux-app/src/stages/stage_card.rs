@@ -61,6 +61,8 @@ pub struct CardInput {
 /// The actions row of the current stage, while the task is open.
 pub struct ActionsInput {
     pub busy: bool,
+    /// The command whose call runs: only its button spins.
+    pub running: Option<PanelCommand>,
     pub resuming: bool,
     pub agent_label: String,
 }

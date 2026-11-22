@@ -11,7 +11,7 @@ use ui::{ButtonLike, Tooltip, prelude::*};
 
 use super::{DetailsPanel, Shown};
 use crate::app::clock::now_ms;
-use crate::components::button_style::{action_button, quiet_button};
+use crate::components::button_style::{action_button, busy as busy_button, quiet_button};
 use crate::components::chips::StateChip;
 use crate::components::detail_section::{DetailSection, field};
 use crate::components::form::input_box;
@@ -133,6 +133,7 @@ impl DetailsPanel {
         });
         let rows: Vec<AnyElement> = rows.collect();
         let add = on.clone();
+        let adding = self.runs(&PanelCommand::AddSubtask);
         let open = self.open_of("subtasks", true, cx);
         DetailSection::new("subtasks", "Subtasks", open, self.fold("subtasks", cx))
             .aside(subtasks_aside(&subtasks))
@@ -142,7 +143,7 @@ impl DetailsPanel {
                     .gap_2()
                     .child(div().flex_1().child(input_box(&self.subtask, cx)))
                     .child(
-                        action_button("details-add-subtask", "Add")
+                        busy_button(action_button("details-add-subtask", "Add"), adding)
                             .label_size(LabelSize::Small)
                             .disabled(busy || empty)
                             .on_click(move |_, window, cx| {
@@ -179,6 +180,7 @@ impl DetailsPanel {
                     .unwrap_or_default();
                 let (open, keep) = (on.clone(), on.clone());
                 let (id, kept) = (each.id.clone(), each.id.clone());
+                let keeping = self.runs(&PanelCommand::KeepTry(each.id.clone()));
                 let weight = if each.id == task.id {
                     FontWeight::BOLD
                 } else {
@@ -200,9 +202,12 @@ impl DetailsPanel {
                     .child(small(pr).color(Color::Muted))
                     .when(can_keep(each), |this| {
                         this.child(
-                            action_button(
-                                SharedString::from(format!("keep-{}", each.id)),
-                                "Keep this try",
+                            busy_button(
+                                action_button(
+                                    SharedString::from(format!("keep-{}", each.id)),
+                                    "Keep this try",
+                                ),
+                                keeping,
                             )
                             .label_size(LabelSize::Small)
                             .disabled(busy)

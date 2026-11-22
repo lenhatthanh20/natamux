@@ -7,6 +7,7 @@ use gpui::{KeybindingKeystroke, Keystroke};
 use ui::{KeyBinding, KeybindingPosition, prelude::*};
 
 use super::icons::icon_path;
+use super::spinner::Spinner;
 
 /// A button for an action: grey with a border, its key hint before the label.
 pub fn action_button(id: impl Into<ElementId>, label: impl Into<SharedString>) -> Button {
@@ -20,6 +21,23 @@ pub fn quiet_button(id: impl Into<ElementId>, label: impl Into<SharedString>) ->
     Button::new(id, label)
         .style(ButtonStyle::Subtle)
         .key_binding_position(KeybindingPosition::Start)
+}
+
+/// The busy state of a button (docs/ui-spec.md, Button states): from the click until the answer,
+/// the 8-dash spinner takes the place of its start icon and the button is off; the label and the
+/// key hint stay. Only the button whose work runs is busy; the others are only off.
+pub fn busy(button: Button, running: bool) -> Button {
+    button.spinner(running.then(|| Spinner::new(IconSize::Small)))
+}
+
+/// `busy` for a button built from `ButtonLike`: the spinner in place of `icon`, of the same size.
+/// The caller turns the button off.
+pub fn busy_icon(icon: impl IntoElement, size: IconSize, running: bool) -> AnyElement {
+    if running {
+        Spinner::new(size).into_any_element()
+    } else {
+        icon.into_any_element()
+    }
 }
 
 /// The icon before a button's label, by its Lucide name (Zed's twin where there is one).
@@ -78,6 +96,28 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_running_button_is_busy_and_off() {
+        let running = busy(
+            action_button("save", "Save").start_icon(button_icon("check")),
+            true,
+        );
+        assert!(running.is_busy());
+        assert!(running.is_off());
+        // A later `.disabled(false)` does not turn it back on.
+        assert!(running.disabled(false).is_off());
+    }
+
+    #[test]
+    fn a_button_that_does_not_run_keeps_its_state() {
+        let idle = busy(action_button("save", "Save"), false);
+        assert!(!idle.is_busy());
+        assert!(!idle.is_off());
+        let off = busy(action_button("save", "Save").disabled(true), false);
+        assert!(!off.is_busy());
+        assert!(off.is_off());
+    }
+
+    #[test]
     fn mod_is_the_secondary_modifier_of_gpui() {
         assert_eq!(gpui_stroke("mod-enter"), "secondary-enter");
         assert_eq!(gpui_stroke("mod-shift-g"), "secondary-shift-g");
@@ -114,6 +154,30 @@ mod tests {
                 files.push(path);
             }
         }
+    }
+
+    /// A second spinner (Zed's turning circle), written in two parts so this file does not match
+    /// itself. `busy` and `busy_icon` are the one way to show a button at work.
+    const OTHER_SPINNERS: [(&str, &str); 2] = [("LoadCir", "cle"), ("\"load", "er")];
+
+    #[test]
+    fn buttons_show_work_with_the_one_busy_spinner() {
+        let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut files = Vec::new();
+        rust_files(&src, &mut files);
+        assert!(!files.is_empty());
+        let mut found = Vec::new();
+        for file in files {
+            let text = std::fs::read_to_string(&file).unwrap_or_default();
+            for (line_no, line) in text.lines().enumerate() {
+                for (head, tail) in OTHER_SPINNERS {
+                    if line.contains(&format!("{head}{tail}")) {
+                        found.push(format!("{}:{}", file.display(), line_no + 1));
+                    }
+                }
+            }
+        }
+        assert!(found.is_empty(), "use busy() or busy_icon(): {found:?}");
     }
 
     #[test]

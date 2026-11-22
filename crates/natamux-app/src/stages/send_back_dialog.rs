@@ -10,6 +10,7 @@ use ui::{ContextMenu, Tooltip, prelude::*};
 
 use super::send_back_rules::{default_send_back_to, earlier_stages, send_back_reason};
 use crate::app::dashboard::Dashboard;
+use crate::components::button_style::busy;
 use crate::components::dialog::{
     DialogFrame, DialogLayer, DialogView, cancel_button, primary_button,
 };
@@ -182,11 +183,14 @@ impl Render for SendBackDialog {
             cx.listener(|_, _, _, cx| cx.emit(DismissEvent)),
         ))
         .footer(
-            primary_button(
-                "Send back",
-                &self.submit_focus,
+            busy(
+                primary_button(
+                    "Send back",
+                    &self.submit_focus,
+                    self.busy,
+                    cx.listener(|this, _, window, cx| this.submit(window, cx)),
+                ),
                 self.busy,
-                cx.listener(|this, _, window, cx| this.submit(window, cx)),
             )
             .tooltip(Tooltip::text(
                 "The stage runs again, and the agent gets your reason with its prompt.",

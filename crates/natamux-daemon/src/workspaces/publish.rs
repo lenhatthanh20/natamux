@@ -4,7 +4,6 @@
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 
 use natamux_agents::custom::agent_kind;
-use natamux_agents::launch::has_one_shot;
 use natamux_git::changes::list_changes;
 use natamux_git::commit_drafter::{AgentRun, DraftInput, MAX_DIFF_CHARS, draft_commit_message};
 use natamux_git::commit_push::{commit_all, push_branch, read_commit_diff};
@@ -15,6 +14,7 @@ use natamux_proto::tasks::task::Task;
 use natamux_proto::workspaces::changes::{CommitMessageDraft, DraftSource};
 use serde_json::json;
 
+use crate::workspaces::draft_agent::{DraftPick, first_draft_agent, pick_draft_agent};
 use crate::workspaces::errors::{WorkspaceError, WorkspaceResult};
 use crate::workspaces::service::WorkspaceService;
 
@@ -141,26 +141,30 @@ impl WorkspaceService {
         let workspace = self.workspace_of(task_id)?;
         let task = self.tasks.get_task(task_id)?;
         // A custom agent drafts as its base with the base's own program: its command may be a
-        // function of the user's interactive shell, which this run does not load. An agent with
-        // no mode that only answers drafts with Claude Code.
-        let agent = task
-            .agent
-            .as_deref()
-            .map(agent_kind)
-            .filter(|agent| has_one_shot(agent))
-            .unwrap_or_else(|| "claude-code".to_string());
+        // function of the user's interactive shell, which this run does not load.
+        let kind = task.agent.as_deref().map(agent_kind);
         let diff = read_commit_diff(&workspace, MAX_DIFF_CHARS)?;
         let changes = list_changes(&workspace, false)?;
         // No agent run in a repo whose commands are not approved: the agent would load the repo's
-        // own agent config. The simple draft takes its place.
-        let trusted = self.repos.is_trusted(task.repo.as_deref());
-        let untrusted = |_: AgentRun| Err::<String, String>(UNTRUSTED_REASON.to_string());
-        let run: &dyn Fn(AgentRun) -> Result<String, String> = if trusted {
-            &*self.run_agent_once
+        // own agent config. The simple draft takes its place, as when no agent is installed.
+        let (agent, refusal, note) = if !self.repos.is_trusted(task.repo.as_deref()) {
+            let agent = first_draft_agent(kind.as_deref());
+            (agent, Some(UNTRUSTED_REASON.to_string()), None)
         } else {
-            &untrusted
+            match pick_draft_agent(kind.as_deref(), &*self.program_of, &*self.is_installed) {
+                DraftPick::Agent { agent, note } => (agent, None, note),
+                DraftPick::Missing(reason) => {
+                    (first_draft_agent(kind.as_deref()), Some(reason), None)
+                }
+            }
         };
-        let draft = draft_commit_message(
+        let refuse = |_: AgentRun| Err::<String, String>(refusal.clone().unwrap_or_default());
+        let run: &dyn Fn(AgentRun) -> Result<String, String> = if refusal.is_some() {
+            &refuse
+        } else {
+            &*self.run_agent_once
+        };
+        let mut draft = draft_commit_message(
             &DraftInput {
                 program: (self.program_of)(&agent),
                 agent: agent.clone(),
@@ -172,6 +176,9 @@ impl WorkspaceService {
             },
             run,
         );
+        if draft.source == DraftSource::Agent {
+            draft.reason = note;
+        }
         if draft.source == DraftSource::Draft {
             (self.log)(&format!(
                 "No commit message draft by {agent} for {task_id}: {}",

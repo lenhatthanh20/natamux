@@ -13,9 +13,12 @@ use ui::prelude::*;
 
 use super::writes::Written;
 use super::{Dashboard, DashboardChange};
+use crate::agents::agent_choices::agent_label;
 use crate::components::toast_rules::ToastTone;
 use crate::components::toasts::{ToastAction, push_toast};
-use crate::git::commit_rules::{committed_text, rolled_back_text};
+use crate::git::commit_rules::{
+    DRAFT_FALLBACK, committed_text, drafted_with_text, rolled_back_text,
+};
 use crate::workspaces::workspace_rules::GitStep;
 
 impl Dashboard {
@@ -65,15 +68,15 @@ impl Dashboard {
             true,
             cx,
             |_, draft: &CommitMessageDraft, cx| {
-                if draft.source == DraftSource::Draft {
-                    push_toast(
-                        "The agent could not draft the message. A simple draft is in the box.",
-                        ToastTone::Info,
-                        draft.reason.clone(),
-                        Vec::new(),
-                        cx,
-                    );
-                }
+                // An agent's draft carries a reason only when it was not the task's agent.
+                let text = match (draft.source, &draft.reason) {
+                    (DraftSource::Draft, _) => DRAFT_FALLBACK.to_string(),
+                    (DraftSource::Agent, Some(_)) => {
+                        drafted_with_text(&agent_label(Some(draft.agent.as_str())))
+                    }
+                    (DraftSource::Agent, None) => return,
+                };
+                push_toast(&text, ToastTone::Info, draft.reason.clone(), Vec::new(), cx);
             },
         );
         Self::on_failure(answer, "Could not draft the commit message.", cx)

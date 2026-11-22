@@ -109,11 +109,22 @@ fn input() -> CardInput {
 /// Clicks each button once and says what it sent, as "button: commands", plus whether a menu
 /// opened after the agent picker.
 fn clicks(busy: bool, resuming: bool, cx: &mut TestAppContext) -> Vec<String> {
+    clicks_running(busy, resuming, None, cx)
+}
+
+/// `clicks` with the command whose call runs (its button spins and takes no click).
+fn clicks_running(
+    busy: bool,
+    resuming: bool,
+    running: Option<PanelCommand>,
+    cx: &mut TestAppContext,
+) -> Vec<String> {
     let sent: Rc<RefCell<Vec<PanelCommand>>> = Rc::default();
     let log = sent.clone();
     let on: OnCommand = Rc::new(move |command, _, _| log.borrow_mut().push(command));
     let actions = ActionsInput {
         busy,
+        running,
         resuming,
         agent_label: "Claude Code".into(),
     };
@@ -183,4 +194,13 @@ fn t24_card_buttons_while_a_request_is_on_its_way(cx: &mut TestAppContext) {
 fn t24_resume_is_off_while_it_resumes(cx: &mut TestAppContext) {
     let seen = clicks(false, true, cx);
     assert_eq!(seen[2], "Resume: []");
+}
+
+/// Only the button of the running command spins: with `busy` left off, it alone takes no click.
+#[gpui::test]
+fn only_the_running_card_button_spins(cx: &mut TestAppContext) {
+    let seen = clicks_running(false, false, Some(PanelCommand::Skip(STAGE.into())), cx);
+    assert_eq!(seen[6], "Skip: []");
+    assert_eq!(seen[0], "Approve { anyway: false }: [Approve(\"review\")]");
+    assert_eq!(seen[5], "Start: [Start(\"review\")]");
 }

@@ -42,7 +42,6 @@ pub fn zed_icon(name: &str) -> Option<IconName> {
         "list-filter" => IconName::Filter,
         "list-todo" => IconName::ListTodo,
         "list-tree" => IconName::ListTree,
-        "loader" | "loader-circle" => IconName::LoadCircle,
         "maximize-2" => IconName::Maximize,
         "minimize-2" => IconName::Minimize,
         "menu" => IconName::Menu,

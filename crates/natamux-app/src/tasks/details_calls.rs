@@ -9,13 +9,21 @@ use ui::prelude::*;
 use super::DetailsPanel;
 use super::run::failure_of;
 use crate::app::dashboard::Dashboard;
-use crate::tasks::details_commands::StageToggle;
+use crate::tasks::details_commands::{PanelCommand, StageToggle};
+use crate::tasks::details_rules::command_runs;
 
 type Written<T> = gpui::Task<Result<T, ClientError>>;
 
 impl DetailsPanel {
     fn busy(&self) -> bool {
         self.shown.as_ref().is_some_and(|shown| shown.busy)
+    }
+
+    /// The call of `command` runs now: its button spins.
+    pub(super) fn runs(&self, command: &PanelCommand) -> bool {
+        self.shown
+            .as_ref()
+            .is_some_and(|shown| command_runs(shown.busy, shown.running.as_ref(), command))
     }
 
     /// Runs one call unless one is on its way, keeps the buttons off until it answers, then runs

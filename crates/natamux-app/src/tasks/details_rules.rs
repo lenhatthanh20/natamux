@@ -12,7 +12,28 @@ use super::task_attention::next_row_change_ms;
 use super::task_rules::{AgentAction, TaskAction};
 use super::task_time::{AgeStyle, format_age, format_exact, next_age_change_ms};
 use crate::stages::overview_rules::next_progress_change_ms;
+use crate::tasks::details_commands::PanelCommand;
 use crate::workspaces::new_workspace_rules::start_branch;
+
+/// The command that started the panel's call: set when this click turned `busy` on, so only its
+/// button spins. A click that started nothing keeps what was there.
+pub fn started_command(
+    was_busy: bool,
+    busy: bool,
+    clicked: PanelCommand,
+    running: Option<PanelCommand>,
+) -> Option<PanelCommand> {
+    if busy && !was_busy {
+        Some(clicked)
+    } else {
+        running
+    }
+}
+
+/// The call of `command` runs now: `busy`, and it is the command that started it.
+pub fn command_runs(busy: bool, running: Option<&PanelCommand>, command: &PanelCommand) -> bool {
+    busy && running == Some(command)
+}
 
 pub const NO_NOTES: &str = "No notes. Add some with Edit.";
 pub const NO_WORKSPACE: &str = "No workspace.";

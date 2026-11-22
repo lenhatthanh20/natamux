@@ -118,6 +118,12 @@ pub fn send_reason(comment: &str) -> Option<&'static str> {
     comment.trim().is_empty().then_some(SEND_REASON)
 }
 
+/// Which button spins while a comment is on its way: (Add comment, Send now). `sending_now`: the
+/// one on its way is Send now.
+pub fn comment_spinners(sending: bool, sending_now: bool) -> (bool, bool) {
+    (sending && !sending_now, sending && sending_now)
+}
+
 #[cfg(test)]
 #[path = "comment_rules_tests.rs"]
 mod tests;

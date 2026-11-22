@@ -12,7 +12,7 @@ use ui::{ContextMenu, Tooltip, prelude::*};
 
 use super::task_view_rules::{add_blocked_reason, task_repo};
 use crate::app::dashboard::Dashboard;
-use crate::components::button_style::{action_button, key_hint};
+use crate::components::button_style::{action_button, busy, key_hint};
 use crate::components::dialog::{DialogFrame, DialogLayer, DialogSize, DialogView};
 use crate::components::form::text_editor;
 use crate::components::menu::MenuLayer;
@@ -332,7 +332,7 @@ impl Render for AddTaskDialog {
             .key_binding(key_hint("mod-enter", false))
             .track_focus(&self.start_focus)
             .on_click(cx.listener(|this, _: &ClickEvent, window, cx| this.start(window, cx)));
-        let add = action_button("add-task-submit", "Add")
+        let add = busy(action_button("add-task-submit", "Add"), self.busy)
             .key_binding(key_hint("enter", blocked.is_some()))
             .track_focus(&self.add_focus)
             .disabled(blocked.is_some())

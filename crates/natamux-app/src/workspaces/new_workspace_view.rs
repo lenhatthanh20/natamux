@@ -11,7 +11,7 @@ use super::super::new_workspace_view_rules::{
     FooterNote, base_name, checked_out, footer_note, inline_error, stage_names, start_tip,
 };
 use super::NewWorkspaceDialog;
-use crate::components::button_style::button_icon;
+use crate::components::button_style::{busy, button_icon};
 use crate::components::chips::tip_with_keys;
 use crate::components::colors::TileColor;
 use crate::components::dialog::{DialogFrame, cancel_button, primary_button};
@@ -82,7 +82,10 @@ impl NewWorkspaceDialog {
     fn start_button(&self, reason: Option<&'static str>, cx: &mut Context<Self>) -> AnyElement {
         let off = reason.is_some() || self.busy;
         let submit = cx.listener(|this, _, window, cx| this.start_checked(window, cx));
-        let button = primary_button(start_label(self.busy), &self.stops.submit, off, submit);
+        let button = busy(
+            primary_button(start_label(self.busy), &self.stops.submit, off, submit),
+            self.busy,
+        );
         let tip = start_tip(reason, self.busy, !self.worktree);
         div()
             .id("new-task-start-tip")

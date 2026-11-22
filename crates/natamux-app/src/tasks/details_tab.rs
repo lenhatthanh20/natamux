@@ -9,7 +9,9 @@ use ui::{Tooltip, prelude::*};
 use super::DetailsPanel;
 use crate::app::clock::now_ms;
 use crate::app::links::open_link;
-use crate::components::button_style::{action_button, button_icon, key_hint, quiet_button};
+use crate::components::button_style::{
+    action_button, busy as busy_button, button_icon, key_hint, quiet_button,
+};
 use crate::components::chips::{StateChip, label_chip, tip_with_keys};
 use crate::components::colors::signal;
 use crate::components::detail_section::{DetailSection, field, field_fit};
@@ -133,10 +135,11 @@ impl DetailsPanel {
         let buttons = actions.into_iter().map(|action| {
             let label = action.label;
             let id = SharedString::from(format!("action-{}", action.event_type));
-            let mut button = action_button(id, label)
+            let event = PanelCommand::TaskEvent(action.event_type);
+            let mut button = busy_button(action_button(id, label), self.runs(&event))
                 .label_size(LabelSize::Small)
                 .disabled(busy)
-                .on_click(send(on, PanelCommand::TaskEvent(action.event_type)));
+                .on_click(send(on, event));
             if let Some(key) = action.hotkey {
                 button = button
                     .key_binding(key_hint(&key.to_string(), busy))
@@ -146,9 +149,11 @@ impl DetailsPanel {
         });
         let agent = agent_action(task.state, task.agent.as_deref()).map(|action| {
             let shown = agent_button(action, waiting, busy);
-            action_button("details-agent", shown.label)
+            let starting = self.runs(&PanelCommand::StartAgent);
+            let button =
+                action_button("details-agent", shown.label).start_icon(button_icon(shown.icon));
+            busy_button(button, starting)
                 .label_size(LabelSize::Small)
-                .start_icon(button_icon(shown.icon))
                 .disabled(shown.disabled)
                 .tooltip(Tooltip::text(shown.tip))
                 .on_click(send(on, PanelCommand::StartAgent))
@@ -190,7 +195,8 @@ impl DetailsPanel {
             }
             None if can_create => {
                 let on = self.on_command(cx);
-                action_button("create-issue", "Create issue")
+                let creating = self.runs(&PanelCommand::CreateIssue);
+                busy_button(action_button("create-issue", "Create issue"), creating)
                     .size(ButtonSize::Compact)
                     .label_size(LabelSize::Small)
                     .disabled(self.shown.as_ref().is_some_and(|shown| shown.busy))
@@ -339,11 +345,14 @@ impl DetailsPanel {
             .gap_2()
             .children(picker)
             .child(
-                Button::new("details-create-workspace", "Create workspace")
-                    .style(ButtonStyle::Outlined)
-                    .label_size(LabelSize::Small)
-                    .disabled(busy)
-                    .on_click(send(on, PanelCommand::CreateWorkspace)),
+                busy_button(
+                    Button::new("details-create-workspace", "Create workspace"),
+                    self.runs(&PanelCommand::CreateWorkspace),
+                )
+                .style(ButtonStyle::Outlined)
+                .label_size(LabelSize::Small)
+                .disabled(busy)
+                .on_click(send(on, PanelCommand::CreateWorkspace)),
             )
             .into_any_element()
     }
@@ -376,10 +385,13 @@ impl DetailsPanel {
                 .color(Color::Muted)
         }))
         .child(
-            Button::new("details-check-pr", "Check now")
-                .label_size(LabelSize::Small)
-                .disabled(busy)
-                .on_click(send(on, PanelCommand::CheckPullRequest)),
+            busy_button(
+                Button::new("details-check-pr", "Check now"),
+                self.runs(&PanelCommand::CheckPullRequest),
+            )
+            .label_size(LabelSize::Small)
+            .disabled(busy)
+            .on_click(send(on, PanelCommand::CheckPullRequest)),
         )
     }
 }
