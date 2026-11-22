@@ -266,9 +266,10 @@ jobs:
         run: |
           mkdir -p dist
           # NSIS needs Windows paths: with forward slashes File finds no files.
+          version=$(sed -n 's/^version = "\([^"]*\)"$/\1/p' crates/natamux-app/Cargo.toml | head -n 1)
           "C:/Program Files (x86)/NSIS/makensis.exe" \
             -DROOT="$(cygpath -w "$PWD")" -DBIN="$(cygpath -w "$PWD/target/release")" -DOUT="$(cygpath -w "$PWD/dist")" \
-            scripts/natamux-windows.nsi
+            -DVERSION="$version" scripts/natamux-windows.nsi
           7z l dist/Natamux-win-x64.exe | grep natamux-daemon.exe >/dev/null
           7z x -y -o"$RUNNER_TEMP/unpacked" dist/Natamux-win-x64.exe >/dev/null
           test -f "$RUNNER_TEMP/unpacked/natamux-app.exe"
@@ -278,6 +279,33 @@ jobs:
           ${{ matrix.py }} scripts/windows-crt-check.py "$RUNNER_TEMP"/unpacked/{natamux-app,natamux-daemon,natamux,nmx}.exe
           scripts/release-smoke.sh "$RUNNER_TEMP/unpacked/natamux-app.exe" \
             "$(cygpath -u "$APPDATA")/Natamux"
+      # Run the real installer and uninstaller: Settings > Apps lists only apps with an
+      # Uninstall key (T-0365).
+      - name: Check the Windows install and uninstall
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = (Select-String -Path crates/natamux-app/Cargo.toml -Pattern '^version = "(.*)"$' | Select-Object -First 1).Matches[0].Groups[1].Value
+          $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Natamux'
+          $dir = Join-Path $env:LOCALAPPDATA 'Programs\Natamux'
+          $run = Start-Process -FilePath dist\Natamux-win-x64.exe -ArgumentList '/S' -Wait -PassThru
+          if ($run.ExitCode -ne 0) { throw "The installer stopped with exit code $($run.ExitCode)." }
+          $entry = Get-ItemProperty $key
+          if ($entry.DisplayName -ne 'Natamux') { throw "DisplayName is '$($entry.DisplayName)'." }
+          if ($entry.DisplayVersion -ne $version) { throw "DisplayVersion is '$($entry.DisplayVersion)', want '$version'." }
+          if (-not ($entry.EstimatedSize -gt 0)) { throw "EstimatedSize is '$($entry.EstimatedSize)'." }
+          $uninstaller = $entry.UninstallString.Trim('"')
+          if (-not (Test-Path $uninstaller)) { throw "UninstallString '$uninstaller' is missing." }
+          $icon = ($entry.DisplayIcon -split ',')[0].Trim('"')
+          if (-not (Test-Path $icon)) { throw "DisplayIcon '$icon' is missing." }
+          # The same list Settings > Apps reads.
+          Get-Package -Name Natamux -ProviderName Programs | Out-Null
+          # _?= makes the uninstaller run in place and wait, instead of a copy in TEMP.
+          $run = Start-Process -FilePath $uninstaller -ArgumentList '/S', "_?=$dir" -Wait -PassThru
+          if ($run.ExitCode -ne 0) { throw "The uninstaller stopped with exit code $($run.ExitCode)." }
+          if (Test-Path $key) { throw 'The Uninstall key is still there after uninstall.' }
+          if (Test-Path (Join-Path $dir 'natamux-app.exe')) { throw 'natamux-app.exe is still there after uninstall.' }
       # The third-party crates of this build, for people who must list what they install.
       - name: Write the SBOM
         run: |

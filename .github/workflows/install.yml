@@ -97,3 +97,8 @@ jobs:
         run: |
           $app = Join-Path $env:LOCALAPPDATA 'Programs\Natamux\natamux-app.exe'
           if (-not (Test-Path $app)) { throw "$app is missing" }
+          # Settings > Apps lists only apps with an Uninstall key (T-0365).
+          $entry = Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Natamux'
+          if ($entry.DisplayName -ne 'Natamux') { throw "DisplayName is '$($entry.DisplayName)'." }
+          $uninstaller = $entry.UninstallString.Trim('"')
+          if (-not (Test-Path $uninstaller)) { throw "UninstallString '$uninstaller' is missing." }
