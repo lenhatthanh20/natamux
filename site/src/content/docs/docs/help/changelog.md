@@ -7,6 +7,13 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v1.0.33 (2026-11-22)
+
+- Windows and Linux have a menu bar at the left end of the title bar, with the same menus as on macOS. See [Desktop app](/docs/guides/desktop-app/#menu).
+- **Generate** no longer needs Claude Code: the task's agent, or else the first installed agent that can answer once, writes the commit message. See [Changes and history](/docs/guides/changes-and-history/).
+- Buttons that wait for an answer show a spinner until it comes.
+- Fix: Natamux was not listed in Windows **Settings → Apps → Installed apps**. Users of v1.0.31 and older run the install command again. See [Troubleshooting](/docs/help/troubleshooting/#natamux-is-not-in-installed-apps-on-windows).
+
 ## v1.0.32 (2026-11-22)
 
 - Natamux has its own icon on Windows (window, taskbar, installer, shortcuts, and an entry in Settings → Apps) and on Linux (window, and the dock matches it to the menu entry).
