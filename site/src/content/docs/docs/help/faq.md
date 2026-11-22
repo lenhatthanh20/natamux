@@ -80,7 +80,7 @@ Quitting stops the daemon and every agent and terminal. The app asks first. Task
 
 ## Does it update itself?
 
-Yes, from version 0.1.2, for the macOS app, the AppImage and the `.deb`. The `.tar.gz` and Windows do not update themselves. Timed checks are off by default: tick **Check for Updates Automatically**, or choose **Check for Updates…**. The app then asks GitHub through the system `curl`, downloads a new release and installs it when you restart. Offline mode turns the update check off, also the manual one. Version 0.1.1 and older cannot update, so install 0.1.2 by hand once. See [Updates](/docs/guides/desktop-app/#updates).
+Yes, from version 0.1.2, for the macOS app, the AppImage and the `.deb`. The Windows installer and the `.tar.gz` update themselves from the version after 1.0.35; older copies open the release page, so install the new version by hand once. Timed checks are off by default: tick **Check for Updates Automatically**, or choose **Check for Updates…**. The app then asks GitHub through the system `curl`, downloads a new release and installs it when you restart. Offline mode turns the update check off, also the manual one. Version 0.1.1 and older cannot update, so install 0.1.2 by hand once. See [Updates](/docs/guides/desktop-app/#updates).
 
 ## How do I uninstall it?
 

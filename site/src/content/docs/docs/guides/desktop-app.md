@@ -73,8 +73,9 @@ How the new version goes in depends on how you installed the app:
 | macOS app in Applications, or any folder you can write | Swapped in after you choose **Restart Now**. If the swap fails, the old app is restored |
 | AppImage | **Restart Now** replaces the file and starts the new one |
 | `.deb` | **Restart Now** installs it with `pkexec dpkg -i`, which asks for your password. If that fails, the app shows the `sudo apt install` command to run |
-| Windows installer | The app offers the release page. Run the new `Natamux-win-x64.exe`; it replaces the old version and keeps your data |
-| `.tar.gz`, or a macOS app run from the disk image | The app tells you about the new version and opens the release page. Download it yourself |
+| Windows installer | **Restart Now** quits the app, runs the new installer without questions in the same folder, and opens the new version. If a file is in use, the old version opens again |
+| `.tar.gz`, in a folder you can write | **Restart Now** swaps the new files into the folder and starts the new version. Other files in the folder stay |
+| A macOS app run from the disk image, or a copy in a folder you cannot write | The app tells you about the new version and opens the release page. Download it yourself |
 
 Releases from 0.1.18 have files for every system again, so an Intel Mac or Linux install of an older version, such as 0.1.2, updates itself again.
 

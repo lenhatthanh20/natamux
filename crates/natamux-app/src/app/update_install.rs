@@ -10,7 +10,9 @@ use gpui::App;
 use natamux_update::check::InstallKind;
 use natamux_update::install::{
     HASH_MISMATCH_EXIT, deb_install_script, mac_install_script, stale_backup,
+    windows_install_script,
 };
+use natamux_update::tarball::{replace_folder, stale_tarball};
 
 use super::update::{READY, Ready, log, set_state};
 use super::update_state::UpdateState;
@@ -81,7 +83,7 @@ pub fn restart(cx: &mut App) {
             if let Ok(mut slot) = READY.lock() {
                 *slot = None;
             }
-            if ready.kind == InstallKind::AppImage {
+            if matches!(ready.kind, InstallKind::AppImage | InstallKind::Tarball) {
                 queue_launch(ready.current);
             }
             cx.quit();
@@ -95,10 +97,12 @@ pub fn restart(cx: &mut App) {
 }
 
 fn stale_message(ready: &Ready) -> Option<String> {
-    if !matches!(ready.kind, InstallKind::Mac | InstallKind::AppImage) {
-        return None;
-    }
-    stale_backup(&ready.current).map(|path| {
+    let stale = match ready.kind {
+        InstallKind::Mac | InstallKind::AppImage => stale_backup(&ready.current),
+        InstallKind::Tarball => stale_tarball(&ready.downloaded, ready.current.parent()?),
+        _ => None,
+    };
+    stale.map(|path| {
         format!(
             "An old update backup is in the way: {}. Remove it, then try again.",
             path.display()
@@ -133,11 +137,12 @@ pub fn take_restart() -> Option<PathBuf> {
     NEXT_LAUNCH.lock().ok().and_then(|mut next| next.take())
 }
 
-/// Finish a ready macOS update and return a queued app relaunch, if it still needs one.
+/// Finish a ready macOS or Windows update and return a queued app relaunch, if it still needs one.
 pub fn finish_on_quit() -> Option<PathBuf> {
     let launch = take_restart();
     let ready = READY.lock().ok().and_then(|mut slot| slot.take());
-    if let Some(ready) = ready.filter(|ready| ready.kind == InstallKind::Mac) {
+    let on_quit = |ready: &Ready| matches!(ready.kind, InstallKind::Mac | InstallKind::Windows);
+    if let Some(ready) = ready.filter(on_quit) {
         match install_ready(&ready, launch.is_some()) {
             Ok(()) => return None,
             Err(error) => log(
@@ -197,6 +202,16 @@ fn install_ready(ready: &Ready, relaunch: bool) -> io::Result<()> {
         InstallKind::AppImage => {
             natamux_update::install::replace_appimage(&ready.downloaded, &ready.current)?;
         }
+        InstallKind::Windows => spawn_windows_install(ready, relaunch)?,
+        InstallKind::Tarball => {
+            let folder = ready
+                .current
+                .parent()
+                .ok_or_else(|| io::Error::other("No app folder"))?;
+            replace_folder(&ready.downloaded, folder)?;
+            let _ = fs::remove_dir_all(&ready.downloaded);
+            log(&ready.folder, "installed update");
+        }
         InstallKind::Deb => {
             return Err(io::Error::other(
                 "The package installer must finish before restart",
@@ -206,6 +221,51 @@ fn install_ready(ready: &Ready, relaunch: bool) -> io::Result<()> {
             return Err(io::Error::other("This installation needs a manual update"));
         }
     }
+    Ok(())
+}
+
+/// The script waits for this app to stop, so it runs the installer after the daemon is gone too.
+fn spawn_windows_install(ready: &Ready, relaunch: bool) -> io::Result<()> {
+    let dir = ready
+        .current
+        .parent()
+        .ok_or_else(|| io::Error::other("No app folder"))?;
+    let script = ready
+        .folder
+        .join("updates")
+        .join(&ready.release.version)
+        .join("install.ps1");
+    write_script(
+        &script,
+        &windows_install_script(
+            &ready.downloaded.to_string_lossy(),
+            &ready.sha256,
+            &dir.to_string_lossy(),
+            &ready.current.to_string_lossy(),
+            &ready.folder.join("logs/update.log").to_string_lossy(),
+            relaunch,
+        ),
+    )?;
+    let mut command = Command::new("powershell.exe");
+    command
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+        ])
+        .args(["-WindowStyle", "Hidden", "-File"])
+        .arg(&script)
+        .arg(std::process::id().to_string())
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    }
+    command.spawn()?;
     Ok(())
 }
 

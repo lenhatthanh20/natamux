@@ -18,6 +18,10 @@ pub enum InstallKind {
     Mac,
     AppImage,
     Deb,
+    /// Installed by the NSIS installer `Natamux-win-x64.exe`.
+    Windows,
+    /// An unpacked `Natamux-linux-x64.tar.gz` in a folder the user can write.
+    Tarball,
     Manual,
 }
 
@@ -64,6 +68,8 @@ pub fn asset_name(kind: InstallKind, arch: &str) -> Option<&'static str> {
         (InstallKind::Mac, "x64") => Some("Natamux-mac-x64.dmg"),
         (InstallKind::AppImage, "x64") => Some("Natamux-linux-x86_64.AppImage"),
         (InstallKind::Deb, "x64") => Some("Natamux-linux-amd64.deb"),
+        (InstallKind::Windows, "x64") => Some("Natamux-win-x64.exe"),
+        (InstallKind::Tarball, "x64") => Some("Natamux-linux-x64.tar.gz"),
         _ => None,
     }
 }

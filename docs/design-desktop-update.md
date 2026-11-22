@@ -22,7 +22,9 @@ The desktop app finds a new release, downloads it in the background, and install
 | `mac` | `process.platform === 'darwin'` | `Natamux-mac-arm64.dmg` or `Natamux-mac-x64.dmg`, from `process.arch` |
 | `appimage` | Linux, `APPIMAGE` is set | `Natamux-linux-x86_64.AppImage` |
 | `deb` | Linux, the app runs from `/opt/Natamux/` | `Natamux-linux-amd64.deb` |
-| `manual` | anything else: the `.tar.gz`, Windows, a Mac app run from a disk image or from a folder the user cannot write | none: the app opens the release page |
+| `windows` | Windows, `Uninstall.exe` beside `natamux-app.exe` (the NSIS installer put it there), and the user can write that folder | `Natamux-win-x64.exe` |
+| `tarball` | Linux, not an AppImage, not in `/opt/Natamux/`, `natamux-daemon` and `natamux.desktop` beside the app (an unpacked `.tar.gz`), and the user can write that folder | `Natamux-linux-x64.tar.gz` |
+| `manual` | anything else: a copied Windows exe, a `.tar.gz` in a folder the user cannot write, a Mac app run from a disk image or from a folder the user cannot write, Arm on Windows or Linux | none: the app opens the release page |
 
 - A Mac app counts as `manual` when its path holds `/AppTranslocation/` or starts with `/Volumes/`, or when the user cannot write the folder that holds `Natamux.app`.
 - An AppImage counts as `manual` when the user cannot write its folder.
@@ -84,6 +86,7 @@ A manual check shows a small frameless window over the main window (on the scree
   5. `CFBundleShortVersionString` of the copy must be the new version.
 
   A file the app downloads itself gets no quarantine flag, so macOS does not ask again when the new version opens.
+- `tarball`: the app unpacks the checked archive with the system `tar` into `<user data>/updates/<version>/tar/`. Only top-level regular files are allowed, and `natamux-app`, `natamux-daemon`, `natamux` and `nmx` must be there. Anything else stops the update.
 - `appimage`: the file goes to `<AppImage folder>/.Natamux-<version>.AppImage.part`, gets mode `0755`, and is renamed over the running AppImage once it is checked. Linux keeps the old file open for the running app. The next start runs the new version, even without a restart.
 
 ## Install on restart
@@ -94,9 +97,11 @@ A manual check shows a small frameless window over the main window (on the scree
 |---|---|
 | `mac` | The app writes `<folder>/install.sh` and starts it detached with `/bin/sh`. The script waits until the app's process is gone. It renames the old bundle to `Natamux.app.old`, moves the new one in, removes the old one, and runs `open` on the bundle. If the move fails, it puts the old bundle back and opens it. |
 | `appimage` | The file is in place already. The app restarts with `APPIMAGE` as the program. |
+| `windows` | The app writes `<folder>/install.ps1` and starts it hidden with `powershell.exe -File install.ps1 <app pid>`, then quits. The script waits up to 120 seconds until the app's process is gone (the app stops its daemon first), checks the installer against the signed hash again, and runs it silently with `/S /D=<app folder>`, so a custom install folder is kept. Then it opens the app again. When the installer fails, for example on a file in use, the old app opens. |
+| `tarball` | The app copies each unpacked file to `<name>.natamux-new` beside the old one. Any error removes those copies, and the old files stay. Then it renames each copy over the old file (Linux allows this for a running program) and restarts. Other files in the folder stay. A `.natamux-new` file left from an earlier try stops the install with its path. |
 | `deb` | The app runs `pkexec dpkg -i <file>` and waits. On success it restarts. When `pkexec` is missing or the password prompt is closed, it shows the command to run by hand: `sudo apt install <file>`. |
 
-- `mac` also installs on a normal quit when an update is ready, without starting the app again.
+- `mac` and `windows` also install on a normal quit when an update is ready, without starting the app again.
 - The script writes what it did to `<user data>/logs/update.log`.
 
 ## What's new

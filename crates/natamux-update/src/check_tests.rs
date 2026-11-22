@@ -42,6 +42,16 @@ fn keeps_the_asset_names_of_the_last_electron_updater() {
         asset_name(InstallKind::Deb, "x64"),
         Some("Natamux-linux-amd64.deb")
     );
+    assert_eq!(
+        asset_name(InstallKind::Windows, "x64"),
+        Some("Natamux-win-x64.exe")
+    );
+    assert_eq!(asset_name(InstallKind::Windows, "arm64"), None);
+    assert_eq!(
+        asset_name(InstallKind::Tarball, "x64"),
+        Some("Natamux-linux-x64.tar.gz")
+    );
+    assert_eq!(asset_name(InstallKind::Tarball, "arm64"), None);
     assert_eq!(asset_name(InstallKind::Manual, "x64"), None);
 }
 

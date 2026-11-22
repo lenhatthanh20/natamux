@@ -76,3 +76,26 @@ fn rejects_the_old_release_before_downloading_files() {
         Ok(CheckOutcome::UpToDate(_))
     ));
 }
+
+#[test]
+fn windows_and_tarball_installs_get_their_signed_asset() {
+    for (kind, file, hash) in [
+        (
+            InstallKind::Windows,
+            "Natamux-win-x64.exe",
+            "1e6e7727b0190c0bb0bcc8a7460595cf535a3d6bf886c2c3250555b271aeff85",
+        ),
+        (
+            InstallKind::Tarball,
+            "Natamux-linux-x64.tar.gz",
+            "33ed21af8680f0b16480bb972e8a9a1231ddc80e65fa717ccd86e177d468a80f",
+        ),
+    ] {
+        let outcome = check_now(&feed(), "1.2.2", kind, "x64", TEST_KEY).expect("signed release");
+        let CheckOutcome::Asset { name, sha256, .. } = outcome else {
+            panic!("expected a verified asset for {file}");
+        };
+        assert_eq!(name, file);
+        assert_eq!(sha256, hash);
+    }
+}

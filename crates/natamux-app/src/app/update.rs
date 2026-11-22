@@ -1,7 +1,7 @@
 //! Signed desktop updates, run off the window thread.
 
 use std::fs::{self, OpenOptions};
-use std::io::Write;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -12,6 +12,7 @@ use natamux_update::check::{InstallKind, Release};
 use natamux_update::install::{InstallInput, appimage_for, install_kind, mac_bundle};
 use natamux_update::preferences;
 use natamux_update::signature::RELEASE_SIGNER;
+use natamux_update::tarball::{is_tarball_layout, unpack_tarball};
 use natamux_update::transport::{CurlFeed, download_asset};
 use natamux_update::updater::{CheckOutcome, check_now};
 
@@ -264,6 +265,8 @@ fn fetch() -> Result<(CheckOutcome, Option<Ready>), String> {
         executable: &current_text,
         appimage: appimage.as_deref(),
         writable,
+        uninstaller: current.with_file_name("Uninstall.exe").is_file(),
+        tarball: tarball_here(&current),
     });
     let arch = match std::env::consts::ARCH {
         "aarch64" => "arm64",
@@ -288,19 +291,8 @@ fn fetch() -> Result<(CheckOutcome, Option<Ready>), String> {
             sha256,
             |total| BYTES.store(total, Ordering::Relaxed),
         )?;
-        let downloaded = if kind == InstallKind::Mac {
-            #[cfg(target_os = "macos")]
-            {
-                natamux_update::install::prepare_mac(&file, &update_folder, &release.version)
-                    .map_err(|error| error.to_string())?
-            }
-            #[cfg(not(target_os = "macos"))]
-            {
-                file.clone()
-            }
-        } else {
-            file
-        };
+        let downloaded = prepare(kind, file, &update_folder, &release.version)
+            .map_err(|error| error.to_string())?;
         log(&folder, &format!("ready: {}", release.tag));
         Some(Ready {
             release: release.clone(),
@@ -314,6 +306,24 @@ fn fetch() -> Result<(CheckOutcome, Option<Ready>), String> {
         None
     };
     Ok((outcome, ready))
+}
+
+/// What the install step uses: the checked Mac bundle, the unpacked tarball folder, or the file.
+fn prepare(kind: InstallKind, file: PathBuf, folder: &Path, version: &str) -> io::Result<PathBuf> {
+    match kind {
+        #[cfg(target_os = "macos")]
+        InstallKind::Mac => natamux_update::install::prepare_mac(&file, folder, version),
+        InstallKind::Tarball => {
+            let staged = folder.join("tar");
+            unpack_tarball(&file, &staged)?;
+            Ok(staged)
+        }
+        _ => {
+            // Only the Mac bundle check reads the version.
+            let _ = version;
+            Ok(file)
+        }
+    }
 }
 
 fn show_result(result: Result<(CheckOutcome, Option<Ready>), String>, cx: &mut App) {
@@ -434,6 +444,10 @@ fn appimage_here(exe: &Path) -> Option<String> {
     )
 }
 
+fn tarball_here(exe: &Path) -> bool {
+    cfg!(target_os = "linux") && exe.parent().is_some_and(is_tarball_layout)
+}
+
 fn packaged() -> bool {
     let Ok(exe) = std::env::current_exe() else {
         return false;
@@ -442,6 +456,7 @@ fn packaged() -> bool {
     mac_bundle(&text).is_some()
         || appimage_here(&exe).is_some()
         || text.starts_with("/opt/Natamux/")
+        || tarball_here(&exe)
         || cfg!(windows) && exe.with_file_name("natamux-daemon.exe").is_file()
 }
 
