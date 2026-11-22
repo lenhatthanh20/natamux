@@ -334,7 +334,8 @@ impl Dashboard {
             &task.id,
         );
         self.agents_open = false;
-        self.settings = None;
+        // Moves the focus out of Settings too, else it stays on a box no longer drawn (T-0368).
+        self.close_settings(cx);
         self.workspace_tab = self.tab_on_open(&task.id);
         // The task it replaces in main folds its card: one open card at a time.
         self.view.folds = opened_folds(&self.view.folds, self.open_task.as_deref(), &task);
@@ -378,7 +379,7 @@ impl Dashboard {
     pub fn open_agents(&mut self, cx: &mut Context<Self>) {
         self.open_task = None;
         self.shell_request = None;
-        self.settings = None;
+        self.close_settings(cx);
         if !self.agents_open {
             self.agents_open = true;
             cx.emit(DashboardChange::AgentsOpened);

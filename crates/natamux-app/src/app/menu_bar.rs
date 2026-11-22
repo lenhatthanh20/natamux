@@ -25,6 +25,8 @@ struct MenuBar {
     skip_click: Cell<bool>,
     /// The `menu-bar` shot shows the row on macOS too.
     forced: Cell<bool>,
+    /// The root view's focus, which every app-wide action reaches.
+    root_focus: RefCell<Option<FocusHandle>>,
 }
 
 impl Global for MenuBar {}
@@ -49,6 +51,31 @@ pub fn force_menu_row(cx: &mut App) {
     bar(cx).forced.set(true);
     // The title bar is a cached view: draw it again with the row.
     cx.refresh_windows();
+}
+
+/// The root view tells its focus, for items whose opener focus is gone.
+pub fn set_root_focus(focus: FocusHandle, cx: &mut App) {
+    *bar(cx).root_focus.borrow_mut() = Some(focus);
+}
+
+/// Where an item's action starts: the opener while it reaches the action. A focus that is no
+/// longer drawn (or none) starts it at the window's root node, above every handler, so the
+/// action would do nothing (T-0368); the root view's focus takes it then.
+fn action_focus(
+    context: Option<&FocusHandle>,
+    action: &dyn Action,
+    window: &Window,
+    cx: &App,
+) -> Option<FocusHandle> {
+    let reaches = |focus: &&FocusHandle| window.is_action_available_in(action, focus);
+    if let Some(focus) = context.filter(reaches) {
+        return Some(focus.clone());
+    }
+    let root = cx
+        .try_global::<MenuBar>()
+        .and_then(|bar| bar.root_focus.borrow().clone());
+    root.filter(|focus| reaches(&focus))
+        .or_else(|| context.cloned())
 }
 
 /// The menu bar menu that shows now.
@@ -104,8 +131,8 @@ fn entry(
         .when(checked, |entry| entry.toggleable(IconPosition::Start, true))
         .handler(move |window, cx| {
             // Sent from the closing menu, the action would not reach the root view's handlers.
-            if let Some(focus) = &context {
-                window.focus(focus, cx);
+            if let Some(focus) = action_focus(context.as_ref(), run.as_ref(), window, cx) {
+                window.focus(&focus, cx);
             }
             window.dispatch_action(run.boxed_clone(), cx);
         })
