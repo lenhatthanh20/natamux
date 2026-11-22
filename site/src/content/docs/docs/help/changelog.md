@@ -7,6 +7,11 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v1.0.34 (2026-11-22)
+
+- Fix: on Windows and Linux, the menu items did nothing after a task or Agents was opened while Settings was open. See [Desktop app](/docs/guides/desktop-app/#menu).
+- Fix: on Windows and Linux, the title bar no longer shows All tasks or Agents next to the menus.
+
 ## v1.0.33 (2026-11-22)
 
 - Windows and Linux have a menu bar at the left end of the title bar, with the same menus as on macOS. See [Desktop app](/docs/guides/desktop-app/#menu).

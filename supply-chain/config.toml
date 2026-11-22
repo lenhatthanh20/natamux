@@ -367,6 +367,10 @@ criteria = "safe-to-deploy"
 version = "0.23.0"
 criteria = "safe-to-deploy"
 
+[[exemptions.form_urlencoded]]
+version = "1.2.3"
+criteria = "safe-to-deploy"
+
 [[exemptions.freetype-sys]]
 version = "0.20.1"
 criteria = "safe-to-deploy"
@@ -1153,6 +1157,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.unicode-vo]]
 version = "0.1.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.url]]
+version = "2.5.9"
 criteria = "safe-to-deploy"
 
 [[exemptions.usvg]]
