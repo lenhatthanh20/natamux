@@ -37,6 +37,7 @@ mod app {
     pub mod jobs;
     pub mod layout_mode;
     pub mod links;
+    pub mod menu_bar;
     pub mod notify;
     pub mod notify_rules;
     pub mod options;

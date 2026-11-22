@@ -221,6 +221,7 @@ The fake's `natamux` project has three open GitHub issues (one imported already)
 | `sign-in` | Sign in with an empty field: Connect off |
 | `sign-in-error` | Sign in after the daemon refused the token: the message and the danger border |
 | `add-menu` | The title bar's + menu: Add a task, Start a task (T-0158) |
+| `menu-bar` | The menu bar of Windows and Linux, forced on macOS, with the Natamux menu open under its button (T-0364) |
 | `details-empty` | All tasks with the details dock open and no task picked: "Select a task" (T-0158) |
 | `rail-closed-panel` | T-0143's workspace with the details panel closed: the terminals and the rail at the right edge (T-0183) |
 | `changes-over-main` | T-0143's Changes over the terminals with the details panel closed: main shows the whole Changes screen, files and commit box too (T-0183) |

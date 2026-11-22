@@ -288,13 +288,14 @@ pub fn bind(cx: &mut App) {
     ]);
 }
 
-/// The menu bar (macOS): the registry's commands that have a menu, a separator between
-/// sections. The menu shows each command's first key from the bindings.
+/// The menu bar: the registry's commands that have a menu, a separator between sections. The
+/// menu shows each command's first key from the bindings. Only macOS draws it; elsewhere the
+/// title bar's menu row (`menu_bar.rs`) reads the same items from `menu_of`.
 pub fn set_menus(cx: &mut App) {
     cx.set_menus(MenuName::ALL.map(|name| Menu::new(name.title()).items(menu_of(name))));
 }
 
-fn menu_of(name: MenuName) -> Vec<MenuItem> {
+pub fn menu_of(name: MenuName) -> Vec<MenuItem> {
     let mut items = Vec::new();
     let mut last_section = None;
     for (command, section) in menu_items(name) {

@@ -13,8 +13,10 @@ use gpui::{Entity, FocusHandle, Focusable, TestAppContext, VisualTestContext, po
 use super::Root;
 use super::flow_tests::{parts, root};
 use crate::app::account_menu::open_account_menu;
+use crate::app::command_types::MenuName;
 use crate::app::dashboard::Dashboard;
 use crate::app::fake_daemon;
+use crate::app::menu_bar::open_app_menu;
 use crate::app::shortcuts::NewTask;
 use crate::app::test_driver::{click_on, press};
 use crate::app::title_bar::open_add_menu;
@@ -41,6 +43,10 @@ fn add(_: &Entity<Root>, _: &Entity<Dashboard>, cx: &mut VisualTestContext) {
     cx.update(|window, cx| open_add_menu(point(px(300.), px(30.)), window, cx));
 }
 
+fn menu_bar(_: &Entity<Root>, _: &Entity<Dashboard>, cx: &mut VisualTestContext) {
+    cx.update(|window, cx| open_app_menu(MenuName::View, point(px(8.), px(34.)), window, cx));
+}
+
 fn choices(_: &Entity<Root>, _: &Entity<Dashboard>, cx: &mut VisualTestContext) {
     cx.update(|window, cx| {
         let entries = vec![
@@ -52,12 +58,13 @@ fn choices(_: &Entity<Root>, _: &Entity<Dashboard>, cx: &mut VisualTestContext) 
 }
 
 /// Each menu opened from the task list, which has the focus, by name.
-fn menus() -> [(&'static str, Open); 5] {
+fn menus() -> [(&'static str, Open); 6] {
     [
         ("task table row (Shift+F10)", table_row as Open),
         ("details more", more as Open),
         ("account", account as Open),
         ("add", add as Open),
+        ("menu bar (Windows and Linux)", menu_bar as Open),
         ("stage field choices", choices as Open),
     ]
 }

@@ -490,6 +490,18 @@ impl ContextMenu {
             })
             .collect()
     }
+
+    /// Of each row in order, for tests: (disabled, ticked). Rows that are not entries are
+    /// (false, false).
+    pub fn row_states(&self) -> Vec<(bool, bool)> {
+        self.rows
+            .iter()
+            .map(|row| match row {
+                Row::Entry(entry) => (entry.disabled, row.checked()),
+                _ => (false, false),
+            })
+            .collect()
+    }
 }
 
 #[cfg(test)]

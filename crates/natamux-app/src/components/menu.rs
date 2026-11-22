@@ -77,6 +77,15 @@ impl MenuLayer {
             .is_some_and(|global| global.0.read(cx).open.is_some())
     }
 
+    /// `menu` is the one that shows now.
+    pub fn is_showing(menu: &Entity<ContextMenu>, cx: &App) -> bool {
+        let Some(global) = cx.try_global::<GlobalMenuLayer>() else {
+            return false;
+        };
+        let open = &global.0.read(cx).open;
+        open.as_ref().is_some_and(|open| open.menu == *menu)
+    }
+
     /// The open menu, for the flow tests.
     #[cfg(test)]
     pub fn open_menu(cx: &App) -> Option<Entity<ContextMenu>> {

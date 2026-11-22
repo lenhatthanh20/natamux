@@ -1,13 +1,14 @@
 //! The title bar of docs/ui-spec.md 3.1 (`features/app/TitleBar.tsx`): the breadcrumb, the `+`
 //! menu (Add a task, Start a task) and the account menu, as Zed's user menu at the right end. On
-//! macOS it is the window's drag area, with a gutter for the traffic lights. The toggles and the
-//! needs-you count live in the status bar.
+//! macOS it is the window's drag area, with a gutter for the traffic lights; elsewhere it starts
+//! with the menu bar (`menu_bar.rs`). The toggles and the needs-you count live in the status bar.
 
 use gpui::{Action, Entity, FontWeight, MouseButton, Stateful, WindowControlArea};
 use ui::{ButtonLike, ContextMenu, ContextMenuEntry, Tooltip, prelude::*};
 
 use super::account_menu::open_account_menu;
 use super::dashboard::Dashboard;
+use super::menu_bar::{menu_row, menu_row_shown};
 use super::shell_rules::Crumb;
 use super::shortcuts::{NewTask, NewWorkspace};
 use crate::components::glyph::StateGlyph;
@@ -143,6 +144,7 @@ fn drag_to_move(bar: Stateful<Div>, armed: Entity<bool>) -> Stateful<Div> {
 impl RenderOnce for TitleBar {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let armed = window.use_keyed_state("title-bar-drag", cx, |_, _| false);
+        let menus = menu_row_shown(cx).then(|| menu_row(cx));
         let colors = cx.theme().colors();
         let left_pad = if MAC && !window.is_fullscreen() {
             px(ui::utils::TRAFFIC_LIGHT_PADDING)
@@ -161,6 +163,7 @@ impl RenderOnce for TitleBar {
             .border_b_1()
             .border_color(colors.border_variant)
             .when(MAC, |this| drag_to_move(this, armed))
+            .children(menus)
             .child(div().min_w_0().flex_1().child(render_crumb(self.crumb, cx)))
             .child(
                 h_flex()
