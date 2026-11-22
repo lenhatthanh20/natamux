@@ -11,7 +11,7 @@ use super::dashboard::Dashboard;
 use super::settings_view::SettingsView;
 use super::source::reason;
 use crate::agents::agent_choices::{AGENT_CHOICES, custom_agents, custom_agents_known};
-use crate::components::button_style::{action_button, button_icon};
+use crate::components::button_style::{action_button, busy, button_icon};
 use crate::components::colors::accent;
 use crate::components::settings_card::{
     SeparatorInset, SettingsCard, SettingsGroup, SettingsRow, foot_text,
@@ -250,7 +250,7 @@ impl AgentRows {
                 .size(IconSize::Custom(rems_from_px(12.0_f32)))
                 .into_any_element()
         };
-        let save = action_button("agents-save", "Save")
+        let save = busy(action_button("agents-save", "Save"), self.saving)
             .track_focus(&self.save)
             .disabled(!save_enabled(changed, self.saving, known))
             .when(!known, |save| save.tooltip(Tooltip::text(NOT_READ_TIP)))

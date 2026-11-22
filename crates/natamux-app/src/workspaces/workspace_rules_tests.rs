@@ -355,3 +355,10 @@ fn reads_the_question_of_the_newest_ask() {
         }
     );
 }
+
+#[test]
+fn only_the_button_of_the_running_step_spins() {
+    assert!(runs_step(Some(GitStep::Push), GitStep::Push));
+    assert!(!runs_step(Some(GitStep::Push), GitStep::PullRequest));
+    assert!(!runs_step(None, GitStep::Push));
+}

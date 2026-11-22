@@ -307,6 +307,7 @@ impl WorkspaceView {
                 ended: shown.ended.clone(),
                 shown: shown.shown_screen.clone(),
                 reopening: shown.reopening,
+                stopping: shown.stopping.clone(),
                 pending: shown.pending,
                 actions,
             }

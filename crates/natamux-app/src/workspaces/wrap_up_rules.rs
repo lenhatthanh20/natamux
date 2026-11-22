@@ -3,6 +3,8 @@
 //! `finishedText`. The remove dialog reads the same rules in `finished_rules.rs`, so the three
 //! always agree.
 
+use std::collections::BTreeSet;
+
 use natamux_proto::events::task_event::{RECORD_ONLY_EVENT_TYPES, StoredEvent};
 use natamux_proto::tasks::task::{Task, TaskState};
 use natamux_proto::workspaces::workspace::GitGraph;
@@ -317,6 +319,11 @@ pub fn finished_text(task: &Task) -> String {
     } else {
         format!("{} is done.", task.id)
     }
+}
+
+/// The Stop of terminal `name` spins: its stop is on its way. Another terminal's Stop does not.
+pub fn stop_spins(stopping: &BTreeSet<String>, name: &str) -> bool {
+    stopping.contains(name)
 }
 
 #[cfg(test)]

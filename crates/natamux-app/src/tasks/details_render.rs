@@ -64,6 +64,7 @@ impl DetailsPanel {
             wait: wait_reason(Some(stored)),
             now_ms: now_ms(),
             busy: shown.busy,
+            running: shown.busy.then(|| shown.running.clone()).flatten(),
             resuming: shown.resuming,
             toggling: shown.toggling.clone(),
             selected: shown.picked.clone(),

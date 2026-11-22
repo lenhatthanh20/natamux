@@ -169,6 +169,7 @@ fn branch_input(taken: bool, expanded: bool) -> ProgressInput {
         wait: WaitReason::Stopped,
         now_ms: 0,
         busy: false,
+        running: None,
         resuming: false,
         toggling: BTreeSet::new(),
         selected: Some("two".into()),

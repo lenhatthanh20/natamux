@@ -154,3 +154,10 @@ fn turns_send_off_until_something_is_written() {
     assert_eq!(send_reason("  \n"), Some("Write a comment first"));
     assert_eq!(send_reason(" Why? "), None);
 }
+
+#[test]
+fn only_the_comment_button_that_sends_spins() {
+    assert_eq!(comment_spinners(true, false), (true, false));
+    assert_eq!(comment_spinners(true, true), (false, true));
+    assert_eq!(comment_spinners(false, false), (false, false));
+}

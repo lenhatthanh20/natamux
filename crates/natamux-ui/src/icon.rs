@@ -4,8 +4,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use gpui::{
-    AbsoluteLength, App, Hsla, IntoElement, Rems, RenderOnce, SharedString, Styled, Transformation,
-    Window, img, svg,
+    AbsoluteLength, App, Hsla, IntoElement, Rems, RenderOnce, SharedString, Styled, Window, img,
+    svg,
 };
 
 use crate::color::Color;
@@ -66,7 +66,6 @@ pub struct Icon {
     art: Art,
     tint: Color,
     side: AbsoluteLength,
-    turn: Transformation,
 }
 
 impl Icon {
@@ -89,7 +88,6 @@ impl Icon {
             art,
             tint: Color::Default,
             side: AbsoluteLength::from(IconSize::Medium.rems()),
-            turn: Transformation::default(),
         }
     }
 
@@ -107,11 +105,6 @@ impl Icon {
     /// A side of any length; the key hint draws its keys as tall as its text.
     pub(crate) fn length(self, side: AbsoluteLength) -> Self {
         Icon { side, ..self }
-    }
-
-    /// Rotates or scales an asset SVG (the spinner of a loading button).
-    pub(crate) fn transform(self, turn: Transformation) -> Self {
-        Icon { turn, ..self }
     }
 }
 
@@ -131,9 +124,7 @@ impl RenderOnce for Icon {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let tint = self.tint.color(cx);
         match self.art {
-            Art::Svg(path) => fit(svg().path(path), self.side, tint)
-                .with_transformation(self.turn)
-                .into_any_element(),
+            Art::Svg(path) => fit(svg().path(path), self.side, tint).into_any_element(),
             Art::Picture(file) => fit(img(file), self.side, tint).into_any_element(),
         }
     }

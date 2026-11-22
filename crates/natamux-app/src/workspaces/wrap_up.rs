@@ -2,6 +2,7 @@
 //! `features/workspaces/WrapUp.tsx`): what is left before the workspace can go, and the task's
 //! terminals, ended or still running. It opens no terminal by itself.
 
+use std::collections::BTreeSet;
 use std::rc::Rc;
 
 use gpui::{ClickEvent, FontWeight};
@@ -10,11 +11,11 @@ use natamux_proto::terminals::ended::EndedShell;
 use natamux_proto::terminals::list::TerminalList;
 use ui::{Tooltip, prelude::*};
 
-use super::workspace_rules::{GitStep, push_button};
-use super::wrap_up_rules::{FinishedAction, GitFacts, RowTone, wrap_up_rows};
+use super::workspace_rules::{GitStep, push_button, runs_step};
+use super::wrap_up_rules::{FinishedAction, GitFacts, RowTone, stop_spins, wrap_up_rows};
 use crate::agents::agent_choices::agent_label;
 use crate::app::links::open_link;
-use crate::components::button_style::{action_button, quiet_button};
+use crate::components::button_style::{action_button, busy, quiet_button};
 use crate::components::icons::icon_path;
 use crate::sidebar::sidebar_tree::stage_name;
 use crate::tasks::task_time::parse_iso_ms;
@@ -85,6 +86,8 @@ pub struct WrapUp {
     /// The ended terminal whose last screen shows.
     pub shown: Option<String>,
     pub reopening: bool,
+    /// The terminals whose Stop is on its way.
+    pub stopping: BTreeSet<String>,
     pub pending: Option<GitStep>,
     pub actions: WrapUpActions,
 }
@@ -143,17 +146,24 @@ impl WrapUp {
                     self.facts.uncommitted,
                 );
                 let reason = push.reason.clone();
-                let button = small_button(id, push.label, self.actions.push.clone())
-                    .disabled(reason.is_some() || self.pending.is_some());
+                let running = runs_step(self.pending, GitStep::Push);
+                let button = busy(
+                    small_button(id, push.label, self.actions.push.clone()),
+                    running,
+                )
+                .disabled(reason.is_some() || self.pending.is_some());
                 Some(match reason {
                     Some(reason) => button.tooltip(Tooltip::text(reason)).into_any_element(),
                     None => button.into_any_element(),
                 })
             }
             FinishedAction::CreatePullRequest => Some(
-                small_button(id, "Create PR", self.actions.pull_request.clone())
-                    .disabled(self.pending.is_some())
-                    .into_any_element(),
+                busy(
+                    small_button(id, "Create PR", self.actions.pull_request.clone()),
+                    runs_step(self.pending, GitStep::PullRequest),
+                )
+                .disabled(self.pending.is_some())
+                .into_any_element(),
             ),
             FinishedAction::OpenPullRequest => self.task.pr.clone().map(|url| {
                 small_button(
@@ -231,10 +241,13 @@ impl WrapUp {
             } else {
                 "done"
             };
-            small_button(
-                "wrap-up-reopen",
-                "Reopen agent",
-                self.actions.reopen.clone(),
+            busy(
+                small_button(
+                    "wrap-up-reopen",
+                    "Reopen agent",
+                    self.actions.reopen.clone(),
+                ),
+                self.reopening,
             )
             .disabled(self.reopening)
             .tooltip(Tooltip::text(format!(
@@ -286,9 +299,12 @@ impl WrapUp {
                     .on_click(move |_: &ClickEvent, window, cx| open(window, cx)),
             )
             .child(
-                action_button(SharedString::from(format!("wrap-up-stop-{name}")), "Stop")
-                    .label_size(LabelSize::Small)
-                    .on_click(move |_: &ClickEvent, window, cx| stop(&stopped, window, cx)),
+                busy(
+                    action_button(SharedString::from(format!("wrap-up-stop-{name}")), "Stop"),
+                    stop_spins(&self.stopping, name),
+                )
+                .label_size(LabelSize::Small)
+                .on_click(move |_: &ClickEvent, window, cx| stop(&stopped, window, cx)),
             )
     }
 

@@ -1,20 +1,18 @@
 //! A button with a label, optional icons before and after it, and an optional key hint.
 
-use std::time::Duration;
-
 use gpui::{
-    Animation, AnimationExt, AnyElement, App, Div, ElementId, IntoElement, ParentElement,
-    RenderOnce, SharedString, Styled, Transformation, Window, percentage,
+    AnyElement, App, Div, ElementId, IntoElement, ParentElement, RenderOnce, SharedString, Styled,
+    Window,
 };
 
 use crate::button_like::ButtonLike;
 use crate::button_setters::forward_button_setters;
 use crate::color::Color;
-use crate::icon::{Icon, IconSize};
-use crate::icon_name::IconName;
+use crate::icon::Icon;
 use crate::label::{Label, LabelCommon, LabelSize};
 use crate::shortcut_hint::KeyBinding;
 use crate::spacing::{DynamicSpacing, h_flex};
+use crate::traits::Disableable;
 
 /// Which side of the label the key hint is on.
 #[derive(Clone, Copy, Debug, Default, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -36,7 +34,8 @@ pub struct Button {
     hint: Option<KeyBinding>,
     hint_first: bool,
     shrinks: bool,
-    spinning: bool,
+    /// The busy spinner, in place of the start icon.
+    spinner: Option<AnyElement>,
 }
 
 forward_button_setters!(Button, base);
@@ -53,7 +52,7 @@ impl Button {
             hint: None,
             hint_first: false,
             shrinks: false,
-            spinning: false,
+            spinner: None,
         }
     }
 
@@ -107,12 +106,27 @@ impl Button {
         }
     }
 
-    /// A turning spinner in place of the start icon.
-    pub fn loading(self, loading: bool) -> Self {
-        Self {
-            spinning: loading,
-            ..self
+    /// While `spinner` is Some, it takes the place of the start icon and the button is off; the
+    /// label and the key hint stay. The app draws the spinner, so it follows the app's motion.
+    pub fn spinner(self, spinner: Option<impl IntoElement>) -> Self {
+        match spinner {
+            Some(spinner) => Self {
+                spinner: Some(spinner.into_any_element()),
+                ..self
+            }
+            .disabled(true),
+            None => self,
         }
+    }
+
+    /// The busy spinner shows (`spinner`).
+    pub fn is_busy(&self) -> bool {
+        self.spinner.is_some()
+    }
+
+    /// The button takes no click: off, or busy.
+    pub fn is_off(&self) -> bool {
+        self.base.setup.disabled || self.spinner.is_some()
     }
 }
 
@@ -146,8 +160,12 @@ impl RenderOnce for Button {
             hint,
             hint_first,
             shrinks,
-            spinning,
+            spinner,
         } = self;
+        // A later `.disabled(false)` must not turn a busy button back on.
+        if spinner.is_some() {
+            base.setup.disabled = true;
+        }
         let off = base.setup.disabled;
         let colour = text_colour(off, base.setup.is_on(), text_color);
         // Screen readers say the label and the keys unless the caller named them.
@@ -165,19 +183,8 @@ impl RenderOnce for Button {
                 icon
             }
         };
-        let lead: Option<AnyElement> = if spinning {
-            let spinner = Icon::new(IconName::LoadCircle)
-                .size(IconSize::Small)
-                .color(Color::Muted)
-                .with_animation(
-                    (base.setup.id.clone(), "loading"),
-                    Animation::new(Duration::from_secs(2)).repeat_synced(),
-                    |icon, turn| icon.transform(Transformation::rotate(percentage(turn))),
-                );
-            Some(spinner.into_any_element())
-        } else {
-            before.map(|icon| grey_if_off(icon).into_any_element())
-        };
+        let lead: Option<AnyElement> =
+            spinner.or_else(|| before.map(|icon| grey_if_off(icon).into_any_element()));
 
         let mut caption = Label::new(text)
             .color(colour)
@@ -231,6 +238,16 @@ mod tests {
         assert!(button.base.setup.disabled);
         assert!(button.base.setup.is_on());
         assert_eq!(button.id(), &ElementId::from("b"));
+    }
+
+    #[test]
+    fn a_spinner_takes_the_start_icon_and_turns_the_button_off() {
+        let busy = Button::new("b", "Go").spinner(Some(gpui::div()));
+        assert!(busy.spinner.is_some());
+        assert!(busy.base.setup.disabled);
+        let idle = Button::new("b", "Go").spinner(None::<gpui::Div>);
+        assert!(idle.spinner.is_none());
+        assert!(!idle.base.setup.disabled);
     }
 
     #[test]

@@ -171,6 +171,11 @@ pub enum GitStep {
     UndoRollback,
 }
 
+/// The button of `step` spins: its step is the one that runs. The others are only off.
+pub fn runs_step(pending: Option<GitStep>, step: GitStep) -> bool {
+    pending == Some(step)
+}
+
 /// The git step to offer after one ends: a commit is pushed next, and a push opens the pull
 /// request unless the task has one.
 pub fn next_git_step(done: GitStep, has_pull_request: bool) -> Option<GitStep> {

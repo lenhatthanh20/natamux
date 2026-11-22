@@ -6,14 +6,14 @@ use gpui::{ClickEvent, Focusable, KeyContext};
 use ui::{Tooltip, prelude::*};
 
 use super::ChangesView;
-use crate::agents::agent_choices::{DEFAULT_AGENT, agent_label};
+use crate::agents::agent_choices::{DEFAULT_AGENT, agent_label, base_in, custom_agents};
 use crate::app::source::reason;
 use crate::components::button_rows::{end_row, lead_row};
-use crate::components::button_style::{action_button, key_hint, quiet_button};
+use crate::components::button_style::{action_button, busy, key_hint, quiet_button};
 use crate::components::form::{input_box, text_editor};
 use crate::git::comment_rules::{
-    REMOVE_QUOTE_LABEL, SENT_TEXT, chip_text, comment_for_agent, comment_label, placeholder,
-    send_reason,
+    REMOVE_QUOTE_LABEL, SENT_TEXT, chip_text, comment_for_agent, comment_label, comment_spinners,
+    placeholder, send_reason,
 };
 use crate::git::commit_rules::{commit_reason, draft_result, draft_tip};
 use crate::text_view::text_box::TextBox;
@@ -138,6 +138,7 @@ impl ChangesView {
         let line = self.diff.update(cx, |diff, cx| diff.cursor_line(cx));
         let text = comment_for_agent(&path, &written, line, self.quote.as_ref());
         self.sending = true;
+        self.sending_now = true;
         self.sent = None;
         let answer = self
             .dashboard
@@ -146,6 +147,7 @@ impl ChangesView {
             let result = answer.await;
             view.update_in(cx, |view, window, cx| {
                 view.sending = false;
+                view.sending_now = false;
                 match result {
                     Ok(_) => {
                         view.quote = None;
@@ -186,33 +188,29 @@ impl ChangesView {
             .task_id
             .as_ref()
             .and_then(|id| self.dashboard.read(cx).data.task(id))
-            .and_then(|task| task.agent.clone());
-        let agent = agent_label(Some(agent.as_deref().unwrap_or(DEFAULT_AGENT)));
-        let generate = quiet_button("commit-generate", "Generate")
-            .start_icon(
-                Icon::new(IconName::Sparkle)
-                    .size(IconSize::Small)
-                    .color(Color::Muted),
-            )
-            .disabled(self.drafting)
-            .tooltip(Tooltip::text(format!(
-                "{} (Mod+Shift+G)",
-                draft_tip(&agent)
-            )))
+            .and_then(|task| task.agent.clone())
+            .unwrap_or_else(|| DEFAULT_AGENT.to_owned());
+        let custom = custom_agents();
+        let tip = draft_tip(base_in(&agent, &custom), &agent_label(Some(agent.as_str())));
+        let generate = quiet_button("commit-generate", "Generate").start_icon(
+            Icon::new(IconName::Sparkle)
+                .size(IconSize::Small)
+                .color(Color::Muted),
+        );
+        let generate = busy(generate, self.drafting)
+            .tooltip(Tooltip::text(format!("{tip} (Mod+Shift+G)")))
             .on_click(cx.listener(|view, _: &ClickEvent, window, cx| view.draft(window, cx)));
         let off = reason.is_some() || committing;
-        let commit = action_button(
-            "commit-all",
-            if committing {
-                "Committing…"
-            } else {
-                "Commit all"
-            },
-        )
-        .full_width()
-        .key_binding(key_hint("mod-enter", off))
-        .disabled(off)
-        .on_click(cx.listener(|view, _: &ClickEvent, window, cx| view.commit(window, cx)));
+        let label = if committing {
+            "Committing…"
+        } else {
+            "Commit all"
+        };
+        let commit = busy(action_button("commit-all", label), committing)
+            .full_width()
+            .key_binding(key_hint("mod-enter", off))
+            .disabled(off)
+            .on_click(cx.listener(|view, _: &ClickEvent, window, cx| view.commit(window, cx)));
         let commit = match reason {
             Some(reason) => commit.tooltip(Tooltip::text(reason)).into_any_element(),
             None => commit.into_any_element(),
@@ -296,7 +294,8 @@ impl ChangesView {
         } else {
             "Add comment"
         };
-        let add = action_button("comment-add", add_label)
+        let (adding, sending_now) = comment_spinners(self.sending, self.sending_now);
+        let add = busy(action_button("comment-add", add_label), adding)
             .key_binding(key_hint("mod-enter", off))
             .disabled(off)
             .on_click(cx.listener(|view, _: &ClickEvent, window, cx| view.add_comment(window, cx)));
@@ -308,7 +307,7 @@ impl ChangesView {
         let second = if editing {
             quiet_button("comment-cancel", "Cancel").on_click(cx.listener(Self::cancel_clicked))
         } else {
-            quiet_button("comment-send", "Send now")
+            busy(quiet_button("comment-send", "Send now"), sending_now)
                 .disabled(off)
                 .on_click(cx.listener(|view, _: &ClickEvent, window, cx| view.send(window, cx)))
         };

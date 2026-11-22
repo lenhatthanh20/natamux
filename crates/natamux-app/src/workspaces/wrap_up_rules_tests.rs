@@ -375,3 +375,11 @@ fn says_how_the_task_ended() {
     assert_eq!(finished_text(&done()), "T-0058 is done.");
     assert_eq!(finished_text(&cancelled()), "T-0058 was cancelled.");
 }
+
+#[test]
+fn only_the_stop_of_the_clicked_terminal_spins() {
+    let stopping = std::collections::BTreeSet::from(["2".to_string()]);
+    assert!(stop_spins(&stopping, "2"));
+    assert!(!stop_spins(&stopping, "3"));
+    assert!(!stop_spins(&std::collections::BTreeSet::new(), "2"));
+}

@@ -6,7 +6,7 @@ use natamux_proto::workspaces::review_comments::{CommentState, ReviewComment};
 use ui::{Tooltip, prelude::*};
 
 use super::ChangesView;
-use crate::components::button_style::{action_button, key_hint, quiet_button};
+use crate::components::button_style::{action_button, busy, key_hint, quiet_button};
 use crate::components::text_size::row_text;
 use crate::git::review_rules::{
     NO_DRAFT_REASON, draft_count, first_line, group_by_file, open_count, quote_preview, row_label,
@@ -132,7 +132,7 @@ impl ChangesView {
         } else {
             send_label(drafts)
         };
-        let send = action_button("review-send", label)
+        let send = busy(action_button("review-send", label), sending)
             .full_width()
             .key_binding(key_hint("mod-alt-enter", off))
             .disabled(off)

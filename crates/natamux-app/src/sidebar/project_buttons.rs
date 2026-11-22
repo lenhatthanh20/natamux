@@ -6,6 +6,7 @@ use ui::{ButtonLike, Tooltip, prelude::*};
 
 use super::sidebar::lucide;
 use super::workspace_tree::{Snapshot, WorkspaceTree};
+use crate::components::button_style::busy_icon;
 use crate::components::confirm::Confirm;
 use crate::sidebar::sidebar_text::{
     ProjectCommand, remove_project_description, remove_project_title, shown_name,
@@ -22,9 +23,23 @@ pub(super) fn hover_button(
     group: SharedString,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> ButtonLike {
+    hover_button_busy(id, icon, label, group, false, on_click)
+}
+
+/// `hover_button` that shows the busy spinner in place of the icon and is off while `running`.
+pub(super) fn hover_button_busy(
+    id: impl Into<ElementId>,
+    icon: &str,
+    label: String,
+    group: SharedString,
+    running: bool,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> ButtonLike {
+    let icon = busy_icon(lucide(icon).color(Color::Muted), IconSize::XSmall, running);
     ButtonLike::new(id)
         .style(ButtonStyle::Subtle)
-        .child(lucide(icon).color(Color::Muted))
+        .disabled(running)
+        .child(icon)
         .tooltip(Tooltip::text(label))
         .visible_on_hover(group)
         .on_click(on_click)

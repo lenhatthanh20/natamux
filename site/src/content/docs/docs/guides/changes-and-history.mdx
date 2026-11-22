@@ -152,12 +152,14 @@ The commit box is under the file list.
 
 **Commit all** stages every change in the workspace, new files too, and commits them. You cannot pick single files. A toast says **Committed N files.** and has a **Push** action. The button is off until you write a message.
 
-**Generate** asks the task's agent to write a message from the changes. It runs the agent once in the background, not in Terminal 1, and puts the answer in the box. Read and change it before you commit; nothing is committed for you.
+**Generate** asks an agent to write a message from the changes. It runs the agent once in the background, not in Terminal 1, and puts the answer in the box. Read and change it before you commit; nothing is committed for you.
 
-- The agent is the one the task runs. A task without one uses Claude Code.
-- While the agent writes, **Commit all** is off with the reason **Drafting the message…**. Text you type in that time stays, and the draft is dropped.
+- The task's agent writes the message when it can answer once and is installed.
+- Otherwise the first installed agent of this list writes it: Claude Code, Codex, Gemini CLI, GitHub Copilot, Cursor, Qwen Code, Factory Droid, Goose, Kiro CLI. Aider, Cline CLI, Kimi CLI, Crush, Amp, OpenCode and Muse Code never draft: their one-off run can change files. A toast says **Drafted with Codex.** (or the agent that wrote it) and why.
+- Installed means the agent's program is on the PATH of your login shell. An agent you start only through a shell alias or function is not found.
+- While the agent writes, **Generate** shows a spinner, and **Commit all** is off with the reason **Drafting the message…**. Text you type in that time stays, and the draft is dropped.
 - **Commit…** in the header drafts a message too, when the box is empty.
-- When the agent is missing, fails, or takes more than 60 seconds, the box gets a simple message from the task title and the file names, and a toast says why.
+- When no agent is installed, or the agent fails or takes more than 60 seconds, the box gets a simple message from the task title and the file names, and a toast says why.
 
 ### Roll back changes
 

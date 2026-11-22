@@ -7,7 +7,7 @@ use gpui::{Focusable, PathPromptOptions};
 use ui::{Tooltip, prelude::*};
 
 use super::ProjectsDialog;
-use crate::components::button_style::action_button;
+use crate::components::button_style::{action_button, busy};
 
 /// The field a Browse… picker fills.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -88,10 +88,13 @@ impl ProjectsDialog {
                 &self.worktree_browse,
             ),
         };
-        action_button(id, "Browse\u{2026}")
-            .track_focus(focus)
-            .disabled(self.busy || self.picking.is_some())
-            .tooltip(Tooltip::text(tip))
-            .on_click(cx.listener(move |this, _, window, cx| this.browse(pick, window, cx)))
+        busy(
+            action_button(id, "Browse\u{2026}"),
+            self.picking == Some(pick),
+        )
+        .track_focus(focus)
+        .disabled(self.busy || self.picking.is_some())
+        .tooltip(Tooltip::text(tip))
+        .on_click(cx.listener(move |this, _, window, cx| this.browse(pick, window, cx)))
     }
 }

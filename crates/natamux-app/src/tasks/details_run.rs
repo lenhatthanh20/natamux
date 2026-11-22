@@ -27,7 +27,9 @@ use crate::stages::card_rules::{end_with_the_task, pick_after_click};
 use crate::stages::send_back_dialog::{self, SendBackDialog};
 use crate::stages::send_back_rules::send_back_target;
 use crate::tasks::details_commands::{OnCommand, PanelCommand};
-use crate::tasks::details_rules::{MenuAction, MoreItem, asking_terminal, can_fan_out, more_menu};
+use crate::tasks::details_rules::{
+    MenuAction, MoreItem, asking_terminal, can_fan_out, more_menu, started_command,
+};
 use crate::tasks::edit_form::{EditForm, Saved};
 use crate::tasks::fan_out_dialog;
 use crate::tasks::task_confirms::{confirm_cancel_task, confirm_delete_task, confirm_keep_try};
@@ -114,6 +116,8 @@ impl DetailsPanel {
         let Some(task) = self.task(cx) else {
             return;
         };
+        let was_busy = self.shown.as_ref().is_some_and(|shown| shown.busy);
+        let clicked = command.clone();
         match command {
             PanelCommand::Approve(stage) => self.act(&task, StageAction::Approve, stage, cx),
             PanelCommand::Report(stage) => self.act(&task, StageAction::Report, stage, cx),
@@ -154,6 +158,10 @@ impl DetailsPanel {
                 fold(self.shown.as_mut().map(|s| &mut s.open_evidence), stage)
             }
             other => self.run_details(&task, other, window, cx),
+        }
+        // The command that started a call is the one whose button spins.
+        if let Some(shown) = self.shown.as_mut() {
+            shown.running = started_command(was_busy, shown.busy, clicked, shown.running.take());
         }
         cx.notify();
     }
@@ -320,17 +328,15 @@ impl DetailsPanel {
             parent_id: Some(task.id.clone()),
             repo: None,
         };
-        let dashboard = self.dashboard.clone();
         // `create_task` selects the new task; the web keeps the selection.
-        let selected = dashboard.read(cx).selected.clone();
-        let written = dashboard.update(cx, |d, cx| d.create_task(input, None, cx));
+        let selected = self.dashboard.read(cx).selected.clone();
         self.subtask.set_text("", window, cx);
-        cx.spawn(async move |_, cx| {
-            if written.await.is_ok() {
-                dashboard.update(cx, |d, cx| d.select(selected, cx));
-            }
-        })
-        .detach();
+        // Through `busy_call`, so Add spins and a second click sends nothing.
+        self.busy_call(
+            cx,
+            move |d, cx| d.create_task(input, None, cx),
+            move |panel, cx| panel.dashboard.update(cx, |d, cx| d.select(selected, cx)),
+        );
     }
 
     fn keep_try(&mut self, kept: &str, window: &mut Window, cx: &mut Context<Self>) {

@@ -21,7 +21,7 @@ use super::stage_card::{ActionsInput, CardInput, FileChip, details_card, stage_c
 use super::stage_choices::ChoiceBox;
 use super::stage_view_rules::{find_stage, missing_skills, ran_with_workflow, waiting_for_ci};
 use crate::agents::agent_choices::{custom_agents, workflow_agent};
-use crate::tasks::details_commands::{OnCommand, StageToggle};
+use crate::tasks::details_commands::{OnCommand, PanelCommand, StageToggle};
 use crate::tasks::usage_rules::{stage_usage, usage_line};
 use natamux_proto::stages::capabilities::{can_run_workflow, offers_ci, offers_workflow};
 
@@ -39,6 +39,8 @@ pub struct ProgressInput {
     pub wait: WaitReason,
     pub now_ms: i64,
     pub busy: bool,
+    /// The command whose call runs (`busy`): only its button spins.
+    pub running: Option<PanelCommand>,
     pub resuming: bool,
     pub toggling: BTreeSet<String>,
     /// The node the user opened (`card_rules::pick_after_click`): its details card shows under
@@ -218,6 +220,7 @@ impl Ctx<'_> {
             skip: skippable.then(|| (marked, input.toggling.contains(&format!("Skip:{id}")))),
             actions: (current && input.can_act).then(|| ActionsInput {
                 busy: input.busy,
+                running: input.running.clone(),
                 resuming: input.resuming,
                 agent_label: input.agent_label.clone(),
             }),

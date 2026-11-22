@@ -28,6 +28,7 @@ use crate::components::form::text_editor;
 use crate::components::motion;
 use crate::files::file_tree::FileTree;
 use crate::stages::flow_lines::dot_grid;
+use crate::tasks::details_commands::PanelCommand;
 use crate::text_view::text_box::TextBox;
 use crate::workspaces::workspace_view::WorkspaceView;
 use reads::ReadPaces;
@@ -49,6 +50,8 @@ pub struct Shown {
     pub base: Option<String>,
     /// A stage or task action is on its way: every action button is off (`busy`).
     pub busy: bool,
+    /// The command that set `busy`: only its button spins.
+    pub running: Option<PanelCommand>,
     pub resuming: bool,
     /// The stage settings being saved, as "<kind>:<stage>".
     pub toggling: BTreeSet<String>,

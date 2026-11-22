@@ -12,7 +12,7 @@ use natamux_proto::projects::repo_trust::{RepoCommand, RepoTrustView, SetupScrip
 use ui::prelude::*;
 
 use crate::app::source::{Source, reason};
-use crate::components::button_style::button_icon;
+use crate::components::button_style::{busy, button_icon};
 use crate::components::colors::TileColor;
 use crate::components::dialog::{
     DialogFrame, DialogLayer, DialogSize, DialogView, cancel_button, primary_button,
@@ -276,8 +276,11 @@ impl Render for RepoTrustDialog {
         let not_now = cx.listener(|this, _, window, cx| this.close(window, cx));
         let approve = cx.listener(|this, _, window, cx| this.approve(window, cx));
         let lead = SettingsTile::icon(button_icon("shield"), TileColor::Yellow, TileSize::Row);
-        let approve = primary_button("Approve", &self.approve, self.busy, approve)
-            .start_icon(button_icon("shield"));
+        let approve = busy(
+            primary_button("Approve", &self.approve, self.busy, approve)
+                .start_icon(button_icon("shield")),
+            self.busy,
+        );
         div().track_focus(&self.focus).child(
             DialogFrame::new(title(&self.name), close)
                 .sheet()

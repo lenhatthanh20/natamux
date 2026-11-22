@@ -118,6 +118,7 @@ pub(super) fn workspace_service(
     }));
     let programs = Arc::clone(agents);
     options.program_of = Arc::new(move |agent: &str| programs.program_of(agent));
+    options.is_installed = Arc::new(natamux_core::login_path::is_on_path);
     let linking = Arc::clone(linker);
     options.pull_request_body =
         Arc::new(move |task: &Task| linking.pull_request_body(task).map_err(link_failure));

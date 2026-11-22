@@ -344,22 +344,45 @@ impl WorkspaceView {
             .get(&task_id)
             .and_then(|list| list.programs.get(name).cloned().flatten())
             .unwrap_or_else(|| "terminal".into());
-        let dashboard = self.dashboard.clone();
+        let view = cx.weak_entity();
         let name = name.to_owned();
         Confirm::new(
             format!("Stop {program} in Terminal {name}?"),
             "The terminal ends with it.",
             "Stop",
             move |_, cx| {
-                let failure = format!("Could not stop Terminal {name}.");
-                dashboard.update(cx, |dashboard, cx| {
-                    dashboard
-                        .end_terminal(&task_id, &name, failure, cx)
-                        .detach()
-                });
+                view.update(cx, |view, cx| view.end_terminal(&task_id, &name, cx))
+                    .ok();
             },
         )
         .open(window, cx);
+    }
+
+    /// Ends a terminal of the wrap-up: its Stop spins until the daemon answers, either way.
+    fn end_terminal(&mut self, task_id: &str, name: &str, cx: &mut Context<Self>) {
+        let Some(shown) = self.shown.as_mut().filter(|s| s.task_id == task_id) else {
+            return;
+        };
+        if !shown.stopping.insert(name.to_owned()) {
+            return;
+        }
+        let failure = format!("Could not stop Terminal {name}.");
+        let answer = self.dashboard.update(cx, |dashboard, cx| {
+            dashboard.end_terminal(task_id, name, failure, cx)
+        });
+        let (done, stopped) = (task_id.to_owned(), name.to_owned());
+        cx.spawn(async move |view, cx| {
+            let _ = answer.await;
+            view.update(cx, |view, cx| {
+                if let Some(shown) = view.shown.as_mut().filter(|s| s.task_id == done) {
+                    shown.stopping.remove(&stopped);
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+        cx.notify();
     }
 
     pub(super) fn show_terminals(&mut self, cx: &mut Context<Self>) {

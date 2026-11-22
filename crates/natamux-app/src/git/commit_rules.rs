@@ -70,9 +70,33 @@ pub fn pushed_text(branch: Option<&str>) -> String {
     format!("Pushed {} to origin.", branch.unwrap_or("the branch"))
 }
 
-/// The tooltip of Generate.
-pub fn draft_tip(agent: &str) -> String {
-    format!("Draft a message with {agent}")
+/// The agents that answer once, as `has_one_shot` in `natamux-agents/src/launch.rs` lists them
+/// (the app does not depend on that crate). For any other agent the daemon drafts with the first
+/// installed one of these.
+const ANSWER_ONCE_AGENTS: [&str; 9] = [
+    "claude-code",
+    "codex",
+    "gemini",
+    "copilot",
+    "cursor",
+    "qwen",
+    "droid",
+    "goose",
+    "kiro",
+];
+
+/// The tooltip of Generate: `base` is what the task's agent behaves as, `label` its name.
+pub fn draft_tip(base: &str, label: &str) -> String {
+    if ANSWER_ONCE_AGENTS.contains(&base) {
+        format!("Draft a message with {label}")
+    } else {
+        "Draft a message with an installed agent".to_string()
+    }
+}
+
+/// The toast after another agent than the task's drafted the message.
+pub fn drafted_with_text(label: &str) -> String {
+    format!("Drafted with {label}.")
 }
 
 /// The label of the Changes tab: the number of files that wait for a commit.

@@ -8,6 +8,7 @@ use natamux_proto::tasks::task::{NewTaskInput, Task};
 use ui::prelude::*;
 
 use crate::app::dashboard::Dashboard;
+use crate::components::button_style::busy;
 use crate::components::dialog::{
     DialogFrame, DialogLayer, DialogSize, DialogView, cancel_button, primary_button,
 };
@@ -182,11 +183,14 @@ impl Render for AddSubtaskDialog {
             &self.cancel_focus,
             cx.listener(|_, _, _, cx| cx.emit(DismissEvent)),
         ))
-        .footer(primary_button(
-            "Add subtask",
-            &self.submit_focus,
-            empty || self.busy,
-            cx.listener(|this, _, window, cx| this.submit(window, cx)),
+        .footer(busy(
+            primary_button(
+                "Add subtask",
+                &self.submit_focus,
+                empty || self.busy,
+                cx.listener(|this, _, window, cx| this.submit(window, cx)),
+            ),
+            self.busy,
         ))
         .child(field);
         div()
