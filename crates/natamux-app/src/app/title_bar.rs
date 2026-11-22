@@ -79,9 +79,10 @@ fn account_button(dashboard: Entity<Dashboard>) -> ButtonLike {
 
 fn render_crumb(crumb: Crumb, cx: &App) -> AnyElement {
     match crumb {
-        Crumb::View(name) => Label::new(name)
-            .weight(FontWeight::SEMIBOLD)
-            .truncate()
+        Crumb::View(name) => div()
+            .min_w_0()
+            .debug_selector(|| "TITLE_VIEW_NAME".into())
+            .child(Label::new(name).weight(FontWeight::SEMIBOLD).truncate())
             .into_any_element(),
         Crumb::Task {
             repo,
@@ -145,6 +146,11 @@ impl RenderOnce for TitleBar {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let armed = window.use_keyed_state("title-bar-drag", cx, |_, _| false);
         let menus = menu_row_shown(cx).then(|| menu_row(cx));
+        // Beside the menu buttons a view name reads as one more menu; a task's crumb stays.
+        let crumb = match self.crumb {
+            Crumb::View(_) if menus.is_some() => None,
+            crumb => Some(render_crumb(crumb, cx)),
+        };
         let colors = cx.theme().colors();
         let left_pad = if MAC && !window.is_fullscreen() {
             px(ui::utils::TRAFFIC_LIGHT_PADDING)
@@ -164,7 +170,7 @@ impl RenderOnce for TitleBar {
             .border_color(colors.border_variant)
             .when(MAC, |this| drag_to_move(this, armed))
             .children(menus)
-            .child(div().min_w_0().flex_1().child(render_crumb(self.crumb, cx)))
+            .child(div().min_w_0().flex_1().children(crumb))
             .child(
                 h_flex()
                     .gap_0p5()

@@ -18,7 +18,7 @@ If the daemon stops unexpectedly, the app shows an error and offers to restart t
 
 ## Menu
 
-On macOS the menus are in the menu bar at the top of the screen. On Windows and Linux they are at the left end of the app's title bar: click a menu name to open it. While one menu is open, move the pointer to another name to open that one.
+On macOS the menus are in the menu bar at the top of the screen. On Windows and Linux they are at the left end of the app's title bar: click a menu name to open it. While one menu is open, move the pointer to another name to open that one. There the title bar shows a task's name when a task is open, and no screen name such as All tasks or Agents.
 
 | Item | What it does |
 |---|---|

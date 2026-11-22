@@ -13,9 +13,11 @@ use ui::ContextMenu;
 use super::{entry, force_menu_row, menu_row_shown, open_app_menu, open_menu_name};
 use crate::app::command_types::MenuName;
 use crate::app::dashboard::Dashboard;
-use crate::app::shortcuts::{ShowAgents, menu_of};
+use crate::app::settings_rules::SettingsFocus;
+use crate::app::shortcuts::{ShowAgents, ShowWhatsNew, menu_of};
 use crate::app::test_driver::{click_on, press};
-use crate::app::window::flow_tests::{parts, root};
+use crate::app::window::flow_tests::{REVIEWED, parts, root};
+use crate::components::dialog::DialogLayer;
 use crate::components::menu::MenuLayer;
 
 /// Under the title bar, at the left.
@@ -225,4 +227,126 @@ fn a_disabled_item_does_nothing(cx: &mut TestAppContext) {
     let disabled = pick_agents(true, &dashboard, cx);
     let enabled = pick_agents(false, &dashboard, cx);
     assert_eq!((disabled, enabled), ((false, false), (true, true)));
+}
+
+/// T-0368: the opener's focus is no longer drawn (a closed Settings box). The action then
+/// started at the window's root node, above every handler, and Help items did nothing.
+#[gpui::test]
+fn an_item_reaches_the_root_view_when_the_opener_focus_is_gone(cx: &mut TestAppContext) {
+    let (_root, _dashboard, cx) = root(cx);
+    let gone = cx.update(|window, cx| {
+        let gone = cx.focus_handle();
+        window.focus(&gone, cx);
+        gone
+    });
+    cx.run_until_parked();
+    cx.update(|window, cx| {
+        let menu = ContextMenu::build(window, cx, move |menu, _, _| {
+            menu.item(entry(
+                "What's New".into(),
+                Box::new(ShowWhatsNew),
+                false,
+                false,
+                Some(gone),
+            ))
+        });
+        MenuLayer::open(menu, at(), window, cx);
+    });
+    cx.run_until_parked();
+    click_on(cx, "MENU_ITEM-What's New");
+    cx.run_until_parked();
+    assert!(cx.update(|_, cx| DialogLayer::is_open(cx)));
+}
+
+/// T-0368: opening a task or Agents over Settings (the jump palette, a toast) closed Settings
+/// but left the focus on its search box, which is no longer drawn.
+#[gpui::test]
+fn opening_a_task_or_agents_over_settings_moves_the_focus_out(cx: &mut TestAppContext) {
+    let (root, dashboard, cx) = root(cx);
+    let root_focus = root.read_with(cx, |root, cx| root.focus_handle(cx));
+    for agents in [false, true] {
+        dashboard.update(cx, |dashboard, cx| {
+            dashboard.open_settings(None, SettingsFocus::Search, cx)
+        });
+        cx.run_until_parked();
+        let in_settings = cx.update(|window, _| !root_focus.is_focused(window));
+        dashboard.update(cx, |dashboard, cx| {
+            if agents {
+                dashboard.open_agents(cx);
+            } else {
+                dashboard.open(REVIEWED, cx);
+            }
+        });
+        cx.run_until_parked();
+        let closed = dashboard.read_with(cx, |dashboard, _| dashboard.settings.is_none());
+        let drawn = cx.update(|window, cx| root_focus.contains_focused(window, cx));
+        assert_eq!(
+            (in_settings, closed, drawn),
+            (true, true, true),
+            "agents: {agents}"
+        );
+    }
+}
+
+/// Beside the menu buttons the view name ("All tasks", "Agents") is not shown; without the
+/// row (macOS) it is.
+#[gpui::test]
+fn the_view_name_hides_beside_the_menu_row(cx: &mut TestAppContext) {
+    let (_root, dashboard, cx) = root(cx);
+    dashboard.update(cx, |dashboard, cx| dashboard.back(cx));
+    cx.run_until_parked();
+    let shown = cx.debug_bounds("TITLE_VIEW_NAME").is_some();
+    let row = cx.update(|_, cx| menu_row_shown(cx));
+    cx.update(|_, cx| force_menu_row(cx));
+    cx.run_until_parked();
+    let forced = cx.debug_bounds("TITLE_VIEW_NAME").is_some();
+    assert_eq!((shown, forced), (!row, false));
+}
+
+/// Every enabled menu item reaches a handler from Root's focus, in the list, a task and
+/// Agents, with and without Settings used first. An item handled only in a child view would
+/// do nothing from the menu bar (T-0368). Items disabled by design are skipped.
+#[gpui::test]
+fn every_menu_item_is_available_from_the_root_focus(cx: &mut TestAppContext) {
+    let (root, dashboard, cx) = root(cx);
+    let root_focus = root.read_with(cx, |root, cx| root.focus_handle(cx));
+    let mut missing = Vec::new();
+    for settings_first in [false, true] {
+        for state in ["list", "task", "agents"] {
+            dashboard.update(cx, |dashboard, cx| dashboard.back(cx));
+            cx.run_until_parked();
+            if settings_first {
+                dashboard.update(cx, |dashboard, cx| {
+                    dashboard.open_settings(None, SettingsFocus::Search, cx)
+                });
+                cx.run_until_parked();
+            }
+            dashboard.update(cx, |dashboard, cx| match state {
+                "task" => dashboard.open(REVIEWED, cx),
+                "agents" => dashboard.open_agents(cx),
+                _ => dashboard.close_settings(cx),
+            });
+            cx.run_until_parked();
+            for name in MenuName::ALL {
+                for item in menu_of(name) {
+                    let MenuItem::Action {
+                        name: title,
+                        action,
+                        disabled: false,
+                        ..
+                    } = item
+                    else {
+                        continue;
+                    };
+                    let reaches = cx.update(|window, _| {
+                        window.is_action_available_in(action.as_ref(), &root_focus)
+                    });
+                    if !reaches {
+                        missing.push(format!("{state} settings:{settings_first} {title}"));
+                    }
+                }
+            }
+        }
+    }
+    assert!(missing.is_empty(), "{missing:#?}");
 }

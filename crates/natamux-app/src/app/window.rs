@@ -127,6 +127,8 @@ impl Root {
         let title_bar = cx.new(|cx| TitleBarView::new(dashboard.clone(), cx));
         let weak_root = cx.weak_entity();
         let status_bar = cx.new(|cx| StatusBarView::new(weak_root, dashboard.clone(), cx));
+        let focus = cx.focus_handle();
+        super::menu_bar::set_root_focus(focus.clone(), cx);
         let mut root = Root {
             source,
             dashboard,
@@ -144,7 +146,7 @@ impl Root {
             palette,
             sign_in: None,
             toaster,
-            focus: cx.focus_handle(),
+            focus,
             resize_focus: cx.focus_handle().tab_stop(true),
             details_resize: cx.focus_handle().tab_stop(true),
             notifier: Notifier::default(),
