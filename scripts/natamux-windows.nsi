@@ -7,6 +7,11 @@
 !ifndef OUT
   !error "OUT is required"
 !endif
+!ifndef VERSION
+  !error "VERSION is required"
+!endif
+
+!include FileFunc.nsh
 
 Name "Natamux"
 OutFile "${OUT}\Natamux-win-x64.exe"
@@ -36,6 +41,9 @@ Section "Install"
   WriteRegStr HKCU "${UNINSTALL_KEY}" "UninstallString" '"$INSTDIR\Uninstall.exe"'
   WriteRegStr HKCU "${UNINSTALL_KEY}" "InstallLocation" "$INSTDIR"
   WriteRegStr HKCU "${UNINSTALL_KEY}" "Publisher" "lenhatthanh20"
+  WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayVersion" "${VERSION}"
+  ${GetSize} "$INSTDIR" "/S=0K" $0 $1 $2
+  WriteRegDWORD HKCU "${UNINSTALL_KEY}" "EstimatedSize" $0
   WriteRegDWORD HKCU "${UNINSTALL_KEY}" "NoModify" 1
   WriteRegDWORD HKCU "${UNINSTALL_KEY}" "NoRepair" 1
 SectionEnd

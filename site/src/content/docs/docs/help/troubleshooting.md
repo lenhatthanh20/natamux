@@ -36,6 +36,12 @@ Natamux 1.0.30 and older need the Microsoft Visual C++ runtime, which a new Wind
 
 Install the newest version of Natamux: it has the runtime built in. To keep an older version, install the [Visual C++ Redistributable for x64](https://aka.ms/vs/17/release/vc_redist.x64.exe), then start Natamux again.
 
+## Natamux is not in Installed apps on Windows
+
+Natamux 1.0.31 and older do not add an entry to **Settings → Apps → Installed apps** (Windows 10: **Apps & features**), so you cannot see or uninstall Natamux there.
+
+Quit Natamux and run the install command again. It installs the newest version over the old one and adds the entry. Your tasks and settings stay: they are in `%APPDATA%\Natamux`.
+
 ## The AppImage does not start
 
 An AppImage mounts itself with FUSE, which some systems do not have. Either install the `.deb`, or start the AppImage without FUSE:
