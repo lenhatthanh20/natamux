@@ -90,7 +90,7 @@ Before it trusts any hash in `SHA256SUMS.txt`, the Rust app downloads `SHA256SUM
 - the trusted comment is exactly `natamux <tag>`, where `<tag>` is the release `/releases/latest` led to;
 - that tag's version is newer than the running app.
 
-Any failure, including a missing `.minisig`, stops the update before the download. The check runs before the app offers anything: a copy that cannot update itself (Windows, a Mac app run from the disk image) is not even shown the release page of an unsigned release. `SHA256SUMS.txt` and its signature larger than 64 KB are refused. A manual **Check for Updates…** shows the reason; a timed check writes it to `logs/update.log`. There is no fallback to the checksum alone.
+Any failure, including a missing `.minisig`, stops the update before the download. The check runs before the app offers anything: a copy that cannot update itself (a Mac app run from the disk image, a copied Windows exe) is not even shown the release page of an unsigned release. `SHA256SUMS.txt` and its signature larger than 64 KB are refused. A manual **Check for Updates…** shows the reason; a timed check writes it to `logs/update.log`. There is no fallback to the checksum alone.
 
 The comment check ties a signature to one release. An old signed `SHA256SUMS.txt` uploaded under a new tag fails, so a stolen GitHub account cannot push an old, vulnerable version as an update.
 
@@ -98,7 +98,6 @@ The comment check ties a signature to one release. An old signed `SHA256SUMS.txt
 
 - Versions up to v0.1.23 do not check the signature. They still trust `SHA256SUMS.txt` of the release alone. Only versions with this check are protected, so the first signed release should ship soon, and users should update to it.
 - The key is in the app. To change it, ship a release with the new key, signed with the old one. A leaked key lets its holder sign updates until every app runs a version with a new key. A lost key means apps cannot update themselves any more; users must download a new version by hand.
-- Windows copies do not update themselves; users check their download as the [install page](https://natamux.github.io/docs/getting-started/install/#verify-the-download) says.
 - The signature proves the files are what the Release run built from the tagged commit. It does not prove the build is clean: a bad action or a bad dependency inside the build makes artifacts that pass every check. Only an independent rebuild would catch that. Read the change list the script shows.
 - Freeze: GitHub, or someone who controls the repository, can keep serving an older signed release as the latest. Apps then see no update. They never go back to an older version, but they can miss a fix.
 - The `main` ruleset blocks delete and force-push and requires the status check `rust-ok` to merge. No review is required (one maintainer). The tag ruleset "Release tags" covers `v*`: an existing tag cannot be deleted or moved, and creating a new tag is allowed. Secret scanning push protection is on. Still missing: a required review, so a stolen token with the right to merge can still change `main` through a pull request. The script's signed-tag check covers the tag, not what is on `main`.

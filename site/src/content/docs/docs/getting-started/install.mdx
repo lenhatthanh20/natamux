@@ -7,7 +7,7 @@ sidebar:
 
 import { Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components'
 
-Natamux is a desktop app for macOS (Apple silicon and Intel), Windows and Linux, all on 64-bit. The macOS app, the AppImage and the `.deb` [update themselves](/docs/guides/desktop-app/#updates); on Windows and with the `.tar.gz` the app tells you about a new version and you install it.
+Natamux is a desktop app for macOS (Apple silicon and Intel), Windows and Linux, all on 64-bit. The macOS app, the Windows installer, the AppImage, the `.deb` and the `.tar.gz` [update themselves](/docs/guides/desktop-app/#updates).
 
 ## Requirements
 
@@ -155,7 +155,7 @@ The package installs the app in `/opt/Natamux/natamux-app` and the Rust `natamux
 
 **tar.gz**
 
-Unpack `Natamux-linux-x64.tar.gz` anywhere and run `natamux-app` from the folder. Keep `natamux-daemon`, `natamux` and `nmx` beside it. Install `curl` for update checks.
+Unpack `Natamux-linux-x64.tar.gz` anywhere and run `natamux-app` from the folder. Keep `natamux-daemon`, `natamux` and `nmx` beside it. Install `curl` and `tar` for updates.
 
 </TabItem>
 </Tabs>

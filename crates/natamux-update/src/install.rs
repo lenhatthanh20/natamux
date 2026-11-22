@@ -13,6 +13,10 @@ pub struct InstallInput<'a> {
     pub appimage: Option<&'a str>,
     /// Whether the parent folder and bundle or AppImage can be replaced.
     pub writable: bool,
+    /// Windows: `Uninstall.exe` sits beside the exe, so the NSIS installer put it there.
+    pub uninstaller: bool,
+    /// Linux: the exe folder looks like an unpacked `.tar.gz` (`tarball::is_tarball_layout`).
+    pub tarball: bool,
 }
 
 pub fn mac_bundle(executable: &str) -> Option<&str> {
@@ -44,8 +48,10 @@ pub fn install_kind(input: InstallInput<'_>) -> InstallKind {
             Some(_) if input.writable => InstallKind::AppImage,
             Some(_) => InstallKind::Manual,
             None if input.executable.starts_with("/opt/Natamux/") => InstallKind::Deb,
+            None if input.tarball && input.writable => InstallKind::Tarball,
             None => InstallKind::Manual,
         },
+        "windows" if input.uninstaller && input.writable => InstallKind::Windows,
         _ => InstallKind::Manual,
     }
 }
@@ -152,6 +158,78 @@ pub fn mac_install_script(current: &str, staged: &str, log: &str, relaunch: bool
         shell_quote(staged),
         shell_quote(log)
     )
+}
+
+/// Run hidden: `powershell.exe -File <this> <app pid>`. It waits for the app to stop, checks the
+/// installer against its signed hash again, then runs the NSIS installer silently into the folder
+/// the app runs from. NSIS wants `/D=` last and unquoted; one argument string keeps it so.
+/// Every outcome after the wait reopens the app when `relaunch` is set, also a failed check.
+/// The BOM makes Windows PowerShell 5.1 read the file as UTF-8, not the ANSI code page, so
+/// non-ASCII paths stay intact.
+pub fn windows_install_script(
+    installer: &str,
+    sha256: &str,
+    install_dir: &str,
+    app_exe: &str,
+    log: &str,
+    relaunch: bool,
+) -> String {
+    let reopen = if relaunch {
+        "Start-Process -FilePath $app\r\n"
+    } else {
+        ""
+    };
+    format!(
+        "\u{FEFF}param([int]$AppPid)\r\n\
+         $ErrorActionPreference = 'Stop'\r\n\
+         $installer = {}\r\n\
+         $sha = {}\r\n\
+         $dir = {}\r\n\
+         $app = {}\r\n\
+         $log = {}\r\n\
+         function Note([string]$text) {{\r\n\
+           try {{ Add-Content -LiteralPath $log -Value $text -Encoding UTF8 }} catch {{ }}\r\n\
+         }}\r\n\
+         $proc = Get-Process -Id $AppPid -ErrorAction SilentlyContinue\r\n\
+         if ($proc -and -not $proc.WaitForExit(120000)) {{ Note 'app did not stop'; exit 1 }}\r\n\
+         $code = 1\r\n\
+         try {{\r\n\
+           if ((Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash -ne $sha) {{\r\n\
+             Note 'the installer does not match its hash'\r\n\
+             $code = {HASH_MISMATCH_EXIT}\r\n\
+           }} else {{\r\n\
+             $switches = '/S /D=' + $dir\r\n\
+             $run = Start-Process -FilePath $installer -ArgumentList $switches -Wait -PassThru\r\n\
+             $code = $run.ExitCode\r\n\
+             $note = \"update failed: exit $code\"\r\n\
+             if ($code -eq 0) {{ $note = 'installed update' }}\r\n\
+             Note $note\r\n\
+           }}\r\n\
+         }} catch {{\r\n\
+           $code = 1\r\n\
+           Note \"update failed: $($_.Exception.Message)\"\r\n\
+         }}\r\n\
+         {reopen}\
+         exit $code\r\n",
+        ps_quote(installer),
+        ps_quote(sha256),
+        ps_quote(install_dir),
+        ps_quote(app_exe),
+        ps_quote(log)
+    )
+}
+
+/// PowerShell also ends a single-quoted string at the curly quotes, so those are doubled too.
+fn ps_quote(text: &str) -> String {
+    let mut quoted = String::from("'");
+    for ch in text.chars() {
+        if matches!(ch, '\'' | '\u{2018}' | '\u{2019}' | '\u{201A}' | '\u{201B}') {
+            quoted.push(ch);
+        }
+        quoted.push(ch);
+    }
+    quoted.push('\'');
+    quoted
 }
 
 fn shell_quote(text: &str) -> String {

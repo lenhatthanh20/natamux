@@ -24,6 +24,9 @@ UninstallIcon "${ROOT}\crates\natamux-app\resources\icon.ico"
 
 Section "Install"
   SetOutPath "$INSTDIR"
+  ; The app updates itself with /S: a file in use must fail the install, not be skipped.
+  SetOverwrite on
+  ClearErrors
   ; Not Natamux.exe: Windows names ignore case, so it would be the CLI natamux.exe.
   File "${BIN}\natamux-app.exe"
   File "${BIN}\natamux-daemon.exe"
@@ -32,6 +35,10 @@ Section "Install"
   File "${ROOT}\LICENSE"
   File "${ROOT}\THIRD-PARTY-NOTICES.md"
   File "${ROOT}\THIRD-PARTY-RUST.md"
+  IfErrors 0 files_written
+    SetErrorLevel 2
+    Abort "Some Natamux files could not be written. Quit Natamux and run the installer again."
+  files_written:
   CreateShortcut "$DESKTOP\Natamux.lnk" "$INSTDIR\natamux-app.exe" "" "$INSTDIR\natamux-app.exe" 0
   CreateShortcut "$SMPROGRAMS\Natamux.lnk" "$INSTDIR\natamux-app.exe" "" "$INSTDIR\natamux-app.exe" 0
   WriteUninstaller "$INSTDIR\Uninstall.exe"

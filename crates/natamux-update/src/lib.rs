@@ -6,6 +6,7 @@ pub mod install;
 pub mod offline;
 pub mod preferences;
 pub mod signature;
+pub mod tarball;
 pub mod transport;
 pub mod updater;
 
@@ -19,6 +20,8 @@ mod install_tests;
 mod preferences_tests;
 #[cfg(test)]
 mod signature_tests;
+#[cfg(test)]
+mod tarball_tests;
 #[cfg(test)]
 mod transport_tests;
 #[cfg(test)]

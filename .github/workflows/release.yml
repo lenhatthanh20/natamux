@@ -301,6 +301,21 @@ jobs:
           if (-not (Test-Path $icon)) { throw "DisplayIcon '$icon' is missing." }
           # The same list Settings > Apps reads.
           Get-Package -Name Natamux -ProviderName Programs | Out-Null
+          # An update: the app runs the installer silently over the old copy, into its own folder.
+          $run = Start-Process -FilePath dist\Natamux-win-x64.exe -ArgumentList "/S /D=$dir" -Wait -PassThru
+          if ($run.ExitCode -ne 0) { throw "The upgrade install stopped with exit code $($run.ExitCode)." }
+          if (-not (Test-Path (Join-Path $dir 'natamux-app.exe'))) { throw 'natamux-app.exe is missing after the upgrade install.' }
+          # A file in use must fail the install (exit 2), not be skipped.
+          $lock = [System.IO.File]::Open((Join-Path $dir 'natamux-daemon.exe'), 'Open', 'Read', 'None')
+          try {
+            $run = Start-Process -FilePath dist\Natamux-win-x64.exe -ArgumentList "/S /D=$dir" -PassThru
+            # A dialog in silent mode would hang the app's update; fail here instead.
+            if (-not $run.WaitForExit(120000)) { $run.Kill(); throw 'The installer hung on a file in use.' }
+            $run.WaitForExit()
+          } finally {
+            $lock.Close()
+          }
+          if ($run.ExitCode -eq 0) { throw 'The installer reported success with a file in use.' }
           # _?= makes the uninstaller run in place and wait, instead of a copy in TEMP.
           $run = Start-Process -FilePath $uninstaller -ArgumentList '/S', "_?=$dir" -Wait -PassThru
           if ($run.ExitCode -ne 0) { throw "The uninstaller stopped with exit code $($run.ExitCode)." }

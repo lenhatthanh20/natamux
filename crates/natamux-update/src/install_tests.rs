@@ -13,7 +13,9 @@ fn mac_install_requires_a_writable_app_bundle() {
             platform: "macos",
             executable: "/Applications/Natamux.app/Contents/MacOS/natamux-app",
             appimage: None,
-            writable: true
+            writable: true,
+            uninstaller: false,
+            tarball: false,
         }),
         InstallKind::Mac
     );
@@ -22,7 +24,9 @@ fn mac_install_requires_a_writable_app_bundle() {
             platform: "macos",
             executable: "/Volumes/Natamux/Natamux.app/Contents/MacOS/natamux-app",
             appimage: None,
-            writable: true
+            writable: true,
+            uninstaller: false,
+            tarball: false,
         }),
         InstallKind::Manual
     );
@@ -31,7 +35,9 @@ fn mac_install_requires_a_writable_app_bundle() {
             platform: "macos",
             executable: "/Applications/Natamux.app/Contents/MacOS/natamux-app",
             appimage: None,
-            writable: false
+            writable: false,
+            uninstaller: false,
+            tarball: false,
         }),
         InstallKind::Manual
     );
@@ -44,7 +50,9 @@ fn linux_install_kind_follows_the_packaging() {
             platform: "linux",
             executable: "/tmp/.mount/Natamux",
             appimage: Some("/home/a/Natamux.AppImage"),
-            writable: true
+            writable: true,
+            uninstaller: false,
+            tarball: false,
         }),
         InstallKind::AppImage
     );
@@ -53,7 +61,9 @@ fn linux_install_kind_follows_the_packaging() {
             platform: "linux",
             executable: "/tmp/.mount/Natamux",
             appimage: Some("/home/a/Natamux.AppImage"),
-            writable: false
+            writable: false,
+            uninstaller: false,
+            tarball: false,
         }),
         InstallKind::Manual
     );
@@ -62,19 +72,113 @@ fn linux_install_kind_follows_the_packaging() {
             platform: "linux",
             executable: "/opt/Natamux/natamux-app",
             appimage: None,
-            writable: false
+            writable: false,
+            uninstaller: false,
+            tarball: false,
         }),
+        InstallKind::Deb
+    );
+}
+
+fn kind(
+    platform: &str,
+    executable: &str,
+    writable: bool,
+    uninstaller: bool,
+    tarball: bool,
+) -> InstallKind {
+    install_kind(InstallInput {
+        platform,
+        executable,
+        appimage: None,
+        writable,
+        uninstaller,
+        tarball,
+    })
+}
+
+#[test]
+fn windows_updates_itself_only_from_a_writable_installer_folder() {
+    let exe = "C:\\Users\\a\\AppData\\Local\\Programs\\Natamux\\natamux-app.exe";
+    assert_eq!(
+        kind("windows", exe, true, true, false),
+        InstallKind::Windows
+    );
+    // A copied exe without the uninstaller.
+    assert_eq!(
+        kind("windows", exe, true, false, false),
+        InstallKind::Manual
+    );
+    assert_eq!(
+        kind("windows", exe, false, true, false),
+        InstallKind::Manual
+    );
+}
+
+#[test]
+fn an_unpacked_tarball_updates_itself_when_its_folder_is_writable() {
+    let exe = "/home/a/natamux/natamux-app";
+    assert_eq!(kind("linux", exe, true, false, true), InstallKind::Tarball);
+    assert_eq!(kind("linux", exe, false, false, true), InstallKind::Manual);
+    assert_eq!(kind("linux", exe, true, false, false), InstallKind::Manual);
+    // The deb and the AppImage keep their kinds.
+    assert_eq!(
+        kind("linux", "/opt/Natamux/natamux-app", false, false, true),
         InstallKind::Deb
     );
     assert_eq!(
         install_kind(InstallInput {
-            platform: "windows",
-            executable: "C:\\Natamux\\natamux-app.exe",
-            appimage: None,
-            writable: true
+            platform: "linux",
+            executable: "/tmp/.mount/natamux-app",
+            appimage: Some("/home/a/Natamux.AppImage"),
+            writable: true,
+            uninstaller: false,
+            tarball: true,
         }),
-        InstallKind::Manual
+        InstallKind::AppImage
     );
+    assert_eq!(kind("macos", exe, true, false, true), InstallKind::Manual);
+}
+
+#[test]
+fn windows_install_script_quotes_paths_and_checks_the_hash_first() {
+    let script = super::install::windows_install_script(
+        "C:\\Users\\O'Neil\\updates\\Natamux-win-x64.exe",
+        "abc123",
+        "C:\\Users\\O\u{2019}Neil\\Programs\\Natamux",
+        "C:\\Users\\O\u{2019}Neil\\Programs\\Natamux\\natamux-app.exe",
+        "C:\\Users\\O'Neil\\logs\\update.log",
+        true,
+    );
+    assert!(script.contains("$installer = 'C:\\Users\\O''Neil\\updates\\Natamux-win-x64.exe'"));
+    assert!(script.contains("$dir = 'C:\\Users\\O\u{2019}\u{2019}Neil\\Programs\\Natamux'"));
+    assert!(script.contains("WaitForExit(120000)"));
+    let hash = script.find("Get-FileHash").expect("hash check");
+    let install = script
+        .find("'/S /D=' + $dir")
+        .expect("silent install, /D= last");
+    assert!(hash < install);
+    assert!(script.contains(&format!("$code = {}", super::install::HASH_MISMATCH_EXIT)));
+    // PowerShell 5.1 reads a script without a BOM in the ANSI code page.
+    assert!(script.starts_with('\u{FEFF}'));
+    // A hash mismatch or a thrown error still reopens the old app.
+    let mismatch = script
+        .find("does not match its hash")
+        .expect("hash mismatch branch");
+    let caught = script
+        .find("} catch {\r\n$code = 1")
+        .expect("caught errors");
+    let reopen = script.find("Start-Process -FilePath $app").expect("reopen");
+    assert!(mismatch < reopen && caught < reopen);
+    assert!(script.contains("update failed: $($_.Exception.Message)"));
+    // The app still runs when it did not stop, so that path ends before the reopen.
+    let timeout = script
+        .find("Note 'app did not stop'; exit 1")
+        .expect("timeout");
+    assert!(timeout < mismatch);
+    let quiet = super::install::windows_install_script("i", "s", "d", "a", "l", false);
+    assert!(quiet.contains("does not match its hash"));
+    assert!(!quiet.contains("Start-Process -FilePath $app"));
 }
 
 #[test]
