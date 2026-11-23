@@ -25,18 +25,24 @@ The daemon owns all task state. The dashboard, the `natamux` command and the age
 
 ### The agent token
 
-The terminals of each task get that task's own token, the agent token, in `NATAMUX_TOKEN`. It looks like `T-42.<secret>`. The daemon keeps it in memory only, so after a daemon start new shells get new tokens, and deleting the task ends its token. Agents and the `natamux` command in a task terminal use it, so the history shows what an agent did.
+The terminals of each task get that task's own token, the agent token, in `NATAMUX_TOKEN`. It looks like `T-42.<secret>`. The daemon keeps it in memory only, so after a daemon start new shells get new tokens. Deleting the task ends its token at once. When the task becomes Done or Cancelled, its token ends 60 seconds later, together with the terminal tickets it asked for; a task reopened before then keeps it, and new shells of a task reopened later get a new token. Agents and the `natamux` command in a task terminal use it, so the history shows what an agent did.
 
-The agent token of a task may call only:
+Every route has a name for what it does (for example `task.read.own` or `git.push.own`). A route without one answers 403 to the agent token, so a new route stays closed until it gets one. The agent token of a task may call only:
 
-- every route under `/tasks/<its id>`, except `DELETE`;
-- `GET` routes under `/tasks/<id>` of its direct subtasks;
-- `GET /tasks`, `/jobs`, `/templates`, `/activity`, `/usage`, `/limits`, `/diffstats`, `/workspaces/preparing`, `/repos`, `/repos/:id/settings`, `/repos/:id/skills`, `/git/branches`, `/git/remote-branches` and `/events`;
-- `POST /tasks` with `parentId` set to its own task. A `repo` other than the parent's answers 4xx: a subtask stays in its parent's project;
+- the routes under `/tasks/<its id>` that have a name, so not `DELETE`, `fan-out` or `ci-approve`;
+- reads of its direct subtasks: `GET /tasks/<id>` gives only `id`, `title`, `state`, `stage`, `parentId`, `pr`, `prStatus`, `stageSince` and `branch`; the events, review comments, files and attachments of the subtask are readable as for the desktop;
+- `GET /tasks`: its own task in full and its direct subtasks in the short form above. Other tasks are not listed;
+- `GET /jobs`, `/activity`, `/usage`, `/diffstats` and `/workspaces/preparing`, with only the rows of its own task;
+- `GET /repos`: only the id and name of its own task's project, no folders. `GET /repos/:id/settings`, `/repos/:id/skills`, `/git/branches` and `/git/remote-branches` only for that project; another project answers 403;
+- `GET /events`: only the messages of its own task, and the task messages (`task.created`, `task.updated`, `task.changed`) of its direct subtasks. `jobs.changed`, `repos.changed` and `limits.changed` are not sent;
+- `POST /tasks` with `parentId` set to its own task. A `repo` other than the parent's, or a `dependsOn` outside its own task and its direct subtasks, answers 403;
+- `PATCH /tasks/<its id>`: `dependsOn` only on its own task and its direct subtasks; `repo` or `parentId` in the body answers 403;
 - `POST /hooks/:agent`. The hook is for the token's task; the `X-Natamux-Task` header and the folder are not used;
 - `POST /limits/:agent`, which `natamux statusline` sends for Claude Code.
 
-Everything else answers 403 `forbidden`. At most two requests with a large body (`POST /tasks`, `POST /workspaces`, `PUT /tasks/:id/file`) are read at once; others wait.
+`GET /templates` and `GET /limits` answer 403: they have no task to cut them to. Everything else answers 403 `forbidden`, and the daemon log gets one line `agent-api: denied <action> <route> task=<own task>`, with no body, query or token. At most two requests with a large body (`POST /tasks`, `POST /workspaces`, `PUT /tasks/:id/file`) are read at once; others wait.
+
+In Strict mode with `agentApi.mode: scoped`, the agent token gets only these actions: `task.read.own`, `task.update.own`, `event.post.own`, `stage.report.own`, `hook.post`, `limits.post`, `subtask.create`, `subtask.read.status`, `terminal.ticket.own`, `files.rw.own`, `workspace.commit.own` and `agent.message.own`. `agentApi.grants` can add `git.push.own`, `pr.create.own`, `issue.create.own`, `agent.start.own`, `agent.reopen.own`, `workspace.create.own`, `rollback.own`, `subtask.read.workspace` (the files of direct subtasks), `events.subscribe`, `repo.read.own` and `tasks.list`. With `requireHumanForPush` (the default), `git.push.own` is never given. The dashboard reads (`/jobs`, `/activity`, `/usage`, `/diffstats`, `/workspaces/preparing`) answer 403, and `GET /events` takes the agent token only in the `Authorization` header, not in `?token=`. The push, pull request and issue routes check the grant again in their handler.
 
 With the agent token:
 

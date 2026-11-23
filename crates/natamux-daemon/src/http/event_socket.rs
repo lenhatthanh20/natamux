@@ -19,9 +19,11 @@ use hyper::{Request, Response, StatusCode};
 use hyper_util::rt::TokioIo;
 use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 
+use super::agent_rules::Caller;
 use super::edge_rules;
 use super::errors::{Answer, not_found};
 use super::server::AppState;
+use crate::shared::event_bus::ClientScope;
 use crate::shared::scheduler::{Scheduler, TimerId};
 
 pub const EVENTS_HIGH_WATER: usize = 1024 * 1024;
@@ -130,7 +132,8 @@ impl EventSocket for QueuedSocket {
     }
 }
 
-pub fn upgrade(request: Request<Incoming>, state: Arc<AppState>) -> Answer {
+/// An agent token gets only the messages of its own task and its direct subtasks (F6).
+pub fn upgrade(request: Request<Incoming>, state: Arc<AppState>, who: &Caller) -> Answer {
     if let Some(refused) = edge_rules::check_origin(request.headers(), &state.allowed_hosts) {
         return refused;
     }
@@ -143,11 +146,15 @@ pub fn upgrade(request: Request<Incoming>, state: Arc<AppState>) -> Answer {
     let (true, Some(key)) = (wants_socket, key) else {
         return not_found("GET", "/events");
     };
+    let scope = match who {
+        Caller::Agent(own) => ClientScope::Task(own.clone()),
+        _ => ClientScope::All,
+    };
     tokio::spawn(async move {
         if let Ok(upgraded) = hyper::upgrade::on(request).await {
             let io = TokioAdapter::new(TokioIo::new(upgraded));
             let socket = WebSocketStream::from_raw_socket(io, Role::Server, None).await;
-            run(socket, state).await;
+            run(socket, state, scope).await;
         }
     });
     let mut answer = Response::new(Full::new(Bytes::new()));
@@ -163,7 +170,7 @@ pub fn upgrade(request: Request<Incoming>, state: Arc<AppState>) -> Answer {
 
 type Io = TokioAdapter<TokioIo<hyper::upgrade::Upgraded>>;
 
-async fn run(socket: WebSocketStream<Io>, state: Arc<AppState>) {
+async fn run(socket: WebSocketStream<Io>, state: Arc<AppState>, scope: ClientScope) {
     let (mut sink, mut stream) = socket.split();
     let (out, mut outbox): (_, UnboundedReceiver<String>) = unbounded_channel();
     let queued = Arc::new(AtomicUsize::new(0));
@@ -175,7 +182,9 @@ async fn run(socket: WebSocketStream<Io>, state: Arc<AppState>) {
     });
     let sender = EventSender::new(socket, Arc::clone(&state.scheduler));
     let listener = sender.clone();
-    let id = state.bus.subscribe_client(move |text| listener.send(text));
+    let id = state
+        .bus
+        .subscribe_client(scope, move |text| listener.send(text));
     // The pull request statuses may be old: nobody looked while no dashboard listened. Returns at
     // once; the watcher's own thread asks GitHub.
     if state.bus.size() == 1 {

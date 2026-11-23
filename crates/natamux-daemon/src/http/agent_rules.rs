@@ -1,12 +1,15 @@
-//! Who calls the daemon, and what the agent token of a task may call (S-01): its own task, reads
-//! of its direct subtasks, and a few global reads. Everything else answers 403 before routing,
-//! so a new route is closed to agents until it is added here.
+//! Who calls the daemon, and what the agent token of a task may call (S-01, F6): the routes
+//! `agent_actions` classifies, on its own task or a direct subtask, and in Strict mode only what
+//! its grants allow. Everything else answers 403 before routing.
 
 use std::sync::Arc;
 
 use hyper::body::Incoming;
 use hyper::{Method, Request, StatusCode};
+use natamux_core::security::{self, SecurityMode};
 
+use super::agent_actions::{AgentAction, Scope, classify};
+use super::agent_grants::AgentGrants;
 use super::auth::{bearer_token, is_authorized};
 use super::errors::{Answer, error_answer};
 use super::server::{AppState, query_value};
@@ -27,20 +30,24 @@ impl Caller {
     }
 }
 
-/// The token of the request: the bearer header, or `?token=` on `/events` only (browsers cannot
-/// set headers on a WebSocket).
-fn provided_token(request: &Request<Incoming>, events: bool, query: &str) -> Option<String> {
+/// The token of the request and whether it came in the query: the bearer header, or `?token=`
+/// on `/events` only (browsers cannot set headers on a WebSocket).
+fn provided_token(
+    request: &Request<Incoming>,
+    events: bool,
+    query: &str,
+) -> Option<(String, bool)> {
     let header = request
         .headers()
         .get(hyper::header::AUTHORIZATION)
         .and_then(|value| value.to_str().ok());
-    bearer_token(header).map(str::to_string).or_else(|| {
-        if events {
-            query_value(query, "token").and_then(|v| v.as_str().map(str::to_string))
-        } else {
-            None
-        }
-    })
+    if let Some(token) = bearer_token(header) {
+        return Some((token.to_string(), false));
+    }
+    if !events {
+        return None;
+    }
+    query_value(query, "token").and_then(|v| v.as_str().map(|token| (token.to_string(), true)))
 }
 
 /// Who calls; None for no one the daemon knows.
@@ -56,13 +63,17 @@ pub fn caller(
     }
     let events = *method == Method::GET && parts == ["events"];
     let provided = provided_token(request, events, query);
-    if is_authorized(provided.as_deref(), &state.token) {
+    let token = provided.as_ref().map(|(token, _)| token.as_str());
+    if is_authorized(token, &state.token) {
         return Some(Caller::User);
     }
-    if let Some(task) = provided
-        .as_deref()
-        .and_then(|token| state.terminals.agent_tokens().task_of(token))
+    if let Some((token, in_query)) = &provided
+        && let Some(task) = state.terminals.agent_tokens().task_of(token)
     {
+        // Strict: an address ends up in logs and shell history, so agents send the header.
+        if *in_query && security::mode().is_strict() {
+            return None;
+        }
         return Some(Caller::Agent(task));
     }
     // The terminal socket checks its one-time ticket itself instead.
@@ -73,45 +84,60 @@ pub fn caller(
     (socket && has_ticket).then_some(Caller::Ticket)
 }
 
-/// What `task list`, `task show` and the event stream need, and what a dashboard part shows.
-fn is_global_read(parts: &[&str]) -> bool {
-    matches!(
-        parts,
-        ["tasks"]
-            | ["jobs"]
-            | ["templates"]
-            | ["activity"]
-            | ["usage"]
-            | ["limits"]
-            | ["diffstats"]
-            | ["workspaces", "preparing"]
-            | ["repos"]
-            | ["repos", _, "settings" | "skills"]
-            | ["git", "branches" | "remote-branches"]
-            | ["events"]
-    )
+/// What the agent token of task `own` does with the call, or why not (None: the route is not
+/// classified). `is_child(id)`: that task is a direct subtask of `own`.
+pub fn agent_decision(
+    method: &Method,
+    parts: &[&str],
+    own: &str,
+    is_child: impl FnOnce(&str) -> bool,
+    mode: &SecurityMode,
+) -> Result<AgentAction, Option<AgentAction>> {
+    let (action, scope) = classify(method, parts).ok_or(None)?;
+    let target = match parts {
+        ["tasks", id, ..] => Some(*id),
+        _ => None,
+    };
+    let action = match (scope, target) {
+        (Scope::Global, _) => action,
+        (_, Some(id)) if id == own => action,
+        (Scope::Child, Some(id)) => {
+            if !is_child(id) {
+                return Err(Some(action));
+            }
+            action.on_child()
+        }
+        _ => return Err(Some(action)),
+    };
+    if AgentGrants::of(mode).allows(action) {
+        Ok(action)
+    } else {
+        Err(Some(action))
+    }
 }
 
-/// Whether the agent token of task `own` may call the route. `is_child(id)`: that task is a
-/// direct subtask of `own`. `POST /tasks` passes here; `create_task` checks its `parentId`.
+/// Whether the agent token of task `own` may call the route in Personal mode.
 pub fn agent_may(
     method: &Method,
     parts: &[&str],
     own: &str,
     is_child: impl FnOnce(&str) -> bool,
 ) -> bool {
-    match parts {
-        // Fan-out makes top-level tasks and starts their agents, past the subtasks-only rule.
-        ["tasks", _, "fan-out"] => false,
-        // A CI push needs a person's approval; the agent must not give it for itself (F4).
-        ["tasks", _, "stages", _, "ci-approve"] => false,
-        ["tasks", id, ..] if *id == own => *method != Method::DELETE,
-        ["tasks", id, ..] => *method == Method::GET && is_child(id),
-        ["tasks"] => *method == Method::GET || *method == Method::POST,
-        // What an agent's own tools send: hooks, and Claude Code's limits from its status line.
-        ["hooks" | "limits", _] => *method == Method::POST,
-        _ => *method == Method::GET && is_global_read(parts),
-    }
+    agent_decision(method, parts, own, is_child, &SecurityMode::Personal).is_ok()
+}
+
+/// The log line of a refused agent call: never the body, the query or the token.
+pub fn denial_line(
+    action: Option<AgentAction>,
+    method: &Method,
+    parts: &[&str],
+    own: &str,
+) -> String {
+    let action = action.map_or("unclassified", AgentAction::name);
+    format!(
+        "agent-api: denied {action} {method} /{} task={own}",
+        parts.join("/")
+    )
 }
 
 /// The 403 for a route the agent token of `own` may not call. The subtask lookup reads the
@@ -136,9 +162,8 @@ pub async fn refusal(
         }
         _ => false,
     };
-    if agent_may(method, parts, own, |_| is_child) {
-        return None;
-    }
+    let denied = agent_decision(method, parts, own, |_| is_child, &security::mode()).err()?;
+    eprintln!("{}", denial_line(denied, method, parts, own));
     Some(error_answer(
         StatusCode::FORBIDDEN,
         "forbidden",
@@ -186,10 +211,8 @@ mod tests {
         for path in [
             "/tasks",
             "/jobs",
-            "/templates",
             "/activity",
             "/usage",
-            "/limits",
             "/diffstats",
             "/workspaces/preparing",
             "/repos",
@@ -221,8 +244,90 @@ mod tests {
             (Method::POST, "/github/issues/import"),
             (Method::GET, "/github/issues"),
             (Method::GET, "/nothing"),
+            // T-0373 (F6): no task to cut these to.
+            (Method::GET, "/templates"),
+            (Method::GET, "/limits"),
+            (Method::GET, "/tasks/T-1/nothing"),
         ] {
             assert!(!may(method.clone(), path), "{method} {path}");
         }
+    }
+
+    fn strict(grants: &[&str]) -> SecurityMode {
+        use natamux_core::security::{AgentApi, StrictSettings};
+        SecurityMode::Strict(StrictSettings {
+            agent_api: AgentApi {
+                grants: grants.iter().map(|name| name.to_string()).collect(),
+                ..AgentApi::default()
+            },
+            ..StrictSettings::default()
+        })
+    }
+
+    fn strict_may(grants: &[&str], method: Method, path: &str) -> bool {
+        let parts: Vec<&str> = path.split('/').skip(1).collect();
+        agent_decision(&method, &parts, "T-1", |id| id == "T-2", &strict(grants)).is_ok()
+    }
+
+    #[test]
+    fn strict_gives_the_minimum_and_the_listed_grants_only() {
+        for (method, path) in [
+            (Method::GET, "/tasks/T-1"),
+            (Method::PATCH, "/tasks/T-1"),
+            (Method::POST, "/tasks/T-1/stage"),
+            (Method::GET, "/tasks/T-1/tree"),
+            (Method::GET, "/tasks/T-2"),
+            (Method::POST, "/tasks"),
+            (Method::POST, "/hooks/claude-code"),
+        ] {
+            assert!(strict_may(&[], method.clone(), path), "{method} {path}");
+        }
+        for (method, path) in [
+            (Method::GET, "/tasks"),
+            (Method::GET, "/jobs"),
+            (Method::GET, "/usage"),
+            (Method::GET, "/repos"),
+            (Method::GET, "/events"),
+            (Method::POST, "/tasks/T-1/push"),
+            (Method::POST, "/tasks/T-1/pull-request"),
+            (Method::POST, "/tasks/T-1/issue"),
+            (Method::GET, "/tasks/T-2/tree"),
+            (Method::GET, "/tasks/T-2/file"),
+        ] {
+            assert!(!strict_may(&[], method.clone(), path), "{method} {path}");
+        }
+        assert!(strict_may(
+            &["subtask.read.workspace"],
+            Method::GET,
+            "/tasks/T-2/tree"
+        ));
+        assert!(strict_may(
+            &["pr.create.own"],
+            Method::POST,
+            "/tasks/T-1/pull-request"
+        ));
+        // A grant never reaches another task.
+        assert!(!strict_may(
+            &["pr.create.own"],
+            Method::POST,
+            "/tasks/T-3/pull-request"
+        ));
+        assert!(!strict_may(
+            &["git.push.own"],
+            Method::POST,
+            "/tasks/T-1/push"
+        ));
+    }
+
+    #[test]
+    fn the_denial_line_names_the_action_route_and_task_only() {
+        let parts = ["tasks", "T-2", "push"];
+        let line = denial_line(Some(AgentAction::GitPushOwn), &Method::POST, &parts, "T-1");
+        assert_eq!(
+            line,
+            "agent-api: denied git.push.own POST /tasks/T-2/push task=T-1"
+        );
+        let line = denial_line(None, &Method::GET, &["nothing"], "T-1");
+        assert_eq!(line, "agent-api: denied unclassified GET /nothing task=T-1");
     }
 }

@@ -99,12 +99,23 @@ impl TerminalService {
         &self.inner.agent_tokens
     }
 
-    pub fn issue_ticket(&self, task_id: &str) -> Result<String, TerminalError> {
+    /// `issuer`: the task whose agent token asks; None: a person.
+    pub fn issue_ticket(
+        &self,
+        task_id: &str,
+        issuer: Option<&str>,
+    ) -> Result<String, TerminalError> {
         (self.inner.options.workspace_of)(task_id)?;
         let now = self.inner.now();
         lock(&self.inner.tickets)
-            .issue(task_id, now)
+            .issue(task_id, issuer, now)
             .ok_or(TerminalError::Limit(MAX_OPEN_TICKETS))
+    }
+
+    /// The agent token of the task stops working, and so do the tickets it asked for.
+    pub fn revoke_agent(&self, task_id: &str) {
+        self.inner.agent_tokens.revoke(task_id);
+        lock(&self.inner.tickets).drop_issued_by(task_id);
     }
 
     pub fn redeem_ticket(&self, ticket: &str, task_id: &str) -> bool {

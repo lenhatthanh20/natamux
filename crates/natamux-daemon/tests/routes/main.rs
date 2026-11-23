@@ -6,6 +6,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 mod agent_routes;
+mod agent_scope;
 mod agents;
 mod blame;
 mod branch_names;

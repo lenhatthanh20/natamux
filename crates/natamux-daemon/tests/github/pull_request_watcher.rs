@@ -10,7 +10,7 @@ use natamux_daemon::github::pull_request_watcher::{
     WATCH_INTERVAL_MS, is_watched,
 };
 use natamux_daemon::projects::repos::Repos;
-use natamux_daemon::shared::event_bus::EventBus;
+use natamux_daemon::shared::event_bus::{ClientScope, EventBus};
 use natamux_daemon::shared::jobs::system_clock;
 use natamux_daemon::tasks::records::WorkspaceChange;
 use natamux_git::gh::{GitHubError, RunGh};
@@ -153,7 +153,7 @@ pub(super) fn fails(text: &'static str) -> (RunGh, Arc<AtomicUsize>) {
 
 pub(super) fn bus_with_client() -> Arc<EventBus> {
     let bus = EventBus::new();
-    bus.subscribe_client(|_| {});
+    bus.subscribe_client(ClientScope::All, |_| {});
     bus
 }
 
@@ -386,7 +386,7 @@ fn asks_nothing_while_no_dashboard_listens_and_once_when_the_first_one_comes() {
     tick(&fx, &watcher, WATCH_INTERVAL_MS * 3);
     assert_eq!(count(&calls), 0);
 
-    let leave = bus.subscribe_client(|_| {});
+    let leave = bus.subscribe_client(ClientScope::All, |_| {});
     watcher.wake();
     watcher.settle();
     assert_eq!(count(&calls), 1);

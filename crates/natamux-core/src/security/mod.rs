@@ -3,8 +3,10 @@
 
 use std::cell::RefCell;
 
+mod agent_api;
 mod ci_push;
 
+pub use agent_api::AgentApi;
 pub use ci_push::{CI_FORBID_REASON, CiMode, CiPush, ci_mode};
 
 /// The Strict keys the Strict rules read.
@@ -14,6 +16,8 @@ pub struct StrictSettings {
     pub require_ask_guarantee: bool,
     /// What a CI check may push (`ciPush`).
     pub ci_push: CiPush,
+    /// What the agent token of a task may call (`agentApi`).
+    pub agent_api: AgentApi,
 }
 
 impl Default for StrictSettings {
@@ -21,6 +25,7 @@ impl Default for StrictSettings {
         StrictSettings {
             require_ask_guarantee: true,
             ci_push: CiPush::default(),
+            agent_api: AgentApi::default(),
         }
     }
 }

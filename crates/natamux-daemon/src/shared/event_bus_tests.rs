@@ -33,7 +33,9 @@ fn heard(bus: &EventBus) -> Arc<Mutex<Vec<DaemonMessage>>> {
 fn texts(bus: &EventBus) -> Arc<Mutex<Vec<String>>> {
     let texts: Arc<Mutex<Vec<String>>> = Arc::default();
     let sink = Arc::clone(&texts);
-    bus.subscribe_client(move |text| sink.lock().unwrap().push(text.to_string()));
+    bus.subscribe_client(ClientScope::All, move |text| {
+        sink.lock().unwrap().push(text.to_string())
+    });
     texts
 }
 
@@ -73,8 +75,8 @@ fn counts_only_the_dashboards_not_the_services_that_subscribe() {
     let bus = EventBus::new();
     bus.subscribe(|_| {});
     assert_eq!(bus.size(), 0);
-    let first = bus.subscribe_client(|_| {});
-    let second = bus.subscribe_client(|_| {});
+    let first = bus.subscribe_client(ClientScope::All, |_| {});
+    let second = bus.subscribe_client(ClientScope::All, |_| {});
     assert_eq!(bus.size(), 2);
     bus.unsubscribe(first);
     bus.unsubscribe(second);
@@ -97,7 +99,7 @@ fn makes_the_json_text_once_for_all_dashboards() {
 #[test]
 fn keeps_sending_when_one_dashboard_throws_and_logs_the_error() {
     let bus = EventBus::new();
-    bus.subscribe_client(|_| panic!("closed socket"));
+    bus.subscribe_client(ClientScope::All, |_| panic!("closed socket"));
     let received = texts(&bus);
     bus.publish(message());
     assert_eq!(*received.lock().unwrap(), [message().to_json()]);
@@ -116,7 +118,7 @@ fn makes_no_text_without_dashboards() {
 #[test]
 fn keeps_sending_to_the_other_dashboards_when_one_throws() {
     let bus = EventBus::new();
-    bus.subscribe_client(|_| panic!("closed socket"));
+    bus.subscribe_client(ClientScope::All, |_| panic!("closed socket"));
     let received = texts(&bus);
     bus.publish(DaemonMessage::ShellsChanged {
         task_id: "T-0001".into(),
@@ -246,4 +248,64 @@ fn sends_a_message_published_by_a_listener_after_the_one_it_hears() {
             r#"{"kind":"shells.changed","taskId":"T-1"}"#
         ]
     );
+}
+
+fn task_of(id: &str, parent: Option<&str>) -> Task {
+    Task {
+        id: id.into(),
+        parent_id: parent.map(str::to_string),
+        ..task()
+    }
+}
+
+// T-0373 (F6): an agent's socket hears its own task and its direct subtasks, nothing else.
+#[test]
+fn a_task_scoped_client_gets_its_own_and_its_subtasks_messages_only() {
+    let bus = EventBus::new();
+    let got: Arc<Mutex<Vec<String>>> = Arc::default();
+    let sink = Arc::clone(&got);
+    let scope = ClientScope::Task("T-0001".into());
+    bus.subscribe_client(scope, move |text| {
+        sink.lock().unwrap().push(text.to_string())
+    });
+    let all = texts(&bus);
+    let b = task_of("T-0002", None);
+    let messages = [
+        DaemonMessage::TaskChanged { task: b.clone() },
+        DaemonMessage::ShellsChanged {
+            task_id: "T-0002".into(),
+        },
+        DaemonMessage::JobsChanged { jobs: Vec::new() },
+        DaemonMessage::ReposChanged,
+        DaemonMessage::LimitsChanged { limits: json!({}) },
+        DaemonMessage::TaskChanged {
+            task: task_of("T-0001", None),
+        },
+        DaemonMessage::ShellsChanged {
+            task_id: "T-0001".into(),
+        },
+        DaemonMessage::TaskCreated {
+            task: task_of("T-0003", Some("T-0001")),
+        },
+        // Only task messages say who the parent is.
+        DaemonMessage::ShellsChanged {
+            task_id: "T-0003".into(),
+        },
+        DaemonMessage::TaskCreated {
+            task: task_of("T-0004", Some("T-0002")),
+        },
+    ];
+    for message in messages {
+        bus.publish(message);
+    }
+    let got = got.lock().unwrap().clone();
+    assert_eq!(got.len(), 3, "{got:?}");
+    assert!(got[0].contains("\"task.changed\"") && got[0].contains("T-0001"));
+    assert!(got[1].contains("shells.changed") && got[1].contains("T-0001"));
+    assert!(got[2].contains("T-0003"));
+    assert!(
+        got.iter()
+            .all(|text| !text.contains("T-0002") && !text.contains("T-0004"))
+    );
+    assert_eq!(all.lock().unwrap().len(), 10);
 }

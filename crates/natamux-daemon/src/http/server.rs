@@ -21,8 +21,8 @@ use super::errors::{Answer, json_answer, not_found, unauthorized};
 use super::health::health_body;
 use super::routes::stages::Mark;
 use super::routes::{
-    agents, github, launch_check, projects, review_comments, stages, tasks, terminals,
-    workspace_files, workspaces,
+    agent_views, agents, github, launch_check, projects, review_comments, stages, tasks, terminals,
+    workspace_files, workspace_rights, workspaces,
 };
 use super::{event_socket, terminal_socket};
 use crate::agents::hook_service::HookService;
@@ -158,10 +158,16 @@ pub async fn handle(request: Request<Incoming>, state: Arc<AppState>) -> Answer 
     let Some(who) = caller(&request, &state, &method, &parts, query) else {
         return unauthorized();
     };
-    if let Caller::Agent(own) = &who
-        && let Some(refused) = refusal(&state, &method, &parts, own).await
-    {
-        return refused;
+    if let Caller::Agent(own) = &who {
+        if let Some(refused) = refusal(&state, &method, &parts, own).await {
+            return refused;
+        }
+        if let Some(scoped) = agent_views::scoped_read(&method, &parts, query, &state, own).await {
+            return scoped;
+        }
+    }
+    if let Some(answer) = workspace_rights::route(&method, &parts, Arc::clone(&state), &who).await {
+        return answer;
     }
     let by_agent = who.is_agent();
     let route = (
@@ -181,7 +187,7 @@ pub async fn handle(request: Request<Incoming>, state: Arc<AppState>) -> Answer 
         (&Method::GET, ["health"]) => {
             json_answer(StatusCode::OK, &health_body(query, &state.token))
         }
-        (&Method::GET, ["events"]) => event_socket::upgrade(request, state),
+        (&Method::GET, ["events"]) => event_socket::upgrade(request, state, &who),
         (&Method::GET, ["tasks", id, "terminal"]) => {
             let id = id.to_string();
             terminal_socket::upgrade(request, state, id, query.to_string())
@@ -196,7 +202,7 @@ pub async fn handle(request: Request<Incoming>, state: Arc<AppState>) -> Answer 
         (&Method::DELETE, ["tasks", id, "terminals", terminal]) => {
             terminals::close_terminal(&state, id, terminal)
         }
-        (&Method::POST, ["tasks", id, "terminal", "ticket"]) => terminals::ticket(&state, id),
+        (&Method::POST, ["tasks", id, "terminal", "ticket"]) => terminals::ticket(&state, id, &who),
         (&Method::GET, ["jobs"]) => tasks::list_jobs(&state),
         (&Method::GET, ["activity"]) => agents::activity(&state),
         (&Method::GET, ["usage"]) => agents::usage(&state),
@@ -310,10 +316,6 @@ async fn workspace_route(
         (&Method::POST, ["tasks", id, "commit-message"]) => {
             workspaces::commit_message(state, id.to_string()).await
         }
-        (&Method::POST, ["tasks", id, "push"]) => workspaces::push(state, id.to_string()).await,
-        (&Method::POST, ["tasks", id, "pull-request"]) => {
-            workspaces::open_pull_request(state, id.to_string()).await
-        }
         (&Method::POST, ["tasks", id, "pull-request", "refresh"]) => {
             workspaces::refresh_pull_request(state, id.to_string()).await
         }
@@ -328,9 +330,6 @@ async fn workspace_route(
         (&Method::GET, ["git", "branches"]) => projects::branches(state, query).await,
         (&Method::GET, ["git", "remote-branches"]) => projects::remote_branches(state, query).await,
         (&Method::GET, ["github", "issues"]) => github::list_issues(state, query).await,
-        (&Method::POST, ["tasks", id, "issue"]) => {
-            github::create_issue(state, id.to_string()).await
-        }
         _ => return None,
     })
 }
@@ -368,7 +367,9 @@ async fn with_body(
         (&Method::POST, ["templates", id, "tasks"]) => {
             tasks::task_from_template(state, id.to_string(), body).await
         }
-        (&Method::PATCH, ["tasks", id]) => tasks::update_task(state, id.to_string(), body).await,
+        (&Method::PATCH, ["tasks", id]) => {
+            tasks::update_task(state, id.to_string(), body, &who).await
+        }
         (&Method::POST, ["tasks", id, "events"]) => {
             tasks::post_event(state, id.to_string(), body, by_agent).await
         }

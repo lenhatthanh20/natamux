@@ -25,6 +25,7 @@ use crate::http::errors::{
     Answer, error_answer, forbidden, internal_error, json_answer, task_error, workspace_error,
     zod_answer,
 };
+use crate::http::routes::agent_fields;
 use crate::http::routes::stages::stage_answer;
 use crate::http::routes::workspaces::bool_query;
 use crate::http::server::AppState;
@@ -71,10 +72,13 @@ pub async fn create_task(state: Arc<AppState>, body: Option<Value>, who: &Caller
         .as_ref()
         .and_then(|body| body.get("parentId"))
         .and_then(Value::as_str);
-    if let Caller::Agent(own) = who
-        && parent != Some(own.as_str())
-    {
-        return forbidden("make a task that is not a subtask of this one");
+    if let Caller::Agent(own) = who {
+        if parent != Some(own.as_str()) {
+            return forbidden("make a task that is not a subtask of this one");
+        }
+        if let Some(refused) = agent_fields::refused(&state, own, body.as_ref(), None).await {
+            return refused;
+        }
     }
     answer(StatusCode::CREATED, move || {
         let object = body.clone().unwrap_or_else(|| json!({}));
@@ -125,7 +129,7 @@ pub async fn delete_task(state: Arc<AppState>, id: String, query: &str) -> Answe
             .tasks
             .delete_task(&id)
             .map_err(|error| Box::new(task_error(&error)))?;
-        state.terminals.agent_tokens().forget(&id);
+        state.terminals.revoke_agent(&id);
         Ok(json!({ "id": id, "tasks": to_value(&tasks) }))
     };
     match tokio::task::spawn_blocking(work).await {
@@ -135,7 +139,17 @@ pub async fn delete_task(state: Arc<AppState>, id: String, query: &str) -> Answe
     }
 }
 
-pub async fn update_task(state: Arc<AppState>, id: String, body: Option<Value>) -> Answer {
+pub async fn update_task(
+    state: Arc<AppState>,
+    id: String,
+    body: Option<Value>,
+    who: &Caller,
+) -> Answer {
+    if let Caller::Agent(own) = who
+        && let Some(refused) = agent_fields::refused(&state, own, body.as_ref(), Some(&id)).await
+    {
+        return refused;
+    }
     answer(StatusCode::OK, move || {
         let id = task_id_param(&id)?;
         Ok(json!({ "task": to_value(&state.tasks.update_task(&id, body.as_ref())?) }))

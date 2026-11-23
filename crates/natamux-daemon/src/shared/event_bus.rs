@@ -84,6 +84,27 @@ fn task_value(task: &Task) -> Value {
 }
 
 impl DaemonMessage {
+    /// The task the message is about; None for a message about none or many.
+    pub fn task_id(&self) -> Option<&str> {
+        match self {
+            DaemonMessage::TaskCreated { task }
+            | DaemonMessage::TaskUpdated { task, .. }
+            | DaemonMessage::TaskChanged { task } => Some(&task.id),
+            DaemonMessage::TaskDeleted { task_id }
+            | DaemonMessage::ActivityChanged { task_id, .. }
+            | DaemonMessage::ShellsChanged { task_id }
+            | DaemonMessage::ProgramsChanged { task_id, .. }
+            | DaemonMessage::WorkspaceDirty { task_id }
+            | DaemonMessage::ReviewCommentsChanged { task_id }
+            | DaemonMessage::WorkspacePreparing { task_id, .. }
+            | DaemonMessage::UsageChanged { task_id, .. } => Some(task_id),
+            DaemonMessage::ReposChanged
+            | DaemonMessage::JobsChanged { .. }
+            | DaemonMessage::LimitsChanged { .. }
+            | DaemonMessage::Resync => None,
+        }
+    }
+
     pub fn kind(&self) -> &'static str {
         match self {
             DaemonMessage::TaskCreated { .. } => "task.created",
@@ -159,6 +180,31 @@ impl DaemonMessage {
     }
 }
 
+/// Which messages a client on /events gets (F6).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ClientScope {
+    /// The desktop: every message.
+    All,
+    /// The agent token of this task: its own messages, and task messages of its direct subtasks.
+    Task(String),
+}
+
+impl ClientScope {
+    pub fn allows(&self, message: &DaemonMessage) -> bool {
+        let ClientScope::Task(own) = self else {
+            return true;
+        };
+        match message {
+            DaemonMessage::TaskCreated { task }
+            | DaemonMessage::TaskUpdated { task, .. }
+            | DaemonMessage::TaskChanged { task } => {
+                task.id == *own || task.parent_id.as_deref() == Some(own.as_str())
+            }
+            _ => message.task_id() == Some(own.as_str()),
+        }
+    }
+}
+
 type Listener = Arc<dyn Fn(&DaemonMessage) + Send + Sync>;
 /// A dashboard on /events gets the message as JSON text.
 type TextListener = Arc<dyn Fn(&str) + Send + Sync>;
@@ -166,7 +212,7 @@ type TextListener = Arc<dyn Fn(&str) + Send + Sync>;
 #[derive(Default)]
 pub struct EventBus {
     listeners: Mutex<Vec<(u64, Listener)>>,
-    clients: Mutex<Vec<(u64, TextListener)>>,
+    clients: Mutex<Vec<(u64, ClientScope, TextListener)>>,
     next: AtomicU64,
     outbox: Mutex<VecDeque<DaemonMessage>>,
     sending: Mutex<()>,
@@ -239,7 +285,12 @@ impl EventBus {
         }
         let clients: Vec<TextListener> = self.clients.lock().map_or_else(
             |_| Vec::new(),
-            |list| list.iter().map(|(_, each)| Arc::clone(each)).collect(),
+            |list| {
+                list.iter()
+                    .filter(|(_, scope, _)| scope.allows(message))
+                    .map(|(_, _, each)| Arc::clone(each))
+                    .collect()
+            },
         );
         if clients.is_empty() {
             return;
@@ -267,15 +318,19 @@ impl EventBus {
             listeners.retain(|(known, _)| *known != id);
         }
         if let Ok(mut clients) = self.clients.lock() {
-            clients.retain(|(known, _)| *known != id);
+            clients.retain(|(known, _, _)| *known != id);
         }
     }
 
-    /// A dashboard: it gets each message as JSON text.
-    pub fn subscribe_client(&self, listener: impl Fn(&str) + Send + Sync + 'static) -> u64 {
+    /// A client on /events: it gets each message its scope allows as JSON text.
+    pub fn subscribe_client(
+        &self,
+        scope: ClientScope,
+        listener: impl Fn(&str) + Send + Sync + 'static,
+    ) -> u64 {
         let id = self.next.fetch_add(1, Ordering::SeqCst) + 1;
         if let Ok(mut clients) = self.clients.lock() {
-            clients.push((id, Arc::new(listener)));
+            clients.push((id, scope, Arc::new(listener)));
         }
         id
     }
