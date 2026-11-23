@@ -759,6 +759,13 @@ jobs:
         run: |
           python scripts/windows-crt-check.py target/release/natamux-app.exe \
             target/release/natamux-daemon.exe target/release/natamux.exe target/release/nmx.exe
+      # Code signing checks the product name and version of every signed file (build.rs).
+      - name: Check the exes have version info
+        run: |
+          for exe in natamux-app natamux-daemon natamux nmx; do
+            name=$(powershell -NoProfile -Command "(Get-Item '$(cygpath -w "target/release/$exe.exe")').VersionInfo.ProductName")
+            [ "$(echo "$name" | tr -d '\r')" = Natamux ] || { echo "$exe.exe: ProductName is '$name'"; exit 1; }
+          done
       - name: Smoke test
         run: target/release/natamux-app.exe --smoke
       - name: Screenshots

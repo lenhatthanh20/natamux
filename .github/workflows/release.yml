@@ -276,6 +276,11 @@ jobs:
           test -f "$RUNNER_TEMP/unpacked/natamux.exe"
           # The icon gpui loads for the window and taskbar, and Explorer shows (build.rs).
           7z l "$RUNNER_TEMP/unpacked/natamux-app.exe" | grep GROUP_ICON >/dev/null
+          # Code signing checks the product name and version of every signed file (build.rs, .nsi).
+          for exe in natamux-app natamux-daemon natamux nmx; do
+            name=$(powershell -NoProfile -Command "(Get-Item '$(cygpath -w "$RUNNER_TEMP/unpacked/$exe.exe")').VersionInfo.ProductName")
+            [ "$(echo "$name" | tr -d '\r')" = Natamux ] || { echo "$exe.exe: ProductName is '$name'"; exit 1; }
+          done
           ${{ matrix.py }} scripts/windows-crt-check.py "$RUNNER_TEMP"/unpacked/{natamux-app,natamux-daemon,natamux,nmx}.exe
           scripts/release-smoke.sh "$RUNNER_TEMP/unpacked/natamux-app.exe" \
             "$(cygpath -u "$APPDATA")/Natamux"

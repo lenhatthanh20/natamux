@@ -2896,6 +2896,7 @@ name = "natamux-cli"
 version = "1.0.36"
 dependencies = [
  "base64",
+ "embed-resource",
  "natamux-agents",
  "natamux-client",
  "natamux-proto",
@@ -2951,6 +2952,7 @@ version = "1.0.36"
 dependencies = [
  "async-tungstenite",
  "base64",
+ "embed-resource",
  "futures",
  "getrandom 0.3.4",
  "http-body-util",
