@@ -92,6 +92,7 @@ pub mod terminals {
 }
 pub mod stages {
     pub mod act;
+    pub mod ci_approval;
     pub mod context;
     pub mod errors;
     mod gate;
@@ -109,6 +110,7 @@ pub mod tasks {
     pub mod errors;
     pub mod helpers;
     pub mod records;
+    mod records_ci;
     mod removal;
     pub mod service;
     pub mod store;

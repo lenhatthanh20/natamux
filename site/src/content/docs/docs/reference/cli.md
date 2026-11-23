@@ -31,6 +31,7 @@ Task ids look like `T-42`. Inside a Natamux terminal, the token, the daemon addr
 | `stage <command> <id>` | `approve`, `back`, `skip`, `pass`, `fail` or `start` the task's stage |
 | `stage workflow <id> on\|off` | Run a stage as a workflow the next time it starts (needs `--stage`) |
 | `stage ci <id> on\|off` | Check a stage on CI before it passes (needs `--stage`) |
+| `stage ci-approve <stage>` | Approve the exact tree a Strict CI push sends (needs `--task` and `--tree`) |
 | `event <id> <type>` | Send an event to a task |
 | `events <id>` | Show the event log of a task |
 | `workspace create <id>` | Create a git worktree and a branch for a task |
@@ -58,6 +59,7 @@ Task ids look like `T-42`. Inside a Natamux terminal, the token, the daemon addr
 | `--prompt <text>` | `agent start` | First prompt. Default: the task title and notes |
 | `--task <id>` | `ask`, `done` | The task. Default: `NATAMUX_TASK_ID` |
 | `--stage <id>` | `stage`, `done`, `ask` | The stage, when two run side by side. For `stage workflow` and `stage ci`: the stage to change |
+| `--tree <id>` | `stage ci-approve` | The tree id shown in the approval |
 | `--to <id>` | `stage back` | The stage to go back to. Default: the last agent stage |
 | `--reason <text>` | `stage back`, `stage fail` | Why, for the agent and the log |
 | `--issue <key>` | `task link` | The issue or ticket, such as `#42` or `ABC-123` |
@@ -142,6 +144,12 @@ natamux stage ci T-42 on --stage implement
 ```
 
 `ci` chooses whether a stage waits for CI before it passes: Natamux pushes the work to `natamux-ci/<branch>` and waits for its runs. The project settings must offer it on the stage. See [Check a stage on CI](/docs/concepts/stages/#check-a-stage-on-ci).
+
+```sh
+natamux stage ci-approve implement --task T-42 --tree 4b825dc6
+```
+
+`ci-approve` approves a CI push under Strict `ciPush: approved-snapshot`. Give the tree id from the `stage.ci-approval-needed` event; if the work changed, the daemon refuses the old id. Only a person can approve: the agent token of a task gets 403.
 
 ## event and events
 

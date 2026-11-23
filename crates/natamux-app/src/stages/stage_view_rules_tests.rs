@@ -414,6 +414,19 @@ fn names_the_stages_whose_ci_check_runs_now_with_their_ci_branch() {
 }
 
 #[test]
+fn says_which_files_ci_does_not_get() {
+    let ci = json!({"branch": "natamux-ci/a", "note": "2 untracked files are not sent: x, y"});
+    let events = [event("stage.ci-started", "implement", ci)];
+    assert_eq!(
+        waiting_for_ci(&events),
+        [(
+            "implement".to_string(),
+            "natamux-ci/a. 2 untracked files are not sent: x, y".to_string()
+        )]
+    );
+}
+
+#[test]
 fn names_the_stages_whose_last_start_asked_for_a_workflow() {
     let workflow = json!({"workflow": true});
     let events = [

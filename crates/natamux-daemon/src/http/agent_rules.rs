@@ -103,6 +103,8 @@ pub fn agent_may(
     match parts {
         // Fan-out makes top-level tasks and starts their agents, past the subtasks-only rule.
         ["tasks", _, "fan-out"] => false,
+        // A CI push needs a person's approval; the agent must not give it for itself (F4).
+        ["tasks", _, "stages", _, "ci-approve"] => false,
         ["tasks", id, ..] if *id == own => *method != Method::DELETE,
         ["tasks", id, ..] => *method == Method::GET && is_child(id),
         ["tasks"] => *method == Method::GET || *method == Method::POST,
@@ -165,6 +167,7 @@ mod tests {
         assert!(!may(Method::DELETE, "/tasks/T-1/terminals/2"));
         // Security T-0346 (F-02).
         assert!(!may(Method::POST, "/tasks/T-1/fan-out"));
+        assert!(!may(Method::POST, "/tasks/T-1/stages/implement/ci-approve"));
     }
 
     #[test]

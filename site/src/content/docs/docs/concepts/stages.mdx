@@ -281,15 +281,21 @@ A stage that changes code (an agent stage without an output file) or a testing s
 - **Project settings** decide which stages offer it: tick **Tasks can check it on CI** on the stage, or write `"ci": true` in `.natamux.json`. The default pipeline offers it on **Implement**; the catalog also offers it on **Automated tests**.
 - On each task, the card of such a stage has a **Check on CI** checkbox. It is off by default, because it pushes the work to your remote.
 - When the agent runs `natamux done` and the other checks pass, Natamux:
-  1. makes a commit of the worktree as it is, without changing your branch, your index or your files. It holds every file that git does not ignore, also new files you did not add, so keep secrets such as `.env` in ignored files. A worktree with no change uses the last commit of the branch instead;
-  2. force-pushes it to `natamux-ci/<task branch>` on `origin` with the login of your `gh` (`gh auth git-credential`), unless that commit has CI runs already, for example as the head of an open pull request: then it waits for those, so CI does not run twice;
-  3. waits for the CI runs of that commit with `gh run list`, for up to 30 minutes. The card says **Checking on CI** with the branch.
+  1. makes a commit of the last commit plus your changes to **tracked** files, without changing your branch, your index or your files. Files git does not track yet are never sent, also when git does not ignore them; the card names them ("N untracked files are not sent: a, b"). A worktree with no tracked change uses the last commit of the branch instead;
+  2. records what it will send as the event `stage.ci-approved`: the mode, the remote (without user name or password), the CI branch, the commit, its tree and the files. It keeps the commit with a local ref `refs/natamux/ci/<task>/<stage>` until the task ends. A retry, or a restart of the daemon, pushes this same commit, even when the worktree changed since;
+  3. checks right before any network call that the mode is the same, `origin` points to the same remote, the commit still holds the approved tree and the branch starts with `natamux-ci/`. Any change stops the check with the reason, and the stage waits for you;
+  4. force-pushes the commit to `natamux-ci/<task branch>` on `origin` with the login of your `gh` (`gh auth git-credential`), unless that commit has CI runs already, for example as the head of an open pull request: then it waits for those, so CI does not run twice;
+  5. waits for the CI runs of that commit with `gh run list`, for up to 30 minutes. The card says **Checking on CI** with the branch.
 - **Every run passes:** the stage passes, and its checks list each run.
 - **A run fails:** the stage goes back to its agent, as a send back from a review does. The agent gets the stage prompt again, with the failed runs and the end of each failed log (`gh run view --log-failed`), and the prompt is sent at once. The card says only **Sent back by CI N×**; point at it to see the failed runs. With `agents.maxSendBacks` set, the first failure past the limit waits for you, and the card lists the failed runs with a **view run** link each.
 - **A run fails on a testing stage:** the task goes back to the stage before it that changes code, such as **Implement**, with the failed runs. Its agent fixes them, and the testing stage runs again. With `agents.maxSendBacks` set, the first failure past the limit waits for you.
 - **No run starts within 3 minutes, CI takes more than 30 minutes, or the push or `gh` fails:** the stage waits for you, with the reason.
 - In [offline mode](/docs/help/security-review/#offline-mode) a CI stage ends with an error and waits for you.
-- When the task is done or cancelled, Natamux deletes the `natamux-ci/` branch. It goes too when you delete the task.
+- When the task is done or cancelled, Natamux deletes the `natamux-ci/` branch and its local refs. The branch goes too when you delete the task. Natamux never deletes a branch of `origin` outside `natamux-ci/`.
+- Strict mode sets `ciPush`, which changes what a CI check sends:
+  - `approved-commit` (the Strict default): only the last commit. The card says "CI checks the last commit (abc1234). N uncommitted files are not sent."
+  - `approved-snapshot`: the last commit plus the tracked changes, after a person approves the exact tree. The task logs `stage.ci-approval-needed` with the remote, branch, files and tree, and waits. Approve with `natamux stage ci-approve <stage> --task <id> --tree <tree>`; another tree is refused. An agent cannot approve.
+  - `forbid`: no CI push at all. **Check on CI** cannot be turned on, a stage that asks for CI fails with the reason, and a CI check that ran before a restart stops with the reason. Natamux makes no remote call to delete a CI branch.
 
 Your CI workflows must run on a push to these branches, for example in GitHub Actions:
 

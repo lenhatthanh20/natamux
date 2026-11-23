@@ -9,10 +9,10 @@ use natamux_core::events::apply::complete_event;
 use natamux_core::events::derive::enters_branch;
 use natamux_core::events::schema::validate_task_event;
 use natamux_core::js::iso_from_millis;
+use natamux_core::security::{CiMode, ci_mode};
 use natamux_core::stages::lanes::terminal_lane;
 use natamux_core::stages::terminal_lane::stage_of_terminal;
 use natamux_core::tasks::dependencies::{open_subtasks, waiting_on};
-use natamux_git::commit_push::delete_remote_ref;
 use natamux_git::worktrees::tracks_path;
 use natamux_proto::events::task_event::{RECORD_ONLY_EVENT_TYPES, TaskEvent};
 use natamux_proto::stages::schema::{Stage, StageKind, Step};
@@ -29,6 +29,7 @@ use natamux_store::task_files::STAGE_DIR;
 use serde_json::{Value, json};
 
 use crate::shared::event_bus::DaemonMessage;
+use crate::stages::ci_approval::clean_ci_refs;
 use crate::stages::errors::{StageError, StageResult};
 use crate::stages::run::{EventInput, StageRun, StageRunOptions, Work, key, step_in};
 use crate::tasks::errors::TaskError;
@@ -154,7 +155,7 @@ impl StageRun {
     }
 
     /// The CI branch only held snapshots for checks. A finished task that used CI deletes it once,
-    /// in the project folder. Gone already, or offline: only logged.
+    /// in the project folder, with its local pins. Gone already, or offline: only logged.
     fn delete_ci_branch(&self, task: &Task) {
         let used_ci = task
             .ci_stages
@@ -168,11 +169,8 @@ impl StageRun {
         }
         let (task_id, ref_name) = (task.id.clone(), ci_branch_of(branch));
         let folder = self.repo_path(task);
-        self.background(move |_| {
-            if let Err(error) = delete_remote_ref(&folder, &ref_name) {
-                eprintln!("Could not delete the CI branch {ref_name} of {task_id}: {error}");
-            }
-        });
+        let forbid = ci_mode() == CiMode::Forbid;
+        self.background(move |_| clean_ci_refs(&folder, &task_id, &ref_name, forbid));
     }
 
     fn archive(&self, task: &Task) {

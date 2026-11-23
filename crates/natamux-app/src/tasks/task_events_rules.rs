@@ -12,7 +12,7 @@ use serde_json::{Map, Value};
 use super::task_time::parse_iso_ms;
 
 /// One short sentence for every kind of event in `EVENT_TYPES`; a test keeps the two in step.
-const EVENT_SENTENCE: [(&str, &str); 50] = [
+const EVENT_SENTENCE: [(&str, &str); 53] = [
     ("task.created", "Task created"),
     ("task.readied", "Marked ready"),
     ("task.blocked", "Blocked"),
@@ -63,6 +63,12 @@ const EVENT_SENTENCE: [(&str, &str); 50] = [
     ("agent.paused", "Agent paused while idle"),
     ("workspace.warning", "Workspace warning"),
     ("workspace.branch-changed", "Branch changed"),
+    ("stage.ci-approved", "CI push approved"),
+    (
+        "stage.ci-approval-needed",
+        "CI push waits for your approval",
+    ),
+    ("stage.ci-blocked", "CI push blocked"),
 ];
 
 /// The name of a path of a branch by its id.

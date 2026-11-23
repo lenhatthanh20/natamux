@@ -10,6 +10,7 @@ mod agents;
 mod blame;
 mod branch_names;
 mod changes;
+mod ci_approve;
 #[cfg(unix)]
 mod custom_agents;
 mod edge_hosts;

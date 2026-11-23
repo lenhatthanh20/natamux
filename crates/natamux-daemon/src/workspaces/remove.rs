@@ -3,6 +3,7 @@
 use std::path::Path;
 
 use natamux_agents::trust::untrust_workspace;
+use natamux_core::security::{CiMode, ci_mode};
 use natamux_git::branches::delete_branch_force;
 use natamux_git::changes::list_changes;
 use natamux_git::commit_push::delete_remote_ref;
@@ -92,7 +93,9 @@ impl WorkspaceService {
             return Ok(());
         }
         delete_branch_force(&repo_dir, branch);
-        if task.ci_stages.as_ref().is_some_and(|s| !s.is_empty()) {
+        // Under `ciPush: forbid` Natamux makes no remote call for CI at all.
+        let forbid = ci_mode() == CiMode::Forbid;
+        if !forbid && task.ci_stages.as_ref().is_some_and(|s| !s.is_empty()) {
             let ref_name = ci_branch_of(branch);
             if let Err(error) = delete_remote_ref(&repo_dir, &ref_name) {
                 (self.log)(&format!(

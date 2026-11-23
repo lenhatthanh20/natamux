@@ -248,7 +248,16 @@ pub fn push_ref(worktree: &Path, sha: &str, ref_name: &str) -> Result<(), GitErr
     remote(worktree, &["push", "--force", "--quiet", "origin", &target])
 }
 
+/// The branches of origin that only hold CI snapshots. Natamux pushes to and deletes only these.
+pub const CI_REF_PREFIX: &str = "natamux-ci/";
+
+/// Deletes a CI branch of origin. Any other ref is refused, so a wrong name never deletes work.
 pub fn delete_remote_ref(cwd: &Path, ref_name: &str) -> Result<(), GitError> {
+    if !ref_name.starts_with(CI_REF_PREFIX) {
+        return Err(GitError(format!(
+            "Natamux deletes only CI branches ({CI_REF_PREFIX}...), not {ref_name:?}"
+        )));
+    }
     remote(cwd, &["push", "--quiet", "origin", "--delete", ref_name])
 }
 

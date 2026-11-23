@@ -6,6 +6,7 @@
 pub mod blame;
 pub mod branches;
 pub mod changes;
+pub mod ci_snapshot;
 pub mod commit_drafter;
 pub mod commit_push;
 pub mod exec;

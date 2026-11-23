@@ -5,10 +5,12 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use natamux_core::js::{js_trim, utf16_len};
+use natamux_core::security::{CI_FORBID_REASON, CiMode, ci_mode};
+use natamux_git::ci_snapshot::{ApprovedPush, push_approved, verify_approved};
 use natamux_git::gh::{RunGh, default_run_gh};
 use natamux_proto::terminals::text::plain_text;
 
-use crate::ci::{CI_BRANCH_PREFIX, CiCheck, CiResult, ci_branch_of, ci_error};
+use crate::ci::{CI_BRANCH_PREFIX, CiCheck, CiResult, CiTarget, ci_branch_of, ci_error};
 
 const POLL_MS: u64 = 15_000;
 /// A workflow that has not started a run by then does not run on the CI branch at all.
@@ -19,28 +21,40 @@ const LOG_TAIL_CHARS: usize = 3000;
 const PASSING: [&str; 3] = ["success", "skipped", "neutral"];
 const FIELDS: &str = "databaseId,workflowName,status,conclusion,url";
 
-pub type SnapshotFn = Arc<dyn Fn(&Path, &str) -> Result<String, String> + Send + Sync>;
-pub type PushFn = Arc<dyn Fn(&Path, &str, &str) -> Result<(), String> + Send + Sync>;
+pub type PushFn = Arc<dyn Fn(&Path, &CiTarget) -> Result<(), String> + Send + Sync>;
 
-/// The calls `GhCi` makes, so tests can stub them. Times are in ms.
+/// The calls `GhCi` makes, so tests can stub them. Times are in ms. `verify` checks the approval
+/// with no network call; `push` checks it again and pushes the approved commit.
 #[derive(Clone)]
 pub struct CiDeps {
-    pub snapshot: SnapshotFn,
+    pub verify: PushFn,
     pub push: PushFn,
     pub gh: RunGh,
     pub sleep: Arc<dyn Fn(u64) + Send + Sync>,
     pub now: Arc<dyn Fn() -> u64 + Send + Sync>,
 }
 
+fn approved<'a>(target: &'a CiTarget, ref_name: &'a str) -> ApprovedPush<'a> {
+    ApprovedPush {
+        mode: target.mode,
+        commit: &target.commit,
+        tree: &target.tree,
+        remote: &target.remote,
+        ref_name,
+    }
+}
+
 impl Default for CiDeps {
     fn default() -> Self {
         Self {
-            snapshot: Arc::new(|worktree, message| {
-                natamux_git::commit_push::snapshot_commit(worktree, message)
+            verify: Arc::new(|worktree, target| {
+                let ref_name = ci_branch_of(&target.branch);
+                verify_approved(worktree, &approved(target, &ref_name))
                     .map_err(|error| error.to_string())
             }),
-            push: Arc::new(|worktree, sha, ref_name| {
-                natamux_git::commit_push::push_ref(worktree, sha, ref_name)
+            push: Arc::new(|worktree, target| {
+                let ref_name = ci_branch_of(&target.branch);
+                push_approved(worktree, &approved(target, &ref_name))
                     .map_err(|error| error.to_string())
             }),
             gh: default_run_gh(),
@@ -60,8 +74,8 @@ pub struct GhCi {
 }
 
 impl CiCheck for GhCi {
-    fn check(&self, worktree: &Path, branch: &str) -> CiResult {
-        check_on_ci(worktree, branch, &self.deps)
+    fn check(&self, worktree: &Path, target: &CiTarget) -> CiResult {
+        check_on_ci(worktree, target, &self.deps)
     }
 }
 
@@ -151,22 +165,41 @@ fn stop(reason: &str) -> CiResult {
     ci_error(reason)
 }
 
-pub fn check_on_ci(worktree: &Path, branch: &str, deps: &CiDeps) -> CiResult {
-    let ref_name = ci_branch_of(branch);
+/// Why the approved push may not go now: the mode forbids it or changed, or `verify` refused it.
+/// Under `ciPush: forbid` no dependency is called at all.
+fn refusal(worktree: &Path, target: &CiTarget, deps: &CiDeps) -> Option<String> {
+    let now = ci_mode();
+    if now == CiMode::Forbid || target.mode == CiMode::Forbid {
+        return Some(CI_FORBID_REASON.to_string());
+    }
+    if target.mode != now {
+        return Some(format!(
+            "CI push refused: the CI push mode changed from {} to {} since the approval.",
+            target.mode.as_str(),
+            now.as_str()
+        ));
+    }
+    (deps.verify)(worktree, target).err()
+}
+
+/// Checks the approved commit of `target` on CI. The approval is checked before any network
+/// call, `gh run list` included.
+pub fn check_on_ci(worktree: &Path, target: &CiTarget, deps: &CiDeps) -> CiResult {
+    if let Some(reason) = refusal(worktree, target, deps) {
+        return stop(&reason);
+    }
+    let ref_name = ci_branch_of(&target.branch);
     let push_failed = |error: String| {
         stop(&format!(
             "Could not push the work to {ref_name} for CI: {error}"
         ))
     };
-    let sha = match (deps.snapshot)(worktree, &format!("Natamux CI check of {branch}")) {
-        Ok(sha) => sha,
-        Err(error) => return push_failed(error),
-    };
+    let sha = target.commit.as_str();
     let mut reader = Reader {
         deps,
         worktree,
         list: [
-            "run", "list", "--commit", &sha, "--json", FIELDS, "--limit", "50",
+            "run", "list", "--commit", sha, "--json", FIELDS, "--limit", "50",
         ]
         .map(String::from)
         .to_vec(),
@@ -177,7 +210,7 @@ pub fn check_on_ci(worktree: &Path, branch: &str, deps: &CiDeps) -> CiResult {
         return stop(&reason);
     }
     if reader.runs.is_empty()
-        && let Err(error) = (deps.push)(worktree, &sha, &ref_name)
+        && let Err(error) = (deps.push)(worktree, target)
     {
         return push_failed(error);
     }
