@@ -102,3 +102,58 @@ fn a_git_error_never_shows_the_token_of_a_remote_url() {
     assert!(error.0.contains("https://host.test/x.git"), "{error}");
     assert!(!error.0.contains("FAKE-TOKEN"), "{error}");
 }
+
+fn linked_worktree() -> (crate::test_support::TempDir, PathBuf, PathBuf) {
+    let (root, repo) = test_repo();
+    let worktree = root.path().join("wt");
+    let path = worktree.to_string_lossy().into_owned();
+    run_git(&repo, &["worktree", "add", "-q", "-b", "t-1", &path]);
+    (root, repo, worktree)
+}
+
+#[test]
+fn linked_git_dirs_gives_the_real_folders_of_a_linked_worktree_only() {
+    let (_root, repo, worktree) = linked_worktree();
+    let common = std::fs::canonicalize(repo.join(".git")).unwrap();
+    assert_eq!(
+        linked_git_dirs(&worktree),
+        Some((common.join("worktrees/wt"), common))
+    );
+    assert_eq!(linked_git_dirs(&repo), None);
+}
+
+#[test]
+fn linked_git_dirs_refuses_a_rewritten_git_file_or_commondir() {
+    // T-0373 Part 7: the agent writes both files, so they must not choose a granted folder.
+    let (root, repo, worktree) = linked_worktree();
+    let home = root.path().join("home");
+    let fake = root.path().join("fake");
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::create_dir_all(&fake).unwrap();
+    std::fs::write(fake.join("commondir"), home.to_string_lossy().as_bytes()).unwrap();
+    let back = worktree.join(".git");
+    std::fs::write(fake.join("gitdir"), back.to_string_lossy().as_bytes()).unwrap();
+    let real_git = std::fs::read_to_string(&back).unwrap();
+    std::fs::write(&back, format!("gitdir: {}\n", fake.display())).unwrap();
+    assert_eq!(linked_git_dirs(&worktree), None);
+
+    std::fs::write(&back, real_git).unwrap();
+    let commondir = repo.join(".git/worktrees/wt/commondir");
+    std::fs::write(&commondir, home.to_string_lossy().as_bytes()).unwrap();
+    assert_eq!(linked_git_dirs(&worktree), None);
+}
+
+#[test]
+fn linked_git_dirs_refuses_a_git_folder_of_another_worktree() {
+    let (root, repo, worktree) = linked_worktree();
+    let other = root.path().join("other");
+    let path = other.to_string_lossy().into_owned();
+    run_git(&repo, &["worktree", "add", "-q", "-b", "t-2", &path]);
+    let other_dir = repo.join(".git/worktrees/other");
+    std::fs::write(
+        worktree.join(".git"),
+        format!("gitdir: {}\n", other_dir.display()),
+    )
+    .unwrap();
+    assert_eq!(linked_git_dirs(&worktree), None);
+}

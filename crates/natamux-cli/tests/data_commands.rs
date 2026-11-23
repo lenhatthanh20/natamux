@@ -47,8 +47,12 @@ fn data_folder(name: &str) -> (PathBuf, PathBuf) {
     (data, worktree)
 }
 
+/// Port 0 is never probed, so a daemon on the default port of this machine changes nothing.
 fn env_of(data: &Path) -> Env {
-    Env::from([("NATAMUX_DATA_DIR", data.to_str().unwrap())])
+    Env::from([
+        ("NATAMUX_DATA_DIR", data.to_str().unwrap()),
+        ("NATAMUX_PORT", "0"),
+    ])
 }
 
 #[test]
@@ -126,5 +130,34 @@ fn purge_data_refuses_a_dirty_worktree_and_a_task_terminal() {
     let result = run_plain(&["purge-data", "--yes"], in_task);
     assert_eq!(result.code, EXIT_USAGE);
     assert!(data.join("tasks/T-1.md").exists());
+    fs::remove_dir_all(&data).unwrap();
+}
+
+#[test]
+fn purge_data_refuses_while_a_daemon_answers_on_the_port() {
+    let (data, _worktree) = data_folder("purge-daemon");
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port().to_string();
+    let data_text = data.to_str().unwrap();
+    let env = Env::from([
+        ("NATAMUX_DATA_DIR", data_text),
+        ("NATAMUX_PORT", port.as_str()),
+    ]);
+    let result = run_plain(&["purge-data", "--yes"], env);
+    assert_eq!(result.code, EXIT_FAILED, "{}", result.stderr);
+    assert!(
+        result.stderr.contains("daemon is running"),
+        "{}",
+        result.stderr
+    );
+    assert!(data.join("tasks/T-1.md").exists());
+
+    drop(listener);
+    let env = Env::from([
+        ("NATAMUX_DATA_DIR", data_text),
+        ("NATAMUX_PORT", port.as_str()),
+    ]);
+    let result = run_plain(&["purge-data", "--yes"], env);
+    assert_eq!(result.code, EXIT_OK, "{}", result.stderr);
     fs::remove_dir_all(&data).unwrap();
 }

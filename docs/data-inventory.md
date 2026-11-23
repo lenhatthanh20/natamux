@@ -66,7 +66,7 @@ Audit events: `security.changed`, `security.outside-change`, `ci.blocked`, `agen
 
 1. Push or save the work in your worktrees.
 2. Quit the app.
-3. Run `natamux purge-data --yes`. It refuses while a worktree in `data/worktrees/` has uncommitted or untracked files (and lists them), while the daemon runs, and in a task's terminal. It removes the task data, the index, the logs, the scripts and the sandbox folders, and the token and port files. It keeps the worktrees and the settings. Running it again changes nothing.
+3. Run `natamux purge-data --yes`. It refuses while a worktree in `data/worktrees/` has uncommitted or untracked files (and lists them), while the daemon runs (on the app's saved port, or on `NATAMUX_PORT`, else 4317), and in a task's terminal. It removes the task data, the index, the logs, the scripts and the sandbox folders, and the token and port files. It keeps the worktrees and the settings. Running it again changes nothing.
 4. Remove what is left:
    - **macOS**: move `Natamux.app` to the Trash, then remove `~/Library/Application Support/Natamux` (this also removes the worktrees and settings).
    - **Linux**: remove the AppImage or the unpacked folder, then `~/.config/Natamux`.

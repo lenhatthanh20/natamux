@@ -61,13 +61,20 @@ pub fn has_unique_commits(state: &AppState, task: &Task) -> bool {
     let Some((cwd, tip)) = tip_of(state, task) else {
         return false;
     };
-    // `--exclude` before `--branches` takes the name without `refs/heads/`.
-    let exclude = task
-        .branch
-        .as_deref()
-        .map(|branch| format!("--exclude={branch}"));
+    // `--exclude` before `--branches` takes the name without `refs/heads/`. The branch the agent
+    // switched to is in `--branches` too, and the delete would drop it, so it is excluded as well.
+    let mut names: Vec<String> = task.branch.iter().cloned().collect();
+    if tip == "HEAD"
+        && let Ok(now) = git(&cwd, &["symbolic-ref", "--short", "-q", "HEAD"], None, &[])
+    {
+        names.push(now.trim().to_string());
+    }
+    let excludes: Vec<String> = names
+        .iter()
+        .map(|name| format!("--exclude={name}"))
+        .collect();
     let mut args = vec!["rev-list", "--count", tip.as_str(), "--not"];
-    args.extend(exclude.as_deref());
+    args.extend(excludes.iter().map(String::as_str));
     args.extend(["--branches", "--remotes", "--tags"]);
     !git(&cwd, &args, None, &[]).is_ok_and(|count| count.trim() == "0")
 }

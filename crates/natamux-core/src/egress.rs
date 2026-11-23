@@ -88,7 +88,13 @@ pub fn parse_remote(url: &str) -> Remote {
         return match scheme.as_str() {
             "file" => Remote::Local,
             "https" | "ssh" | "git+ssh" | "ssh+git" => {
-                let (authority, path) = rest.split_once('/').unwrap_or((rest, ""));
+                // curl and git end the authority at `/`, `?` or `#`; a `\` is read as `/` by some.
+                let cut = rest.find(['/', '?', '#']).unwrap_or(rest.len());
+                let (authority, tail) = rest.split_at(cut);
+                if authority.contains('\\') {
+                    return Remote::Refused("a backslash in the remote host is refused".into());
+                }
+                let path = if tail.starts_with('/') { tail } else { "" };
                 network_remote(authority, path)
             }
             _ => Remote::Refused(format!("the remote scheme {scheme:?} is refused")),

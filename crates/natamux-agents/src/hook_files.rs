@@ -14,7 +14,7 @@ use natamux_proto::agents::claude_code::{
 };
 use serde_json::{Map, Value, json};
 
-use crate::hook_origin;
+use crate::hook_rules::{self, COPILOT_EVENTS};
 use crate::launch::{HOOK, LAUNCHABLE_AGENTS};
 
 /// Codex takes hooks for one session as `-c` overrides (see `codex_hook_args`).
@@ -121,17 +121,6 @@ pub fn claude_code_workspace_settings(bin_dir: Option<&str>) -> Value {
     settings["statusLine"] = claude_code_status_line(bin_dir);
     settings
 }
-
-/// Copilot CLI does not tell a hook which event it is, so each event names itself.
-pub(crate) const COPILOT_EVENTS: [&str; 7] = [
-    "userPromptSubmitted",
-    "preToolUse",
-    "postToolUse",
-    "postToolUseFailure",
-    "notification",
-    "agentStop",
-    "errorOccurred",
-];
 
 pub fn copilot_hook_file() -> Value {
     json!({
@@ -332,7 +321,7 @@ pub fn is_natamux_hook(hook: &Value) -> bool {
     !commands.is_empty()
         && commands
             .iter()
-            .all(|each| each.as_str().is_some_and(hook_origin::is_hook_command))
+            .all(|each| each.as_str().is_some_and(hook_rules::is_hook_command))
 }
 
 /// The JSON of a hook file that holds Natamux's hooks only, so writing them again loses no hook
@@ -344,7 +333,7 @@ pub fn natamux_hook_json(text: &str) -> Option<Map<String, Value>> {
     };
     let foreign_key = parsed
         .keys()
-        .any(|key| !hook_origin::HOOK_FILE_KEYS.contains(&key.as_str()));
+        .any(|key| !hook_rules::HOOK_FILE_KEYS.contains(&key.as_str()));
     if parsed.contains_key("hooks") && foreign_key {
         return None;
     }
@@ -413,7 +402,7 @@ pub fn prepare_workspace(agent: &str, workspace: &Path, hooks: WorkspaceHooks) -
         Ok(meta) if meta.file_type().is_symlink() => return false,
         Ok(_) => match fs::read(&target) {
             Ok(bytes) if bytes == file.content.as_bytes() => Some(file.content.clone()),
-            Ok(_) if hook_origin::is_tracked(workspace, file.path) => None,
+            Ok(_) if hook_rules::is_tracked(workspace, file.path) => None,
             Ok(bytes) => hook_file_text(&file, &String::from_utf8_lossy(&bytes)),
             Err(_) => return false,
         },

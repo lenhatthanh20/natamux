@@ -13,22 +13,7 @@ pub use natamux_proto::agents::start::{DEFAULT_PROGRAMS, LAUNCHABLE_AGENTS};
 /// What the hooks run. `natamux hook` does nothing outside a Natamux terminal (no token).
 pub const HOOK: &str = "natamux hook";
 
-/// The shell of the terminal: PowerShell on Windows, a POSIX shell elsewhere.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Platform {
-    Posix,
-    Windows,
-}
-
-impl Platform {
-    pub fn current() -> Self {
-        if cfg!(windows) {
-            Self::Windows
-        } else {
-            Self::Posix
-        }
-    }
-}
+pub use crate::launch_platform::Platform;
 
 /// A built-in agent or one of the user's custom agents.
 pub fn is_launchable(agent: &str) -> bool {

@@ -178,6 +178,21 @@ async fn retention_deletes_only_old_finished_tasks_without_work_and_is_safe_to_r
     );
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn retention_keeps_a_task_whose_agent_switched_to_a_branch_with_unpushed_commits() {
+    let d = git_daemon("privacy-retention-switched").await;
+    let (id, ws) = task_with_workspace(&d, "Switched one").await;
+    run_git(&ws, &["switch", "-c", "other-work"]);
+    run_git(&ws, &["commit", "--allow-empty", "-m", "unpushed"]);
+    set_done(&d, &id).await;
+
+    let report = retain(&d, 30, now_ms() + 31 * DAY_MS).await;
+    assert!(report.deleted.is_empty(), "{report:?}");
+    assert_eq!(report.refused, std::slice::from_ref(&id));
+    assert_eq!(d.get(&format!("/tasks/{id}")).await.0, 200);
+    assert!(ws.exists());
+}
+
 /// Every file under `folder` but the worktrees, with its path inside `folder`.
 fn data_files(folder: &Path, inside: &Path, out: &mut Vec<(String, Vec<u8>)>) {
     for entry in std::fs::read_dir(folder).unwrap().flatten() {

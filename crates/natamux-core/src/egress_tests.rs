@@ -151,3 +151,18 @@ fn a_denial_writes_one_audit_line_with_the_host_and_never_the_url() {
     assert_eq!(lines.len(), 1);
     assert_eq!(lines[0], ["egress.denied", "github.com", "denied"]);
 }
+
+#[test]
+fn a_query_fragment_or_backslash_cannot_hide_the_real_host() {
+    let host = |url: &str| match parse_remote(url) {
+        Remote::Network { host, .. } => host,
+        other => format!("{other:?}"),
+    };
+    assert_eq!(host("https://evil.com?@github.com/acme/x"), "evil.com");
+    assert_eq!(host("https://evil.com#@github.com/x"), "evil.com");
+    assert_eq!(host("ssh://evil.com?x@github.com/x"), "evil.com");
+    assert!(matches!(
+        parse_remote("https://evil.com\\@github.com/acme/x"),
+        Remote::Refused(_)
+    ));
+}

@@ -129,3 +129,47 @@ fn codex_config_overrides_that_open_approvals_are_forbidden() {
     }
     assert_eq!(word("claude-code", "-c approval_policy=never"), None);
 }
+
+// T-0373 review 1: clap and yargs read short flags with an attached value and grouped flags.
+#[test]
+fn short_flags_with_an_attached_value_or_grouped_are_forbidden() {
+    for (agent, words) in [
+        ("codex", "-a=never"),
+        ("codex", "-anever"),
+        ("codex", "-s=danger-full-access"),
+        ("codex", "-sdanger-full-access"),
+        ("codex", "-c=approval_policy=never"),
+        ("codex", "-capproval_policy=never"),
+        ("codex", "'-c=sandbox_mode=\"danger-full-access\"'"),
+        ("gemini", "-dy"),
+        ("gemini", "-y=true"),
+        ("qwen", "-yd"),
+        ("cursor", "-af"),
+        ("cursor", "-pf"),
+    ] {
+        let line = format!("--model x {words} --verbose");
+        assert!(word(agent, &line).is_some(), "{agent}: {words}");
+    }
+    assert_eq!(word("codex", "-xa never"), Some("-xa never".into()));
+    assert_eq!(word("codex", "-anever"), Some("-anever".into()));
+}
+
+#[test]
+fn harmless_short_flags_pass() {
+    for (agent, words) in [
+        ("codex", "-a=on-request"),
+        ("codex", "-aon-request"),
+        ("codex", "-sworkspace-write"),
+        ("codex", "-s=read-only"),
+        ("codex", "-xa on-request"),
+        ("codex", "-c=model=o3"),
+        ("codex", "-cmodel=o3"),
+        ("codex", "-mgpt-5"),
+        ("gemini", "-dv"),
+        ("gemini", "-mgemini-2.5-pro"),
+        ("cursor", "-pv"),
+        ("claude-code", "-dy"),
+    ] {
+        assert_eq!(word(agent, words), None, "{agent}: {words}");
+    }
+}
