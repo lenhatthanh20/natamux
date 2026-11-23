@@ -30,6 +30,7 @@ Commands:
   workspace create <id>      Create a git worktree and a branch for a task
   workspace remove <id>      Remove the worktree of a task (needs --yes)
   repo trust <repo>          Show the commands a project runs; approve them with --approve
+  repo verify-launch         For a launch script: check the worktree is still the approved one
   hooks claude-code          Print Claude Code settings that report a task's progress
   hooks opencode|qwen|droid  Print the hook file Natamux writes into a task's worktree
   hook <agent>               For an agent's hook: send the JSON on stdin to the daemon (silent)
@@ -43,7 +44,8 @@ Options:
   --agent <name>        task create: agent that works on the task; agent start: which agent
   --depends-on <id>     task create, task edit: task that must finish first (repeat for more)
   --prompt <text>       agent start: first prompt (default: the task title and notes)
-  --task <id>           ask, done: the task (default: NATAMUX_TASK_ID)
+  --task <id>           ask, done: the task (default: NATAMUX_TASK_ID); repo trust,
+                        repo verify-launch: the task whose worktree is read
   --context <source>    task create: where its context comes from, such as github-issue:42
   --repo <id>           task create: the project (default: the project of NATAMUX_TASK_ID's
                         task, or the only project)
@@ -67,6 +69,7 @@ Options:
   --yes                 workspace remove: confirm that the worktree folder is deleted
   --delete-branch       workspace remove: also delete the branch when it is merged
   --approve <hash>      repo trust: approve the commands with this hash (from the list)
+  --digest <hash>       repo verify-launch: the digest the launch was approved with
   --json                Print JSON instead of text
   -h, --help            Show this help
 

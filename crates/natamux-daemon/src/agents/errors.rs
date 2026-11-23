@@ -21,6 +21,9 @@ pub enum AgentError {
     },
     Task(TaskError),
     Terminal(TerminalError),
+    /// 409: the worktree's agent config is not the approved one, or Strict mode refuses the
+    /// agent. Nothing was written or typed.
+    Untrusted(String),
 }
 
 impl fmt::Display for AgentError {
@@ -36,6 +39,7 @@ impl fmt::Display for AgentError {
             }
             AgentError::Task(error) => write!(f, "{error}"),
             AgentError::Terminal(error) => write!(f, "{error}"),
+            AgentError::Untrusted(reason) => f.write_str(reason),
         }
     }
 }

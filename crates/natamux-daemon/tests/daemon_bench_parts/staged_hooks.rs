@@ -175,7 +175,7 @@ fn stage_runner(
         on_launch: None,
         trust_paths: trust_paths(|_| None, home),
         permission_mode_of: Arc::new(|_| String::new()),
-        trusted_of: Arc::new(|_| true),
+        trusted_of: natamux_daemon::projects::repo_trust_worktree::trust_always(true),
     }));
     let (paths, settings) = (Arc::clone(repos), Arc::clone(repos));
     let mut options = StageRunOptions::new(

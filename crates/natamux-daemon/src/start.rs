@@ -225,6 +225,7 @@ fn terminal_service(
     let output = Arc::clone(&cells.runner);
     let idle = Arc::clone(&cells.workspaces);
     let exited = Arc::clone(&cells.hooks);
+    let agent_ended = Arc::clone(&cells.runner);
     let signalled = Arc::clone(&store.signals);
     let ended = store.tasks.clone();
     TerminalService::new(TerminalOptions {
@@ -253,6 +254,9 @@ fn terminal_service(
         on_exit: Some(Arc::new(move |task_id: &str, terminal: &str| {
             if let Some(hooks) = exited.get() {
                 hooks.shell_ended(task_id, terminal);
+            }
+            if let Some(runner) = agent_ended.get() {
+                runner.run.options.agents.agent_ended(task_id, terminal);
             }
         })),
         trace_input: trace_input_on(env.get("NATAMUX_INPUT_TRACE").map(String::as_str)),

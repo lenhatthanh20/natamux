@@ -7,6 +7,11 @@ use serde::{Deserialize, Serialize};
 pub const UNTRUSTED_REASON: &str =
     "Repo commands are not approved. Review them in the project settings, then retry.";
 
+/// What a blocked launch says when the agent config of the task's worktree is not the approved
+/// one.
+pub const CONFIG_CHANGED_REASON: &str =
+    "The agent config in this worktree changed since it was approved. Review it, then retry.";
+
 /// The note the approval shows: approval also turns on the agents' own trust of the folder.
 pub const TRUST_NOTE: &str = concat!(
     "Agents will trust this folder and run in auto mode, so the repo's own agent config ",
@@ -40,6 +45,13 @@ pub struct RepoTrustView {
     /// Agent config files of the project folder (hooks, MCP servers), the ones that exist.
     #[serde(default, rename = "agentFiles")]
     pub agent_files: Vec<SetupScript>,
+    /// The files that differ from the last approval: changed, new or gone.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub changed: Vec<String>,
+    /// Why the agent config cannot be checked (a link, a path outside, a file over the caps).
+    /// Such a folder can never be approved.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unverifiable: Option<String>,
 }
 
 /// The body of `POST /repos/:id/trust`.
@@ -68,6 +80,8 @@ mod tests {
                 file: ".mcp.json".into(),
                 text: "{}".into(),
             }],
+            changed: Vec::new(),
+            unverifiable: None,
         };
         let text = serde_json::to_string(&view).unwrap();
         assert_eq!(
@@ -75,6 +89,14 @@ mod tests {
             r#"{"trusted":false,"hash":"ab","commands":[{"where":"Stage test: check","text":"pnpm test"}],"setup":[],"agentFiles":[{"file":".mcp.json","text":"{}"}]}"#
         );
         assert_eq!(serde_json::from_str::<RepoTrustView>(&text).unwrap(), view);
+    }
+
+    #[test]
+    fn names_the_changed_files_and_why_a_folder_cannot_be_checked() {
+        let text = r#"{"trusted":false,"hash":"ab","commands":[],"changed":[".mcp.json"],"unverifiable":"x"}"#;
+        let view: RepoTrustView = serde_json::from_str(text).unwrap();
+        assert_eq!(view.changed, [".mcp.json"]);
+        assert_eq!(view.unverifiable.as_deref(), Some("x"));
     }
 
     #[test]

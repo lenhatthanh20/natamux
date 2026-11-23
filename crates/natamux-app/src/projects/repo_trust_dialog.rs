@@ -27,7 +27,7 @@ pub mod row;
 #[path = "repo_trust_rules.rs"]
 pub mod rules;
 
-use rules::{CHANGED, LEAD, needs_review, title};
+use rules::{CHANGED, LEAD, changed_note, needs_review, title};
 
 /// What runs once the dialog closes, whichever the answer: Start a task goes on with it.
 pub type Then = Rc<dyn Fn(&mut Window, &mut App)>;
@@ -268,6 +268,8 @@ impl Render for RepoTrustDialog {
         // A 409 shows as a warning over the new commands; any other refusal under them.
         let changed = self.error.as_deref() == Some(CHANGED);
         let alert = changed.then(|| SettingsAlert::new(AlertKind::Warning, CHANGED));
+        let note = changed_note(&self.view);
+        let files = note.map(|text| SettingsAlert::new(AlertKind::Warning, text));
         let failed = self.error.clone().filter(|_| !changed).map(error_line);
         let commands = SettingsGroup::new("Commands")
             .child(self.commands(cx))
@@ -286,6 +288,7 @@ impl Render for RepoTrustDialog {
                 .sheet()
                 .lead(lead)
                 .children(alert)
+                .children(files)
                 .child(div().pt(rems_from_px(14.0_f32)).child(foot_text(LEAD)))
                 .child(commands)
                 .children(failed)

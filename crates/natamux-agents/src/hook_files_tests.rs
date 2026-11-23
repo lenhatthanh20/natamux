@@ -251,24 +251,19 @@ fn gives_claude_code_commands_not_http_hooks_since_copilot_cli_reads_its_file_to
     assert_eq!(claude_code_hook_file(), json!({ "hooks": hooks }));
 }
 
+// T-0373: a key Natamux never writes (here the permissions Claude Code saved) makes the file
+// someone else's, so it is not merged into.
 #[test]
-fn writes_the_hooks_of_an_older_natamux_again_and_keeps_what_claude_code_saved() {
+fn leaves_a_claude_code_file_with_a_key_natamux_never_writes_alone() {
     let repo = TempDir::new("launch");
     let mut old = claude_code_hook_settings("http://127.0.0.1:1111");
     old["permissions"] = json!({ "allow": ["Bash(pnpm test)"] });
-    write(
-        repo.path(),
-        ".claude/settings.local.json",
-        &hook_file_text_of(&old),
-    );
+    let text = hook_file_text_of(&old);
+    write(repo.path(), ".claude/settings.local.json", &text);
 
-    assert!(prepare_workspace("claude-code", repo.path(), claude_on()));
+    assert!(!prepare_workspace("claude-code", repo.path(), claude_on()));
 
-    let written: Value =
-        serde_json::from_str(&read(repo.path(), ".claude/settings.local.json")).unwrap();
-    let mut want = claude_code_workspace_settings(std::env::var("NATAMUX_BIN_DIR").ok().as_deref());
-    want["permissions"] = json!({ "allow": ["Bash(pnpm test)"] });
-    assert_eq!(written, want);
+    assert_eq!(read(repo.path(), ".claude/settings.local.json"), text);
 }
 
 #[test]

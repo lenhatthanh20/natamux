@@ -11,6 +11,7 @@ use natamux_agents::launch::{
     LAST_SESSION, LaunchOptions, Platform, PromptMode, default_program, is_launchable,
     launch_command, prompt_mode, quote_argument, takes_model,
 };
+use natamux_agents::launch_ask::{ask_flags, with_ask_env};
 use natamux_agents::trust::{TrustPaths, trust_workspace};
 use natamux_core::js::is_js_space;
 use natamux_core::tasks::dependencies::waiting_on;
@@ -22,14 +23,17 @@ use natamux_stages::issue::{ISSUE_NOTE, fence_of, imported_url};
 use natamux_stages::prompts::{arg_values, fill};
 
 use crate::agents::errors::AgentError;
+use crate::agents::hook_config_watch::HookConfigWatch;
+use crate::agents::launch_guard::{LaunchGate, drop_trust, guard, with_verify};
 use crate::agents::pasted_prompt::PastedPrompts;
-use crate::projects::repo_trust::TrustedOf;
+use crate::projects::repo_trust_worktree::TrustedOf;
 use crate::shared::jobs::system_clock;
 use crate::stages::launcher::write_private;
 use crate::tasks::service::TaskService;
 use crate::terminals::limits::MAIN_TERMINAL;
 use crate::terminals::service::TerminalService;
 use crate::terminals::types::DEFAULT_SIZE;
+use crate::workspaces::setup_script::WORKSPACE_WARNING_EVENT;
 
 /// On Windows the program of a terminal is always the shell, so the end of an agent cannot be
 /// seen there. Its launch line sets these window titles, which reach the terminal as escape
@@ -140,8 +144,8 @@ pub struct AgentRunnerOptions {
     /// Where the agents keep their trusted folders.
     pub trust_paths: TrustPaths,
     pub permission_mode_of: PermissionModeOf,
-    /// Whether the project's commands are approved. Without it the agent gets no auto mode, no
-    /// trust of the folder and no stage words: the repo's own agent config would run.
+    /// Whether the project is approved as the task's worktree is now. Without it the agent gets
+    /// no auto mode, no trust of the folder and no stage words: the repo's own config would run.
     pub trusted_of: TrustedOf,
 }
 
@@ -153,6 +157,7 @@ pub struct AgentRunner {
     launch_dir: PathBuf,
     /// First prompts of agents that take none on their command line.
     pasted: Arc<PastedPrompts>,
+    watch: HookConfigWatch,
 }
 
 impl AgentRunner {
@@ -189,6 +194,7 @@ impl AgentRunner {
         );
         AgentRunner {
             pasted,
+            watch: HookConfigWatch::default(),
             gemini_settings_path: options
                 .gemini_settings_path
                 .clone()
@@ -259,12 +265,20 @@ impl AgentRunner {
             });
         }
         let program = self.program_of(agent);
-        let (command, pasted) = self.command_of(&task, agent, prompt, session, own);
+        let (trusted_of, paths) = (&self.options.trusted_of, &self.options.trust_paths);
+        let gate = guard(trusted_of, &task, &agent_kind(agent), paths)?;
+        let (command, pasted) = self.command_of(&task, agent, prompt, session, own, &gate);
+        gate.recheck(trusted_of, &task, paths)?;
         let shell = terminal.unwrap_or(MAIN_TERMINAL);
-        let line = self.launch_line(task_id, &command, terminal)?;
+        let check = gate.verify_digest().map(|digest| (task_id, digest));
+        let line = self.launch_line(task_id, &command, terminal, check)?;
+        gate.recheck(trusted_of, &task, paths)?;
+        // The agent that ran here before is over.
+        self.agent_ended(task_id, shell);
         self.options
             .terminals
             .run(task_id, &line, shell, DEFAULT_SIZE)?;
+        self.watch.launched(&task, shell, gate.state.digest());
         if let Some(text) = pasted {
             self.pasted.hold(task_id, shell, &text);
         }
@@ -277,7 +291,7 @@ impl AgentRunner {
                 program: program.clone(),
                 session: resumed.map(str::to_string),
                 restored: own.restored,
-                model: self.model_for(&task, agent, own),
+                model: self.model_for(&task, agent, own, gate.trusted()),
             });
         }
         let restored_in = own.restored.then_some(shell);
@@ -294,10 +308,29 @@ impl AgentRunner {
         )?)
     }
 
+    /// The agent of a shell ended: its config changed meanwhile goes into the task's log, and
+    /// Strict mode takes back Cursor's and Copilot's trust of the worktree.
+    pub fn agent_ended(&self, task_id: &str, terminal: &str) {
+        let trusted_of = &self.options.trusted_of;
+        let Some(message) = self.watch.ended(task_id, terminal, trusted_of) else {
+            return;
+        };
+        let tasks = &self.options.tasks;
+        let payload = serde_json::json!({ "message": message });
+        let logged = tasks.record_event(task_id, WORKSPACE_WARNING_EVENT, payload, "system");
+        if let Err(error) = logged {
+            eprintln!("The config warning of {task_id} is not logged: {error}");
+        }
+        if natamux_core::security::mode().is_strict()
+            && let Ok(task) = tasks.get_task(task_id)
+        {
+            drop_trust(&task, &self.options.trust_paths);
+        }
+    }
+
     /// The task's model for this start. Stage words of an untrusted project are left out, so a
     /// `--model` in them does not count.
-    fn model_for(&self, task: &Task, agent: &str, own: &OwnAgent) -> Option<String> {
-        let trusted = (self.options.trusted_of)(task.repo.as_deref());
+    fn model_for(&self, task: &Task, agent: &str, own: &OwnAgent, trusted: bool) -> Option<String> {
         let stage_args = own.args.as_deref().filter(|_| trusted);
         task_model(task, agent, stage_args).map(str::to_string)
     }
@@ -311,15 +344,17 @@ impl AgentRunner {
         prompt: Option<&str>,
         session: Option<&str>,
         own: &OwnAgent,
+        gate: &LaunchGate,
     ) -> (String, Option<String>) {
-        let trusted = (self.options.trusted_of)(task.repo.as_deref());
+        let (trusted, strict) = (gate.trusted(), gate.strict());
         // A custom agent starts as its base, with its own program.
         let kind = agent_kind(agent);
         let mut workspace_hooks = false;
         if let Some(workspace) = &task.workspace {
             workspace_hooks =
                 prepare_workspace(&kind, Path::new(workspace), self.options.workspace_hooks);
-            if trusted {
+            // Strict mode never writes Cursor's or Copilot's trust of a path.
+            if trusted && !strict {
                 trust_workspace(&kind, workspace, &self.options.trust_paths);
             }
         }
@@ -329,9 +364,12 @@ impl AgentRunner {
             .filter(|_| trusted)
             .map(|args| quoted_words(args, &arg_values(task), self.platform()));
         let model = self
-            .model_for(task, agent, own)
+            .model_for(task, agent, own, trusted)
             .map(|model| format!("--model {}", quote_argument(&model, self.platform())));
+        // Strict mode: the agent's ask mode, before the user's own words.
+        let ask = strict.then(|| ask_flags(&kind).join(" "));
         let extra: Vec<&str> = [
+            ask.as_deref(),
             self.extra_args.get(&kind).map(String::as_str),
             model.as_deref(),
             stage_words.as_deref(),
@@ -362,12 +400,18 @@ impl AgentRunner {
                 claude_settings_path: self.options.claude_settings_path.to_string_lossy().into(),
                 gemini_settings_path: self.gemini_settings_path.to_string_lossy().into(),
                 // Read at each start, so a saved change counts for the next agent.
-                auto: trusted && (self.options.permission_mode_of)(task.repo.as_deref()) == "auto",
+                auto: !strict
+                    && trusted
+                    && (self.options.permission_mode_of)(task.repo.as_deref()) == "auto",
                 workspace: task.workspace.clone(),
                 trust: trusted,
                 workspace_hooks,
+                bypass_hook_trust: gate.bypass_hook_trust(),
             },
         );
+        if strict {
+            return (with_ask_env(&kind, &command, self.platform()), pasted);
+        }
         (command, pasted)
     }
 
@@ -383,9 +427,11 @@ impl AgentRunner {
         task_id: &str,
         command: &str,
         terminal: Option<&str>,
+        check: Option<(&str, &str)>,
     ) -> Result<String, AgentError> {
         let platform = self.platform();
         if self.options.windows {
+            let command = with_verify(command, check, "", platform);
             let title = |text: &str| format!("$Host.UI.RawUI.WindowTitle = '{text}'");
             return Ok(format!(
                 "{}; {command}; if ($LASTEXITCODE -ne 0) {{ {} }}; {}",
@@ -412,8 +458,9 @@ impl AgentRunner {
             .map_or_else(String::new, |bin| {
                 format!("PATH={}:\"$PATH\" ", quote_argument(bin, platform))
             });
+        let command = with_verify(&format!("{path}{command}"), check, &path, platform);
         // `||` and printf, not `$?`, which fish does not have.
-        write_private(&script, &format!("{path}{command}{}\n", failed_mark())).map_err(io)?;
+        write_private(&script, &format!("{command}{}\n", failed_mark())).map_err(io)?;
         Ok(format!(
             ". {}",
             quote_argument(&script.to_string_lossy(), platform)

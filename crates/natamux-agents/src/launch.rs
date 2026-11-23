@@ -64,8 +64,7 @@ pub enum PromptMode {
 }
 
 /// Agents that start without a prompt: Amp, Kimi, Aider, Crush, Muse have no flag for it; a
-/// prompt on Cline's line runs it headless; Goose's and Kiro's flags for it are not documented
-/// to keep the screen open. Orca pastes for all of them too.
+/// prompt on Cline's line runs it headless; Goose's and Kiro's flags may not keep the screen.
 const PASTED_PROMPT_AGENTS: [&str; 8] = [
     "amp", "kimi", "goose", "aider", "crush", "cline", "kiro", "muse",
 ];
@@ -127,9 +126,8 @@ pub fn agent_of_command(line: &str, program_of: impl Fn(&str) -> String) -> Opti
     })
 }
 
-/// The flags of the `auto` permission mode. Only Claude Code checks each action in its auto mode;
-/// the others have no such check, so their closest flag lets them run (almost) anything. Goose
-/// has no flag for its mode, so its arm in `launch_command` sets `GOOSE_MODE=auto` instead.
+/// The flags of the `auto` permission mode. Only Claude Code checks each action in it; the others'
+/// closest flag lets them run (almost) anything. Goose gets `GOOSE_MODE=auto` in `launch_command`.
 pub const AUTO_FLAGS: [(&str, &[&str]); 15] = [
     ("claude-code", &["--permission-mode", "auto"]),
     // Codex dropped `--full-auto`. The first two flags mean the same and exist in old and new
@@ -224,12 +222,13 @@ pub struct LaunchOptions {
     pub auto: bool,
     /// The task's worktree, which the agent is told to trust. None: no trust is added.
     pub workspace: Option<String>,
-    /// Whether the agent is told to trust the folder (Codex's `trust_level`, Gemini's trust
-    /// variable). Off for a project whose commands are not approved: its own agent config
-    /// (hooks, MCP servers) would run.
+    /// Whether the agent is told to trust the folder (Codex's `trust_level`, Gemini's variable).
+    /// Off for a project that is not approved: its own agent config would run.
     pub trust: bool,
     /// The agent's hook file is in the worktree, so the launch need not pass them.
     pub workspace_hooks: bool,
+    /// Codex's `--dangerously-bypass-hook-trust`. Strict mode: only for an approved digest.
+    pub bypass_hook_trust: bool,
 }
 
 /// The command line that starts an agent in its interactive mode, with its first prompt and the
@@ -398,7 +397,9 @@ fn codex_words(
     if session.is_some() {
         words.push("resume".into());
     }
-    words.push("--dangerously-bypass-hook-trust".into());
+    if options.bypass_hook_trust {
+        words.push("--dangerously-bypass-hook-trust".into());
+    }
     words.extend(mode);
     if let (true, Some(workspace)) = (options.trust, &options.workspace) {
         words.push("-c".into());
@@ -475,10 +476,9 @@ pub struct OneShot {
     pub stdin: String,
 }
 
-/// The command line that runs an agent once, without its interactive screen, for a short answer
-/// such as a commit message: the prompt goes on stdin where the agent reads it there, so a long
-/// prompt does not hit the limit of a command line. No hooks, no permission flags: it needs no
-/// tools, and must not move the task.
+/// The command line that runs an agent once, without its screen, for a short answer such as a
+/// commit message: the prompt goes on stdin where the agent reads it there, so a long prompt does
+/// not hit the limit of a command line. No hooks, no permission flags, and no task moves.
 pub fn one_shot_command(agent: &str, program: &str, prompt: &str, platform: Platform) -> OneShot {
     let quote = |value: &str| quote_argument(&task_word(value), platform);
     let (line, stdin) = match agent {
@@ -536,7 +536,8 @@ const NO_ONE_SHOT_AGENTS: [&str; 7] =
     ["aider", "cline", "kimi", "crush", "amp", "opencode", "muse"];
 
 pub fn has_one_shot(agent: &str) -> bool {
-    LAUNCHABLE_AGENTS.contains(&agent) && !NO_ONE_SHOT_AGENTS.contains(&agent)
+    let known = LAUNCHABLE_AGENTS.contains(&agent) && !NO_ONE_SHOT_AGENTS.contains(&agent);
+    known && crate::launch_ask::allowed_now(agent)
 }
 
 #[cfg(test)]

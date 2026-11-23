@@ -320,6 +320,7 @@ fn with_prompt(prompt: &str) -> LaunchOptions {
         workspace: None,
         trust: true,
         workspace_hooks: false,
+        bypass_hook_trust: true,
     }
 }
 

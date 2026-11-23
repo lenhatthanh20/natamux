@@ -7,7 +7,7 @@ use super::*;
 
 fn untrusted(env: &Env) -> AgentRunner {
     AgentRunner::new(AgentRunnerOptions {
-        trusted_of: Arc::new(|_| false),
+        trusted_of: natamux_daemon::projects::repo_trust_worktree::trust_always(false),
         ..env.options()
     })
 }

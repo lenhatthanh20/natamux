@@ -21,8 +21,8 @@ use super::errors::{Answer, json_answer, not_found, unauthorized};
 use super::health::health_body;
 use super::routes::stages::Mark;
 use super::routes::{
-    agents, github, projects, review_comments, stages, tasks, terminals, workspace_files,
-    workspaces,
+    agents, github, launch_check, projects, review_comments, stages, tasks, terminals,
+    workspace_files, workspaces,
 };
 use super::{event_socket, terminal_socket};
 use crate::agents::hook_service::HookService;
@@ -188,7 +188,7 @@ pub async fn handle(request: Request<Incoming>, state: Arc<AppState>) -> Answer 
         }
         (&Method::GET, ["tasks", id, "ended-shells"]) => terminals::ended_shells(&state, id),
         (&Method::GET, ["repos", id, "trust"]) => {
-            projects::get_trust(state, id.to_string(), by_agent).await
+            projects::get_trust(state, id.to_string(), query.to_string(), by_agent).await
         }
         (&Method::GET, ["tasks", id, "terminals"]) => {
             terminals::list_terminals(state, id.to_string()).await
@@ -246,6 +246,7 @@ pub async fn handle(request: Request<Incoming>, state: Arc<AppState>) -> Answer 
         | (&Method::POST, ["repos"])
         | (&Method::PUT, ["repos", _, "settings"])
         | (&Method::POST, ["repos", _, "trust"])
+        | (&Method::POST, ["tasks", _, "launch-check"])
         | (&Method::POST, ["github", "issues", "import"])
         | (&Method::PUT, ["tasks", _, "file"]) => {
             with_body(request, state, route, query.to_string(), who).await
@@ -394,6 +395,9 @@ async fn with_body(
         (&Method::POST, ["tasks", id, "agent", "message"]) => {
             agents::message(state, id.to_string(), body).await
         }
+        (&Method::POST, ["tasks", id, "launch-check"]) => {
+            launch_check::launch_check(state, id.to_string(), body).await
+        }
         (&Method::POST, ["limits", agent]) => agents::post_limits(&state, agent, body),
         (&Method::PUT, ["custom-agents"]) => agents::put_custom_agents(state, body).await,
         (&Method::POST, ["tasks", id, "review-comments"]) => {
@@ -408,7 +412,7 @@ async fn with_body(
             projects::put_settings(state, id.to_string(), head.headers, body, by_agent).await
         }
         (&Method::POST, ["repos", id, "trust"]) => {
-            projects::post_trust(state, id.to_string(), body, by_agent).await
+            projects::post_trust(state, id.to_string(), (body, query), by_agent).await
         }
         _ => workspace_body_route(&method, &parts, state, query, head.headers, body).await,
     }

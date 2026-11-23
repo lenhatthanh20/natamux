@@ -147,7 +147,9 @@ impl WorkspaceService {
         let changes = list_changes(&workspace, false)?;
         // No agent run in a repo whose commands are not approved: the agent would load the repo's
         // own agent config. The simple draft takes its place, as when no agent is installed.
-        let (agent, refusal, note) = if !self.repos.is_trusted(task.repo.as_deref()) {
+        let folder = Some(workspace.as_path());
+        let trust = self.repos.is_trusted_in_task(task.repo.as_deref(), folder);
+        let (agent, refusal, note) = if !trust.is_trusted() {
             let agent = first_draft_agent(kind.as_deref());
             (agent, Some(UNTRUSTED_REASON.to_string()), None)
         } else {
