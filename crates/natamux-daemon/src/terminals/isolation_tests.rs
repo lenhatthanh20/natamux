@@ -1,3 +1,6 @@
+// Landlock is Linux only, and these tests build Unix paths.
+#![cfg(unix)]
+
 use std::sync::Mutex;
 
 use natamux_git::test_support::TempDir;

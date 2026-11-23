@@ -91,7 +91,7 @@ fn too_wide(dir: &Path, home: &Path, data_dir: &Path) -> bool {
 /// its own `lib` (an npm global install, `~/.cargo`), unless that parent is too wide.
 pub fn toolchain_dirs(path: &str, home: &Path, data_dir: &Path) -> Vec<PathBuf> {
     let mut dirs: Vec<PathBuf> = Vec::new();
-    for entry in path.split(':').map(PathBuf::from) {
+    for entry in std::env::split_paths(path) {
         if !entry.is_absolute() || !entry.is_dir() {
             continue;
         }

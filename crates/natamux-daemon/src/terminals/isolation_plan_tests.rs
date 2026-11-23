@@ -1,3 +1,6 @@
+// Landlock is Linux only, and these tests build Unix paths.
+#![cfg(unix)]
+
 use std::path::{Path, PathBuf};
 
 use natamux_core::security::IsolationSettings;

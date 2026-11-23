@@ -91,15 +91,18 @@ mod tests {
         assert_eq!(isolation_of(&json!({})), IsolationSettings::default());
         let off = isolation_of(&json!({ "isolation": { "mode": "off" } }));
         assert!(!off.required);
+        // `/opt/tools` is not absolute on Windows: build absolute paths for this platform.
+        let tools = std::env::temp_dir().join("tools");
+        let cache = std::env::temp_dir().join("cache");
         let set = isolation_of(&json!({ "isolation": {
             "mode": "required",
-            "extraReadOnly": ["/opt/tools", "relative/no"],
-            "extraReadWrite": ["/srv/cache"],
+            "extraReadOnly": [tools, "relative/no"],
+            "extraReadWrite": [cache],
             "envAllow": ["JAVA_HOME", ""],
         }}));
         assert!(set.required);
-        assert_eq!(set.extra_read_only, [PathBuf::from("/opt/tools")]);
-        assert_eq!(set.extra_read_write, [PathBuf::from("/srv/cache")]);
+        assert_eq!(set.extra_read_only, [tools]);
+        assert_eq!(set.extra_read_write, [cache]);
         assert_eq!(set.env_allow, ["JAVA_HOME"]);
         assert_eq!(
             isolation_of(&json!({ "isolation": isolation_value(&set) })),
