@@ -98,5 +98,6 @@ Natamux has no account or telemetry. Task data stays in the app's user data fold
 - [Documentation](https://natamux.github.io/docs/)
 - [Contributing](docs/dev-setup.md)
 - [Security](SECURITY.md)
+- [Code signing policy](https://natamux.github.io/docs/help/code-signing/)
 - [License](LICENSE) · MIT
 - Releases `native-beta.1` and `v1.0.0` to the last `v1.0.x` were released under GPL-3.0-or-later and stay under it. The first release after the move to MIT is MIT.

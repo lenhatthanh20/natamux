@@ -14,6 +14,15 @@
 !include FileFunc.nsh
 
 Name "Natamux"
+; Code signing checks the product name and version of every signed file.
+VIProductVersion "${VERSION}.0"
+VIFileVersion "${VERSION}.0"
+VIAddVersionKey /LANG=0 "ProductName" "Natamux"
+VIAddVersionKey /LANG=0 "ProductVersion" "${VERSION}"
+VIAddVersionKey /LANG=0 "FileVersion" "${VERSION}"
+VIAddVersionKey /LANG=0 "FileDescription" "Natamux installer"
+VIAddVersionKey /LANG=0 "CompanyName" "lenhatthanh20"
+VIAddVersionKey /LANG=0 "LegalCopyright" "MIT License"
 OutFile "${OUT}\Natamux-win-x64.exe"
 InstallDir "$LOCALAPPDATA\Programs\Natamux"
 RequestExecutionLevel user

@@ -29,6 +29,21 @@ When you or an agent you start makes it happen, and for the automatic items belo
 - **Links.** Links in the dashboard open in your browser.
 - **Update check (desktop app).** Off by default. When you tick **Check for Updates Automatically** (app menu on macOS, **Help** menu on Linux and Windows, or **Settings → General → Updates**), the app checks about 30 seconds after it starts, and every 6 hours. The app starts the system `curl` (found through `PATH`; it reads `~/.curlrc` and proxy variables) with a HEAD request to `https://github.com/lenhatthanh20/natamux/releases/...` and follows redirects to GitHub's file hosts. The request has no data about you, your repositories or your tasks. GitHub sees your IP address and the app's version. When a newer release exists, the app also fetches `SHA256SUMS.txt`, `SHA256SUMS.txt.minisig`, then the file. Untick it to turn the timed checks off. **Check for Updates…** checks once, when you choose it.
 
+## Privacy policies of other services
+
+Natamux itself talks only to GitHub. The coding agents are separate programs that you install and sign in to, and they follow their own companies' policies.
+
+| Service | Used for | Policy |
+|---|---|---|
+| GitHub | Releases, update check, `git` and `gh` | [GitHub Privacy Statement](https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement) |
+| Anthropic | Claude Code | [Privacy Policy](https://www.anthropic.com/legal/privacy) |
+| OpenAI | Codex | [Privacy Policy](https://openai.com/policies/privacy-policy/) |
+| Google | Gemini CLI | [Privacy Policy](https://policies.google.com/privacy) |
+| GitHub | Copilot CLI | [GitHub Privacy Statement](https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement) |
+| Cursor | Cursor CLI | [Privacy Policy](https://cursor.com/privacy) |
+
+For other agents, see the agent's own website.
+
 ## Offline mode
 
 Off by default. It is on when `NATAMUX_OFFLINE` is exactly `1`, or `"offline": true` is in `settings.json` of the desktop app's user data folder, or in the settings file of the machine (`/Library/Application Support/Natamux/settings.json` on macOS, `/etc/natamux/settings.json` on Linux, `%ProgramData%\Natamux\settings.json` on Windows), which an administrator can set for every user. It is read once at start: restart to change it. Your own `settings.json` reaches the daemon only through the app that starts it; the machine file and the variable are read by every program. Natamux then makes no update check (the manual one is refused too), runs no `gh`, runs no `git fetch`, `pull`, `push`, `ls-remote` or `clone`, runs no pull request watcher, and does not resume the CI gate. A CI stage started offline ends with an error and waits for you. It does not limit the coding agents or what you type in a terminal. The full list is in [For a security review](https://natamux.github.io/docs/help/security-review/).
