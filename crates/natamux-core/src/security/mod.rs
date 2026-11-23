@@ -4,9 +4,11 @@
 use std::cell::RefCell;
 
 mod agent_api;
+mod agent_mode;
 mod ci_push;
 
 pub use agent_api::AgentApi;
+pub use agent_mode::{AUTO_FORBID_REASON, INPUT_TRACE_BLOCKED, auto_allowed, input_trace_allowed};
 pub use ci_push::{CI_FORBID_REASON, CiMode, CiPush, ci_mode};
 
 /// The Strict keys the Strict rules read.

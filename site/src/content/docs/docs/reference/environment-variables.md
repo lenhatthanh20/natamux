@@ -19,7 +19,7 @@ Set these in the environment where the daemon starts.
 | `NATAMUX_DATA_DIR` | `<current folder>/.natamux` | Task files and the SQLite index |
 | `NATAMUX_REPO_DIR` | none | A git repository to add once as the first project, with the id `default`. Without it the daemon starts with no project. A project removed later does not come back |
 | `NATAMUX_WORKTREES_DIR` | `<data dir>/worktrees` | Where worktrees go, one folder per task |
-| `NATAMUX_INPUT_TRACE` | none | `1` writes every key sent to a terminal to the daemon log, for finding typing problems such as lost Vietnamese letters. It logs passwords too: turn it off after use |
+| `NATAMUX_INPUT_TRACE` | none | `1` writes every key sent to a terminal to the daemon log, for finding typing problems such as lost Vietnamese letters. It logs passwords too: turn it off after use. Blocked in Strict mode |
 | `NATAMUX_CLAUDE_COMMAND` | `claude` | Program that starts Claude Code |
 | `NATAMUX_CODEX_COMMAND` | `codex` | Program that starts Codex |
 | `NATAMUX_GEMINI_COMMAND` | `gemini` | Program that starts Gemini CLI |
