@@ -4,6 +4,7 @@
 //! and GitHub (part 5). It answers as the Node daemon in `packages/daemon` does.
 
 pub mod agents {
+    pub mod access_revoke;
     pub mod custom_agents;
     pub mod errors;
     pub mod generic_signals;
@@ -29,6 +30,8 @@ pub mod github {
     pub mod pull_request_watcher;
 }
 pub mod http {
+    pub mod agent_actions;
+    pub mod agent_grants;
     pub mod agent_rules;
     pub mod auth;
     pub mod body;
@@ -37,6 +40,8 @@ pub mod http {
     pub mod event_socket;
     pub mod health;
     pub mod routes {
+        pub mod agent_fields;
+        pub mod agent_views;
         pub mod agents;
         pub mod github;
         pub mod launch_check;
@@ -46,6 +51,7 @@ pub mod http {
         pub mod tasks;
         pub mod terminals;
         pub mod workspace_files;
+        pub mod workspace_rights;
         pub mod workspaces;
     }
     pub mod server;

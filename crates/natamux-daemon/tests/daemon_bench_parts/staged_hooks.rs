@@ -15,7 +15,7 @@ use natamux_daemon::agents::hook_service::{HookOptions, HookService, StageLookup
 use natamux_daemon::agents::runner::{AgentRunner, AgentRunnerOptions};
 use natamux_daemon::agents::usage_service::{UsageOptions, UsageService};
 use natamux_daemon::projects::repos::{RepoOptions, Repos};
-use natamux_daemon::shared::event_bus::EventBus;
+use natamux_daemon::shared::event_bus::{ClientScope, EventBus};
 use natamux_daemon::shared::jobs::system_clock;
 use natamux_daemon::shared::scheduler::Scheduler;
 use natamux_daemon::stages::run::StageRunOptions;
@@ -85,7 +85,7 @@ fn staged_setup(dir: &Path, agents: usize) -> (Arc<HookBench>, Arc<UsageService>
     }
     let bus = EventBus::new();
     // A dashboard: each message is made into its text, as for an event socket.
-    bus.subscribe_client(|text| {
+    bus.subscribe_client(ClientScope::All, |text| {
         std::hint::black_box(text.len());
     });
     let repos = Repos::with_options(RepoOptions {

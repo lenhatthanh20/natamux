@@ -177,7 +177,8 @@ pub struct Task {
     pub issue: Option<IssueLink>,
     #[serde(default)]
     pub created_at: String,
-    /// ISO 8601 in UTC, so it sorts as text.
+    /// ISO 8601 in UTC, so it sorts as text. Absent in the subtask view an agent gets.
+    #[serde(default)]
     pub updated_at: String,
 }
 

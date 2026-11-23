@@ -37,8 +37,9 @@ impl AgentTokens {
         bool::from(known.as_bytes().ct_eq(secret.as_bytes())).then(|| task_id.to_string())
     }
 
-    /// A deleted task's token stops working, also for a later task with the same id.
-    pub fn forget(&self, task_id: &str) {
+    /// The task's token stops working: deleted, or finished after the grace. A later
+    /// `token_for` (a reopened task, a later task with the same id) gives a new one.
+    pub fn revoke(&self, task_id: &str) {
         self.secrets().remove(task_id);
     }
 }
@@ -75,10 +76,21 @@ mod tests {
     fn a_forgotten_task_s_token_stops_working_and_a_new_one_differs() {
         let tokens = AgentTokens::default();
         let old = tokens.token_for("T-1");
-        tokens.forget("T-1");
+        tokens.revoke("T-1");
         assert_eq!(tokens.task_of(&old), None);
         let new = tokens.token_for("T-1");
         assert_ne!(new, old);
         assert_eq!(tokens.task_of(&new).as_deref(), Some("T-1"));
+    }
+
+    #[test]
+    fn a_token_of_an_earlier_daemon_run_is_unknown() {
+        let earlier = AgentTokens::default();
+        let old = earlier.token_for("T-1");
+        let now = AgentTokens::default();
+        assert_eq!(now.task_of(&old), None);
+        let new = now.token_for("T-1");
+        assert_ne!(new, old);
+        assert_eq!(now.task_of(&new).as_deref(), Some("T-1"));
     }
 }

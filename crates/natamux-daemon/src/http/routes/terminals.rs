@@ -4,6 +4,7 @@ use hyper::StatusCode;
 use natamux_proto::terminals::query::is_terminal_name;
 use serde_json::{Map, Value, json};
 
+use crate::http::agent_rules::Caller;
 use crate::http::errors::{Answer, Issue, invalid, json_answer, task_error, terminal_error};
 use crate::http::server::AppState;
 use crate::terminals::shell_files::read_ended_shells;
@@ -165,12 +166,17 @@ pub fn close_terminal(state: &AppState, id: &str, terminal: &str) -> Answer {
     ok(json!({ "terminals": state.terminals.list(id) }))
 }
 
-pub fn ticket(state: &AppState, id: &str) -> Answer {
+/// `who` is recorded as the issuer, so revoking an agent token also drops its tickets.
+pub fn ticket(state: &AppState, id: &str, who: &Caller) -> Answer {
     let issues = task_id_issues(id);
     if !issues.is_empty() {
         return invalid(&issues);
     }
-    match state.terminals.issue_ticket(id) {
+    let issuer = match who {
+        Caller::Agent(own) => Some(own.as_str()),
+        _ => None,
+    };
+    match state.terminals.issue_ticket(id, issuer) {
         Ok(ticket) => ok(json!({ "ticket": ticket })),
         Err(error) => terminal_error(&error),
     }
