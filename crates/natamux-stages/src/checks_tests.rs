@@ -322,3 +322,21 @@ fn reads_headings_as_the_regex_does() {
         strings(&["x", "## B", "y"])
     );
 }
+
+#[cfg(unix)]
+#[test]
+fn a_stage_check_runs_without_the_stripped_credentials() {
+    use natamux_core::security::{NetworkSettings, force_network};
+    let dir = TempDir::new("check-env");
+    let line = "echo \"home=$HOME prompt=$GIT_TERMINAL_PROMPT\"";
+    let before = run_shell_command(line, dir.path());
+    assert!(!before.output.contains("home= "), "{}", before.output);
+    // HOME is in every test process, so it stands in for a token the daemon has.
+    let _strip = force_network(NetworkSettings {
+        strip: true,
+        strip_extra: vec!["HOME".into()],
+        ..NetworkSettings::defaults(false)
+    });
+    let ran = run_shell_command(line, dir.path());
+    assert_eq!(ran.output.trim(), "home= prompt=0");
+}

@@ -26,6 +26,24 @@ pub struct SecurityView {
     /// How task shells are isolated while this daemon runs. None from an older daemon.
     #[serde(default)]
     pub isolation: Option<IsolationView>,
+    /// Where Natamux's own calls may go. None from an older daemon.
+    #[serde(default)]
+    pub network: Option<NetworkView>,
+}
+
+/// `network` of `GET /security`.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NetworkView {
+    /// `open`, `allowlist` or `loopback` (offline mode is `loopback`).
+    pub egress: String,
+    pub updater: bool,
+    /// `strip` or `inherit`.
+    pub credentials: String,
+    pub proxy: bool,
+    /// Child processes can reach only loopback ports (Landlock TCP rules).
+    pub confined: bool,
+    #[serde(default)]
+    pub note: Option<String>,
 }
 
 /// `isolation` of `GET /security`: the mode the daemon started with (a change needs a restart),

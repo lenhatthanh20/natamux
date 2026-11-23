@@ -23,7 +23,7 @@ This page is for the person who reviews Natamux before a company installs it. It
 | Update check: `https://github.com/lenhatthanh20/natamux/releases/...`, through the system `curl` | Only when **Check for Updates Automatically** is on (off by default), or when the user picks **Check for Updates…** | The app version in the user agent. GitHub sees the IP address |
 | Update download from the same release, with redirects to GitHub's file hosts | After an update check finds a signed, newer release | Same |
 
-Natamux links no TLS library. The app starts the system `curl`, found through `PATH`, which does the HTTPS. It reads `~/.curlrc` and the proxy variables, uses the certificate store of the system, and follows redirects from github.com to GitHub's file hosts. A check sends a HEAD request; when a newer release exists, the app also fetches `SHA256SUMS.txt`, `SHA256SUMS.txt.minisig`, then the file. Timed checks run about 30 seconds after the start and every 6 hours, only when the switch is on. The switch is in the app menu (macOS), the **Help** menu (Linux and Windows) and **Settings → General → Updates**.
+Natamux links no TLS library. The app starts the system `curl`, found through `PATH`, which does the HTTPS. It gets `--disable`, so it does not read `~/.curlrc`; it reads the proxy variables (or `--proxy` from the network settings), uses the certificate store of the system, and follows redirects from github.com to GitHub's file hosts. Under egress `allowlist` it follows no redirect by itself: the app checks each redirect's host first. A check sends a HEAD request; when a newer release exists, the app also fetches `SHA256SUMS.txt`, `SHA256SUMS.txt.minisig`, then the file. Timed checks run about 30 seconds after the start and every 6 hours, only when the switch is on. The switch is in the app menu (macOS), the **Help** menu (Linux and Windows) and **Settings → General → Updates**.
 
 ### Made by programs that Natamux starts on its own
 
@@ -62,6 +62,10 @@ Any one of them turns offline mode on. None of them can turn it off when another
 - the CI gate is not resumed. A CI stage started offline ends with an error and waits for the user. A CI branch pushed before is not deleted.
 
 Offline mode covers Natamux's own code and the programs it starts by itself. It does not limit coding agents or what a user types in a terminal. Limit those with the agent's own settings and with your network rules.
+
+## Network settings
+
+The `network` key of `security.json` (the daemon's data folder) gives finer control than offline mode: egress `open`, `allowlist` (only the git remotes and `gh` hosts you list, each URL resolved and pinned before git runs) or `loopback` (as offline mode, read at each call), a proxy, updates off, and `credentials.agentEnv: strip`, which takes `GH_TOKEN`, `SSH_AUTH_SOCK`, `GIT_ASKPASS` and the like out of task terminals, checks and the commit-message agent. Strict mode turns `strip` on. Other traffic of agents is held only with isolation on Linux and Landlock ABI 4 (TCP to the daemon and proxy ports); otherwise use a firewall or proxy. `GET /security` shows the state in `network`. The full rules are in [SECURITY.md](https://github.com/lenhatthanh20/natamux/blob/main/SECURITY.md#network-and-credentials).
 
 ## What a release is built from
 

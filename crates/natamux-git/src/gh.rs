@@ -63,11 +63,10 @@ pub fn run_gh_with_timeout(
     args: &[String],
     timeout: Duration,
 ) -> Result<String, GitHubError> {
-    if natamux_core::offline::offline() {
-        return Err(GitHubError::new("offline mode: GitHub is not reached"));
-    }
+    let pinned = crate::gh_egress::gh_target(cwd, args)?;
     let mut command = Command::new("gh");
     command
+        .envs(pinned)
         .args(args)
         .current_dir(cwd)
         .env("GH_PROMPT_DISABLED", "1")

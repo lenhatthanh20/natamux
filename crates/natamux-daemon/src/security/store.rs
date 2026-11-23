@@ -49,6 +49,7 @@ impl SecurityStore {
     /// The save of `PUT /security`.
     pub fn save(&self, body: &Value) -> Result<SecurityState, String> {
         let text = with_isolation_kept(checked_text(body)?, body, self.source.path());
+        let text = with_network_kept(text, body, self.source.path());
         self.source
             .write(&text)
             .map_err(|error| format!("security.json could not be written: {error}"))
@@ -93,6 +94,25 @@ pub fn with_isolation_kept(text: String, body: &Value, file: &Path) -> String {
     };
     if let Some(keys) = value.as_object_mut() {
         keys.insert("isolation".into(), isolation_value(&settings));
+    }
+    serde_json::to_string_pretty(&value).unwrap_or(text)
+}
+
+/// `network` is its own setting too: a save keeps the file's own unless the body sets it. It is
+/// kept as written; reading it fails closed on a bad value.
+pub fn with_network_kept(text: String, body: &Value, file: &Path) -> String {
+    let kept = match body.get("network") {
+        Some(network) => Some(network.clone()),
+        None => std::fs::read_to_string(file)
+            .ok()
+            .and_then(|old| serde_json::from_str::<Value>(&old).ok())
+            .and_then(|old| old.get("network").cloned()),
+    };
+    let (Some(network), Ok(mut value)) = (kept, serde_json::from_str::<Value>(&text)) else {
+        return text;
+    };
+    if let Some(keys) = value.as_object_mut() {
+        keys.insert("network".into(), network);
     }
     serde_json::to_string_pretty(&value).unwrap_or(text)
 }

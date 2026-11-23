@@ -11,12 +11,13 @@ use std::sync::Arc;
 use natamux_agents::hook_files::{WorkspaceHooks, prepare_agent_hooks};
 use natamux_agents::launch_isolation::{ISOLATION_AGENT_REASON, isolated_adapter_ok};
 use natamux_core::formats::is_task_id_shape;
-use natamux_core::security::{IsolationSettings, install_git_hardening, load_isolation};
+use natamux_core::security::{IsolationSettings, install_git_hardening, load_isolation, network};
 use natamux_core::workspaces::private_dir::{private_dir, write_private};
 use natamux_proto::projects::security::IsolationView;
 use natamux_pty::sandbox_plan::{isolate_command, landlock_abi};
 use natamux_pty::{Env, SpawnOptions};
 
+use super::isolation_network::tcp_ports;
 use super::isolation_plan::{PlanInput, isolated_env, plan_of};
 use super::login_path::use_login_path;
 use super::session_lifecycle::{SpawnPty, random_id};
@@ -151,11 +152,12 @@ impl Isolation {
         let mut env = self.env_for(&options.env, &dirs.0, &dirs.1);
         let mark = random_id(12);
         env.insert(SANDBOX_MARK.into(), mark.clone());
-        let plan = plan_of(PlanInput {
+        let mut plan = plan_of(PlanInput {
             path: env.get("PATH").map(String::as_str),
             sweep_mark: Some(format!("{SANDBOX_MARK}={mark}")),
             ..self.input(&options.cwd, &dirs)
         });
+        plan.tcp_connect = tcp_ports(&env, &network());
         options.env = env;
         options.isolation = Some(plan);
         Ok(())
@@ -172,10 +174,11 @@ impl Isolation {
         let dirs = self.prepare_task(&task_id)?;
         let mut env = self.env_for(&env_of(command), &dirs.0, &dirs.1);
         env.remove("NATAMUX_TOKEN");
-        let plan = plan_of(PlanInput {
+        let mut plan = plan_of(PlanInput {
             path: env.get("PATH").map(String::as_str),
             ..self.input(worktree, &dirs)
         });
+        plan.tcp_connect = tcp_ports(&env, &network());
         command.env_clear().envs(&env);
         isolate_command(command, &plan)
     }
@@ -250,6 +253,16 @@ pub fn with_isolation(spawn: Arc<SpawnPty>, isolation: Option<Arc<Isolation>>) -
     };
     Arc::new(move |mut options: SpawnOptions| {
         isolation.isolate_shell(&mut options)?;
+        (*spawn)(options)
+    })
+}
+
+/// Takes the user's git and GitHub credentials out of a shell's environment when the network
+/// settings say `strip`, and sets the proxy. Read at each shell start, so a change applies to
+/// the next shell.
+pub fn with_child_env(spawn: Arc<SpawnPty>) -> Arc<SpawnPty> {
+    Arc::new(move |mut options: SpawnOptions| {
+        options.env = natamux_core::child_env::scrub(&options.env);
         (*spawn)(options)
     })
 }

@@ -20,6 +20,14 @@ pub struct IsolationPlan {
     pub sweep_mark: Option<String>,
     /// Use at most this Landlock ABI. None: what the kernel offers. 0 always fails.
     pub max_abi: Option<u32>,
+    /// TCP connections go only to these ports. Landlock checks ports from ABI 4 on; an older
+    /// kernel leaves TCP open (`tcp_confined` tells). None: TCP is not restricted.
+    pub tcp_connect: Option<Vec<u16>>,
+}
+
+/// Whether `plan` holds TCP to its ports on a kernel with Landlock `abi`.
+pub fn tcp_confined(plan: &IsolationPlan, abi: u32) -> bool {
+    plan.tcp_connect.is_some() && plan.max_abi.map_or(abi, |max| max.min(abi)) >= 4
 }
 
 /// The Landlock ABI the kernel offers, or why isolation cannot run here.

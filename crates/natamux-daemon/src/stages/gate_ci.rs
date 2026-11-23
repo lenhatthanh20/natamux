@@ -23,7 +23,7 @@ impl StageRun {
     /// A CI check that ran when the daemon stopped goes on: it pushes the approved commit again and
     /// waits. Under `ciPush: forbid` it stops with the reason instead.
     pub fn resume_ci_checks(&self) {
-        if natamux_core::offline::offline() {
+        if natamux_core::egress::loopback() {
             return;
         }
         for task in self.all_tasks() {

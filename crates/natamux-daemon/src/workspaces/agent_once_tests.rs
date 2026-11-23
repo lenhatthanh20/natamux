@@ -116,6 +116,34 @@ mod real_runs {
     }
 
     #[test]
+    fn strip_keeps_the_git_credentials_from_the_commit_draft_agent() {
+        use natamux_core::security::{NetworkSettings, force_network};
+        let dir = TempDir::new("once");
+        let program = fake_agent(&dir, "env");
+        let mut env: Env = std::env::vars().collect();
+        env.insert("GH_TOKEN".to_string(), "FAKE-TOKEN-MARK".to_string());
+        env.insert(
+            "SSH_AUTH_SOCK".to_string(),
+            "/tmp/FAKE-TOKEN-MARK".to_string(),
+        );
+        env.insert("ANTHROPIC_API_KEY".to_string(), "model-key".to_string());
+        let strip = force_network(NetworkSettings {
+            strip: true,
+            ..NetworkSettings::defaults(false)
+        });
+        let out = run_with_env(agent_run(&dir, &program, 10_000), &env).unwrap();
+        assert!(!out.contains("FAKE-TOKEN-MARK"), "{out}");
+        assert!(out.contains("ANTHROPIC_API_KEY=model-key"), "{out}");
+        assert!(out.contains("GIT_TERMINAL_PROMPT=0"), "{out}");
+        drop(strip);
+        let out = run_with_env(agent_run(&dir, &program, 10_000), &env).unwrap();
+        assert!(
+            out.contains("GH_TOKEN=FAKE-TOKEN-MARK"),
+            "inherit keeps today's env: {out}"
+        );
+    }
+
+    #[test]
     fn rejects_with_the_exit_code_and_the_first_line_of_stderr() {
         let dir = TempDir::new("once");
         let program = fake_agent(&dir, "echo \"not logged in\" >&2; echo more >&2; exit 3");

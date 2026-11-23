@@ -129,10 +129,36 @@ Isolation is its own setting, not part of Strict mode: on macOS and Windows no b
 - The daemon's own git hardens itself while isolation is on: no hooks (`core.hooksPath` set to an empty folder), `core.fsmonitor=false`, `protocol.ext.allow=never` and `GIT_CONFIG_NOSYSTEM=1`. An agent cannot get a command run outside its sandbox through a git setting.
 - `GET /security` shows `isolation { mode, backend, abi, ok, reason }` for this daemon run.
 
+### Network and credentials
+
+The `network` key of `security.json` decides where Natamux's own calls go (git remotes, `gh`, the updater) and what credentials the programs it starts keep. Egress is its own setting, not set by Strict mode; `credentials` is. A save in Settings > Security keeps the file's `network` key.
+
+```json
+{ "network": {
+    "egress": "open | allowlist | loopback",
+    "git": [{ "host": "github.com", "owner": "acme", "repo": "*", "actions": ["fetch", "push"] }],
+    "gh": [{ "host": "github.com", "actions": ["read", "pr-create"] }],
+    "updater": true,
+    "proxy": { "url": "", "noProxy": [] },
+    "credentials": { "agentEnv": "strip | inherit", "stripExtra": [] } } }
+```
+
+- Egress: offline mode (`NATAMUX_OFFLINE=1` or the machine `offline` key) is always `loopback`. Otherwise the file's value. A repo's `.natamux.json` (`security.network.egress`) can only move it from `open` to `allowlist` to `loopback`. An unknown value counts as `loopback`.
+- `open`: the calls of today.
+- `loopback`: no `git fetch`, `pull`, `push`, `ls-remote`, no `gh`, no update check, no pull request watcher, no resumed CI gate.
+- `allowlist`: before a remote call, the daemon asks git for the URL it would really use (`git remote get-url`, so `insteadOf` and `pushInsteadOf` rules are applied), refuses more than one push URL or a URL that git would rewrite again, checks it against `network.git`, and runs git with that URL, not the remote name. A change of the remote after the check cannot move the call. The git of that call takes only `https`, `ssh` and `file` (`GIT_ALLOW_PROTOCOL`), runs no hook (`core.hooksPath=/dev/null`), and asks no credential helper but `gh auth git-credential`. Any other network git call is refused. Actions: `fetch` (also `ls-remote` and `pull`), `push`, `push-force` (`--force`, `+refspec`; the CI push needs it) and `delete`. A host is exact or `*.name`; owner and repo are exact or `*`. A folder or `file://` remote is local and always allowed. `ext::` and other helper forms, `http://`, `git://` and a URL with a password are refused. An empty list, or a list with one bad entry, refuses everything.
+- `gh` under `allowlist`: only calls Natamux knows (`read`: `pr view/list/checks`, `run list/view`, GET `gh api`, GraphQL queries; `pr-create`; `issue-create`), on a host of `network.gh`. gh gets `GH_HOST` and `GH_REPO` pinned to the checked host and origin.
+- Updater: `updater: false` turns update checks off in every mode. Under `allowlist` the host must be listed (`updater: true` lists GitHub's release hosts; a list of hosts replaces them), curl follows no redirect by itself, and the host of each redirect is checked before the next request. curl always gets `--disable` (no `~/.curlrc`), and `--proxy` when a proxy is set.
+- Credentials: with `agentEnv: strip` (the Strict default) task terminals, stage `check` commands and the commit-message agent lose `GH_TOKEN`, `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN`, `GITHUB_ENTERPRISE_TOKEN`, `GITLAB_TOKEN`, `GIT_ASKPASS`, `SSH_ASKPASS`, `SSH_AUTH_SOCK`, `GIT_SSH`, `GIT_SSH_COMMAND`, `GIT_CREDENTIAL_*` and `stripExtra`. They get an empty `GH_CONFIG_DIR`, `GIT_TERMINAL_PROMPT=0`, `GCM_INTERACTIVE=never` and an empty `credential.helper`. Model keys (`ANTHROPIC_*` and the like) stay. Under Strict, `inherit` is ignored. `git push` or `gh` typed in such a terminal then has no login: the daemon's own push still works.
+- Proxy: with `proxy.url` set, those programs get `HTTP_PROXY`, `HTTPS_PROXY` and `ALL_PROXY` (both cases), and `NO_PROXY` becomes loopback plus `noProxy`.
+- With isolation on, egress not `open` and Landlock ABI 4 or later, an isolated process can open TCP only to the daemon port and the proxy port. Landlock checks ports, not addresses. Otherwise `GET /security` says `child processes not confined` in `network.note`.
+- A refusal starts with `egress policy:` and is logged as one line with the host and the action, never a URL with a password.
+- Changes apply to the next call or the next terminal. `GET /security` shows `network { egress, updater, credentials, proxy, confined, note }`.
+
 ## Known limits
 
 - Isolation (above) does not cover macOS or Windows, or agents other than Claude Code. Without it an agent runs with all your rights.
-- Isolation does not block network connections yet, so an isolated agent can still send what it can read (the worktree, `~/.claude`) anywhere. Landlock before ABI 6 also does not stop a connection to a unix socket by path (for example a Docker or ssh-agent socket whose path it knows); the socket's own permissions still apply.
+- Network rules hold Natamux's own git, gh and update calls. Other traffic of an agent is held only with isolation, egress `allowlist` or `loopback` and Landlock ABI 4 (TCP ports, see above); UDP is not held, and with egress `open` an isolated agent can still send what it can read (the worktree, `~/.claude`) anywhere. Blocking it for every program needs a firewall or a proxy. Landlock before ABI 6 also does not stop a connection to a unix socket by path (for example a Docker or ssh-agent socket whose path it knows); the socket's own permissions still apply.
 - `NO_NEW_PRIVS` means `sudo` and other setuid programs do not gain rights in an isolated shell.
 - The cleanup sweep is best effort: a process that clears its own environment is not found. Killing every process of a task for sure needs a PID namespace or a cgroup, which need root.
 - Isolation follows the paths as they are at the shell's start. A folder made later in a granted place is covered; a new toolchain folder on the `PATH` needs a new shell.

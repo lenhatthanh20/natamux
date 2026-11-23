@@ -109,10 +109,14 @@ fn settings_file() -> Option<PathBuf> {
 pub fn init_offline() {
     let on = settings_file().is_some_and(|file| preferences::load_offline(&file));
     natamux_update::offline::set_setting(on);
+    if let Some(folder) = view_state::folder() {
+        natamux_update::policy::set_data_dir(&folder.join("data"));
+    }
 }
 
 pub fn automatic() -> bool {
     !natamux_update::offline::offline()
+        && natamux_update::policy::updates_off().is_none()
         && settings_file()
             .and_then(|file| preferences::load(&file).ok())
             .unwrap_or(false)

@@ -10,7 +10,7 @@ use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use natamux_pty::sandbox_plan::{isolate_command, landlock_abi};
+use natamux_pty::sandbox_plan::{isolate_command, landlock_abi, tcp_confined};
 use natamux_pty::sandbox_sweep::holders;
 use natamux_pty::{Env, IsolationPlan, PtyEvents, Signal, SpawnOptions, spawn_shell};
 
@@ -53,6 +53,7 @@ impl Dirs {
             .concat(),
             sweep_mark: None,
             max_abi: None,
+            tcp_connect: None,
         }
     }
 }
@@ -128,6 +129,38 @@ fn a_task_reads_and_writes_its_worktree_and_nothing_of_others() {
         &dirs.at("a"),
     );
     assert!(out.contains("Permission denied") && !tmp.exists(), "{out}");
+}
+
+/// T-0373 Part 8 (F3): under a closed egress a sandboxed shell connects only to the daemon port.
+/// Landlock checks TCP ports from ABI 4 on; below that `GET /security` says not confined.
+#[test]
+fn tcp_reaches_only_the_allowed_port() {
+    let abi = landlock_abi().unwrap();
+    let dirs = Dirs::new("tcp");
+    let daemon = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let other = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let (allowed, refused) = (
+        daemon.local_addr().unwrap().port(),
+        other.local_addr().unwrap().port(),
+    );
+    let mut plan = dirs.plan();
+    plan.tcp_connect = Some(vec![allowed]);
+    if !tcp_confined(&plan, abi) {
+        println!("Landlock ABI {abi} < 4: TCP is not confined, so this kernel cannot prove it");
+        return;
+    }
+    let connect = |plan: &IsolationPlan, host: &str, port: u16| {
+        let line = format!(
+            "bash -c 'exec 3<>/dev/tcp/{host}/{port}' 2>/dev/null && echo REACHED || echo REFUSED"
+        );
+        sandboxed(plan, &line, &dirs.at("a"))
+    };
+    assert!(connect(&plan, "127.0.0.1", allowed).contains("REACHED"));
+    assert!(connect(&plan, "127.0.0.1", refused).contains("REFUSED"));
+    // A non-loopback test address (TEST-NET-1): refused by Landlock before any packet.
+    assert!(connect(&plan, "192.0.2.1", 80).contains("REFUSED"));
+    plan.tcp_connect = None;
+    assert!(connect(&plan, "127.0.0.1", refused).contains("REACHED"));
 }
 
 #[test]
