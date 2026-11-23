@@ -50,6 +50,7 @@ pub mod http {
         pub mod review_comments;
         pub mod security;
         pub mod stages;
+        pub mod support;
         pub mod tasks;
         pub mod terminals;
         pub mod workspace_files;
@@ -70,6 +71,11 @@ pub mod projects {
     pub mod settings;
     pub mod settings_parse;
     pub mod settings_trim;
+}
+pub mod privacy {
+    pub mod audit;
+    pub mod retention;
+    pub mod support_bundle;
 }
 pub mod security {
     pub mod store;
@@ -140,6 +146,7 @@ pub mod workspaces {
     pub mod branch_sync;
     pub mod changes;
     pub mod create;
+    pub mod delete_task;
     pub mod diff_stats;
     pub mod dirty;
     pub mod draft_agent;

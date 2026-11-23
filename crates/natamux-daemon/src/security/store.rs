@@ -6,7 +6,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use natamux_core::security::{
-    SecurityState, Source, installed, isolation_of, isolation_value, read_value, to_text, view_of,
+    OUTSIDE_CHANGE_WARNING, SecurityState, Source, installed, isolation_of, isolation_value,
+    read_value, to_text, view_of,
 };
 use serde_json::Value;
 
@@ -40,6 +41,12 @@ impl SecurityStore {
             return;
         }
         let state = self.source.current();
+        if state.warning.as_deref() == Some(OUTSIDE_CHANGE_WARNING)
+            && let Some(data_dir) = self.source.path().parent()
+        {
+            let event = "security.outside-change";
+            crate::privacy::audit::write(data_dir, event, "security.json", "kept-stricter");
+        }
         bus.publish(DaemonMessage::SecurityChanged {
             strict: state.mode.is_strict(),
             warning: state.warning,
@@ -50,6 +57,7 @@ impl SecurityStore {
     pub fn save(&self, body: &Value) -> Result<SecurityState, String> {
         let text = with_isolation_kept(checked_text(body)?, body, self.source.path());
         let text = with_network_kept(text, body, self.source.path());
+        let text = with_key_kept(text, body, self.source.path(), "data");
         self.source
             .write(&text)
             .map_err(|error| format!("security.json could not be written: {error}"))
@@ -101,18 +109,24 @@ pub fn with_isolation_kept(text: String, body: &Value, file: &Path) -> String {
 /// `network` is its own setting too: a save keeps the file's own unless the body sets it. It is
 /// kept as written; reading it fails closed on a bad value.
 pub fn with_network_kept(text: String, body: &Value, file: &Path) -> String {
-    let kept = match body.get("network") {
-        Some(network) => Some(network.clone()),
+    with_key_kept(text, body, file, "network")
+}
+
+/// A top-level key the Security page does not show (`network`, `data`): the body's own, else the
+/// file's.
+pub fn with_key_kept(text: String, body: &Value, file: &Path, key: &str) -> String {
+    let kept = match body.get(key) {
+        Some(set) => Some(set.clone()),
         None => std::fs::read_to_string(file)
             .ok()
             .and_then(|old| serde_json::from_str::<Value>(&old).ok())
-            .and_then(|old| old.get("network").cloned()),
+            .and_then(|old| old.get(key).cloned()),
     };
-    let (Some(network), Ok(mut value)) = (kept, serde_json::from_str::<Value>(&text)) else {
+    let (Some(set), Ok(mut value)) = (kept, serde_json::from_str::<Value>(&text)) else {
         return text;
     };
     if let Some(keys) = value.as_object_mut() {
-        keys.insert("network".into(), network);
+        keys.insert(key.into(), set);
     }
     serde_json::to_string_pretty(&value).unwrap_or(text)
 }

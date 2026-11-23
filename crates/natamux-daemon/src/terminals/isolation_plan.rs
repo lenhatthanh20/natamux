@@ -114,20 +114,31 @@ pub fn toolchain_dirs(path: &str, home: &Path, data_dir: &Path) -> Vec<PathBuf> 
 /// A linked worktree writes its own git folder, the shared objects and branch refs; the rest of
 /// the shared folder (config, hooks, info/exclude, other worktrees) is read only. A checkout
 /// with its own `.git` inside is covered by the worktree grant.
-fn git_grants(worktree: &Path) -> (Vec<PathBuf>, Vec<PathBuf>) {
-    // `commondir` is relative (`../..`): a rule and a comparison need the real path.
-    let real = |path: PathBuf| std::fs::canonicalize(&path).unwrap_or(path);
-    let Some((git_dir, common)) = natamux_git::exec::git_dirs(worktree) else {
+fn git_grants(
+    worktree: &Path,
+    writable: &[PathBuf],
+    home: &Path,
+    data_dir: &Path,
+) -> (Vec<PathBuf>, Vec<PathBuf>) {
+    let real = |path: &Path| std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    // The agent can rewrite `.git` and `commondir`, and build a fake shared folder where it can
+    // write: only a checked shared folder outside its write grants counts, and never one that
+    // would reach home or the data folder.
+    let Some((git_dir, common)) = natamux_git::exec::linked_git_dirs(worktree)
+        .map(|(git_dir, common)| (git_dir, real(&common)))
+        .filter(|(_, common)| !too_wide(common, &real(home), &real(data_dir)))
+        .filter(|(_, common)| !writable.iter().any(|dir| common.starts_with(real(dir))))
+    else {
         return (Vec::new(), Vec::new());
     };
-    let (git_dir, common) = (real(git_dir), real(common));
-    if git_dir == common {
-        return (Vec::new(), Vec::new());
-    }
     let shared = ["objects", "refs/heads", "logs/refs/heads"].map(|dir| common.join(dir));
     for dir in &shared {
         // Made here, outside the sandbox: the shared folder is read only inside it.
         let _ = std::fs::create_dir_all(dir);
+        // A link inside the shared folder would carry the write grant somewhere else.
+        if real(dir) != *dir {
+            return (Vec::new(), Vec::new());
+        }
     }
     let mut write = vec![git_dir];
     write.extend(shared);
@@ -146,20 +157,20 @@ pub fn plan_of(input: PlanInput<'_>) -> IsolationPlan {
         settings,
         sweep_mark,
     } = input;
-    let (git_read, git_write) = git_grants(worktree);
     let mut read_only = existing(SYSTEM_READ_ONLY.map(PathBuf::from));
     read_only.extend(toolchain_dirs(path.unwrap_or(""), home, data_dir));
     read_only.extend(existing(bin_dir.map(PathBuf::from)));
     read_only.extend(existing([data_dir.join(CLAUDE_SETTINGS_FILE)]));
     read_only.push(task_dir.to_path_buf());
-    read_only.extend(git_read);
     read_only.extend(existing(settings.extra_read_only.iter().cloned()));
     let mut read_write = existing(DEVICES.map(PathBuf::from));
     read_write.extend([worktree.to_path_buf(), tmp.to_path_buf()]);
     // Claude Code keeps its sign-in here: the one credential left in reach of the agent.
     read_write.extend(existing([home.join(".claude"), home.join(".claude.json")]));
-    read_write.extend(git_write);
     read_write.extend(existing(settings.extra_read_write.iter().cloned()));
+    let (git_read, git_write) = git_grants(worktree, &read_write, home, data_dir);
+    read_only.extend(git_read);
+    read_write.extend(git_write);
     IsolationPlan {
         read_only,
         read_write,

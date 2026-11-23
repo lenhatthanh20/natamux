@@ -131,9 +131,12 @@ pub(super) fn release_url(url: &str) -> bool {
     }
 }
 
-fn host_of(url: &str) -> Option<String> {
+pub(super) fn host_of(url: &str) -> Option<String> {
     let rest = url.strip_prefix("https://")?;
-    let authority = rest.split('/').next()?;
+    let authority = rest.split(['/', '?', '#']).next()?;
+    if authority.contains('\\') {
+        return None;
+    }
     let host = authority.rsplit('@').next()?.split(':').next()?;
     (!host.is_empty()).then(|| host.to_ascii_lowercase())
 }

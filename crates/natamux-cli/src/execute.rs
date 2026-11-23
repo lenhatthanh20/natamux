@@ -118,7 +118,10 @@ pub async fn execute<T: Transport>(
     let mut cx = Ctx { client, io, env };
     let cx = &mut cx;
     match command {
-        Command::Help | Command::HooksClaudeCode | Command::HooksFile(_) => Ok(()),
+        Command::Help
+        | Command::HooksClaudeCode
+        | Command::HooksFile(_)
+        | Command::PurgeData(_) => Ok(()),
         Command::TaskCreate(task) => create_task(task, cx).await,
         Command::TaskList { state, json } => list_tasks(state.as_deref(), *json, cx).await,
         Command::TaskShow { id, json } => {
@@ -170,6 +173,11 @@ pub async fn execute<T: Transport>(
         }
         Command::CiApprove(approve) => {
             let text = crate::ci_approve::run(approve, cx.client).await?;
+            cx.io.stdout(&text);
+            Ok(())
+        }
+        Command::SupportBundle(support) => {
+            let text = crate::support_command::run(support, cx.client).await?;
             cx.io.stdout(&text);
             Ok(())
         }

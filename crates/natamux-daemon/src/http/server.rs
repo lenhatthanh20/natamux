@@ -21,8 +21,8 @@ use super::errors::{Answer, json_answer, not_found, unauthorized};
 use super::health::health_body;
 use super::routes::stages::Mark;
 use super::routes::{
-    agent_views, agents, github, launch_check, projects, review_comments, security, stages, tasks,
-    terminals, workspace_files, workspace_rights, workspaces,
+    agent_views, agents, github, launch_check, projects, review_comments, security, stages,
+    support, tasks, terminals, workspace_files, workspace_rights, workspaces,
 };
 use super::{event_socket, terminal_socket};
 use crate::agents::hook_service::HookService;
@@ -211,6 +211,7 @@ pub async fn handle(request: Request<Incoming>, state: Arc<AppState>) -> Answer 
         (&Method::GET, ["limits"]) => agents::limits(&state),
         (&Method::GET, ["custom-agents"]) => agents::custom_agents(),
         (&Method::GET, ["security"]) => security::get_security(state).await,
+        (&Method::GET, ["support-bundle"]) => support::get_support_bundle(state, by_agent).await,
         (&Method::POST, ["hooks", agent]) => {
             agents::post_hook(request, state, who, agent.to_string(), query.to_string()).await
         }

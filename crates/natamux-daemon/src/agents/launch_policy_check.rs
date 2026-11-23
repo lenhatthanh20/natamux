@@ -44,6 +44,7 @@ fn block(tasks: &TaskService, task: &str, word: &str, source: &str, reason: &str
     if let Err(error) = logged {
         eprintln!("The blocked start of {task} is not logged: {error}");
     }
+    natamux_core::privacy::audit::record("agent.blocked", task, "policy");
     AgentError::Untrusted(reason.to_string())
 }
 

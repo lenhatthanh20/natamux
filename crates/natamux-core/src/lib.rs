@@ -18,6 +18,8 @@ pub mod json;
 pub mod login_path;
 pub mod offline;
 pub mod privacy {
+    pub mod audit;
+    pub mod log_trim;
     pub mod redact;
 }
 pub mod security;

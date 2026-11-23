@@ -198,3 +198,18 @@ fn an_agent_on_base_other_runs_in_ask_with_a_notice_and_never_in_strict() {
     let blocked = events_of(&env.tasks, &task.id, POLICY_BLOCKED_EVENT);
     assert_eq!(blocked.len(), 1);
 }
+
+#[test]
+fn a_blocked_start_writes_one_audit_line_without_the_word_or_reason() {
+    let (sink, lines) = natamux_core::privacy::audit::catcher();
+    let _audit = natamux_core::privacy::audit::force(sink);
+    let env = Env::new();
+    let task = env.task();
+    let runner = runner_in(&env, "ask", &[("codex", "--yolo")]);
+    let result = runner.start(&task.id, "codex", None, None, None, &OwnAgent::default());
+    assert!(is_blocked(result));
+    let lines = lines.lock().unwrap().clone();
+    assert_eq!(lines.len(), 1);
+    assert_eq!(lines[0], ["agent.blocked", task.id.as_str(), "policy"]);
+    assert!(!format!("{lines:?}").contains("yolo"));
+}

@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex};
 mod agent_api;
 mod agent_mode;
 mod ci_push;
+mod data;
 mod decide;
 mod git_harden;
 mod isolation;
@@ -19,8 +20,9 @@ mod view;
 pub use agent_api::AgentApi;
 pub use agent_mode::{AUTO_FORBID_REASON, INPUT_TRACE_BLOCKED, auto_allowed, input_trace_allowed};
 pub use ci_push::{CI_FORBID_REASON, CiMode, CiPush, ci_mode};
+pub use data::{DEFAULT_LOG_MAX_BYTES, DataSettings, data_in, data_of};
 pub use decide::{Decision, KeyState, key_states, mode_in, tighten, tighten_with_repo};
-pub use git_harden::{harden_git, install_git_hardening};
+pub use git_harden::{harden_git, harden_git_in, install_git_hardening};
 pub use isolation::{IsolationSettings, isolation_of, isolation_value, load_isolation};
 pub use network::{
     Egress, ForcedNetwork, GH_ACTIONS, GIT_ACTIONS, GhRule, GitRule, NetworkSettings, UPDATE_HOSTS,

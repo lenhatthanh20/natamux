@@ -20,7 +20,7 @@ pub const BAD_FILE_WARNING: &str = "security.json could not be read, so Strict m
      its defaults. Save the Security settings again to fix the file.";
 
 /// The keys Strict mode fixes, with the only value it accepts.
-pub const FIXED_KEYS: [(&str, &str); 8] = [
+pub const FIXED_KEYS: [(&str, &str); 9] = [
     ("agentAutoMode", "forbid"),
     ("terminalInputTrace", "off"),
     ("repoTrust.scope", "worktree"),
@@ -29,6 +29,7 @@ pub const FIXED_KEYS: [(&str, &str); 8] = [
     ("agents.requireAskGuarantee", "true"),
     ("agentApi.mode", "scoped"),
     ("agentApi.requireHumanForPush", "true"),
+    ("data.auditLog", "true"),
 ];
 
 fn at<'a>(value: &'a Value, path: &str) -> Option<&'a Value> {

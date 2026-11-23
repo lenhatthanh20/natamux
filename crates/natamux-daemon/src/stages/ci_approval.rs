@@ -245,6 +245,7 @@ impl StageRun {
 
     /// A CI round that may not run: logged with its reason, and a failure no agent can fix.
     pub(crate) fn block_ci(&self, task_id: &str, stage_id: &str, reason: &str) -> StageResult<()> {
+        crate::privacy::audit::write(&self.options.data_dir, "ci.blocked", task_id, "blocked");
         self.record(
             task_id,
             "stage.ci-blocked",

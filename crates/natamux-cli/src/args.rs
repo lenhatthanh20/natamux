@@ -43,6 +43,7 @@ const OPTIONS: &[Spec] = &[
     spec("source", Kind::Text),
     spec("payload", Kind::Text),
     spec("yes", Kind::Flag),
+    spec("out", Kind::Text),
     spec("delete-branch", Kind::Flag),
     spec("title", Kind::Text),
     spec("prompt", Kind::Text),

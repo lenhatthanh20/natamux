@@ -482,3 +482,18 @@ fn goes_on_when_the_project_of_a_branch_only_task_is_gone() {
             .any(|line| line.contains("Could not delete the branch"))
     );
 }
+
+#[test]
+fn removes_the_ci_pins_of_a_task_that_has_no_finished_ci_stages() {
+    let fx = Fx::new();
+    let task = fx.task("Fix the bug");
+    fx.ws.create(&task.id, None, None).unwrap();
+    let removed = fx.ws.remove(&task.id, false).unwrap().task;
+    let pin = format!("refs/natamux/ci/{}/implement", task.id);
+    run_git(&fx.repo, &["update-ref", &pin, "HEAD"]);
+
+    fx.ws.delete_branches_of(&removed).unwrap();
+
+    let left = run_git(&fx.repo, &["for-each-ref", "refs/natamux/ci/"]);
+    assert!(left.trim().is_empty(), "pins left: {left}");
+}

@@ -35,6 +35,8 @@ Commands:
   repo trust <repo>          Show the commands a project runs; approve them with --approve
   repo verify-launch         For a launch script: check the worktree is still the approved one
   security                   Show the security mode and what each rule blocks
+  support-bundle             Save a support bundle with no task text to a private file (--out)
+  purge-data                 Remove task data, logs and the token; worktrees stay (needs --yes)
   hooks claude-code          Print Claude Code settings that report a task's progress
   hooks opencode|qwen|droid  Print the hook file Natamux writes into a task's worktree
   hook <agent>               For an agent's hook: send the JSON on stdin to the daemon (silent)
@@ -70,7 +72,9 @@ Options:
                         or the default of origin)
   --branch <name>       workspace create, agent start: the new workspace uses this branch:
                         local, or origin/<name> tracked, or new from the base
-  --yes                 workspace remove: confirm that the worktree folder is deleted
+  --yes                 workspace remove: confirm that the worktree folder is deleted;
+                        purge-data: confirm the removal
+  --out <file>          support-bundle: where to save it (default: natamux-support-bundle.json)
   --delete-branch       workspace remove: also delete the branch when it is merged
   --approve <hash>      repo trust: approve the commands with this hash (from the list)
   --digest <hash>       repo verify-launch: the digest the launch was approved with

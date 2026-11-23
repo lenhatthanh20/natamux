@@ -39,6 +39,7 @@ async fn main() -> std::process::ExitCode {
     // Before `start`: a resume or restore at start already decides by the mode.
     let security = natamux_core::security::Source::open(&config.data_dir);
     natamux_core::security::install(Arc::new(security));
+    natamux_daemon::privacy::audit::install(&config.data_dir);
     let daemon = match start(&config, &env, Arc::new(spawn_shell), Scheduler::real()).await {
         Ok(daemon) => daemon,
         Err(error) => {
@@ -53,17 +54,26 @@ async fn main() -> std::process::ExitCode {
     );
     println!("Data directory: {}", config.data_dir.display());
     if config.token_was_generated {
-        // A log or a pipe must not keep the token: only a person at a terminal sees it.
-        if std::io::stdout().is_terminal() {
-            println!("Token for this run: {}", config.token);
-        } else {
-            println!("The token was not printed. Set NATAMUX_TOKEN to choose one.");
-        }
+        let strict = natamux_core::security::mode().is_strict();
+        println!(
+            "{}",
+            token_line(&config.token, std::io::stdout().is_terminal(), strict)
+        );
     }
     stopped(parent_end).await;
     // A second signal must not exit before the shells have ended: it is not listened to.
     let _ = tokio::task::spawn_blocking(move || daemon.shut_down()).await;
     std::process::ExitCode::SUCCESS
+}
+
+/// A log or a pipe must not keep the token: only a person at a terminal sees it. Strict mode never
+/// prints it, since a recorded terminal session would keep it too.
+fn token_line(token: &str, terminal: bool, strict: bool) -> String {
+    if terminal && !strict {
+        format!("Token for this run: {token}")
+    } else {
+        "The token was not printed. Set NATAMUX_TOKEN to choose one.".to_string()
+    }
 }
 
 fn read_parent_end(mut input: impl Read, ended: tokio::sync::oneshot::Sender<()>) {
@@ -109,7 +119,14 @@ async fn stopped(parent_end: Option<tokio::sync::oneshot::Receiver<()>>) {
 
 #[cfg(test)]
 mod tests {
-    use super::read_parent_end;
+    use super::{read_parent_end, token_line};
+
+    #[test]
+    fn the_token_is_printed_only_to_a_terminal_and_never_in_strict_mode() {
+        assert_eq!(token_line("t-1", true, false), "Token for this run: t-1");
+        assert!(!token_line("t-1", false, false).contains("t-1"));
+        assert!(!token_line("t-1", true, true).contains("t-1"));
+    }
 
     #[test]
     fn parent_pipe_eof_sends_the_shutdown_signal() {

@@ -108,7 +108,7 @@ pub(crate) fn run_checked(
         return Err(refused);
     }
     let mut command = Command::new("git");
-    natamux_core::security::harden_git(&mut command);
+    natamux_core::security::harden_git_in(&mut command, cwd, env);
     command
         .args(args)
         .current_dir(cwd)
@@ -255,6 +255,33 @@ pub fn git_dirs(worktree: &Path) -> Option<(PathBuf, PathBuf)> {
         Err(_) => git_dir.clone(),
     };
     Some((git_dir, common))
+}
+
+/// The git folder of a linked worktree and its shared folder, both canonical, for a sandbox
+/// grant. `.git` and `commondir` are files the worktree's agent can rewrite, so they are only a
+/// hint: the git folder must be `<common>/worktrees/<name>`, `commondir` must name that same
+/// `<common>`, `<common>` must hold `HEAD`, `objects` and `refs`, and the git folder's `gitdir`
+/// must name this worktree's `.git` back. None for a checkout with its own `.git` folder.
+pub fn linked_git_dirs(worktree: &Path) -> Option<(PathBuf, PathBuf)> {
+    let real = |path: &Path| std::fs::canonicalize(path).ok();
+    let (git_dir, common) = git_dirs(worktree)?;
+    let git_dir = real(&git_dir)?;
+    let parent = git_dir.parent()?;
+    if parent.file_name()? != "worktrees" {
+        return None;
+    }
+    let shared = parent.parent()?.to_path_buf();
+    if real(&common)? != shared {
+        return None;
+    }
+    let back = std::fs::read_to_string(git_dir.join("gitdir")).ok()?;
+    if real(&git_dir.join(back.trim_end()))? != real(&worktree.join(".git"))? {
+        return None;
+    }
+    let is_repo = shared.join("HEAD").is_file()
+        && shared.join("objects").is_dir()
+        && shared.join("refs").is_dir();
+    is_repo.then_some((git_dir, shared))
 }
 
 /// The branch a checkout is on, or None when HEAD is detached.

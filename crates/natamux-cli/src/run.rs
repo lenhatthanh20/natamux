@@ -134,6 +134,8 @@ pub async fn run_cli<T: Transport>(
             }
             return EXIT_OK;
         }
+        // Works on the files, with the daemon stopped: no token.
+        Command::PurgeData(purge) => return crate::purge_data_command::run(purge, env, io),
         _ => {}
     }
 

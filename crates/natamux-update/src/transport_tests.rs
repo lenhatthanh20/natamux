@@ -2,7 +2,7 @@ use std::io::Read;
 
 use natamux_core::security::{Egress, NetworkSettings};
 
-use super::transport::{Counting, checked_target, curl_with, get_command, release_url};
+use super::transport::{Counting, checked_target, curl_with, get_command, host_of, release_url};
 
 const LATEST: &str = "https://github.com/lenhatthanh20/natamux/releases/latest";
 const ASSET: &str =
@@ -143,4 +143,21 @@ fn a_redirect_to_an_unlisted_host_stops_before_the_second_request() {
         Ok("http://github.com/x".into())
     });
     assert!(http.is_err());
+}
+
+#[test]
+fn the_host_ends_at_a_query_a_fragment_or_a_backslash() {
+    assert_eq!(
+        host_of("https://evil.com?@github.com/x").as_deref(),
+        Some("evil.com")
+    );
+    assert_eq!(
+        host_of("https://evil.com#@github.com/x").as_deref(),
+        Some("evil.com")
+    );
+    assert_eq!(host_of("https://evil.com\\@github.com/x"), None);
+    assert_eq!(
+        host_of("https://user@github.com/x").as_deref(),
+        Some("github.com")
+    );
 }

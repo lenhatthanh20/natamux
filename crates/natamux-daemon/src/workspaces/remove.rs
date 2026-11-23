@@ -6,6 +6,7 @@ use natamux_agents::trust::untrust_workspace;
 use natamux_core::security::{CiMode, ci_mode};
 use natamux_git::branches::delete_branch_force;
 use natamux_git::changes::list_changes;
+use natamux_git::ci_snapshot::unpin_task;
 use natamux_git::commit_push::delete_remote_ref;
 use natamux_git::worktrees::{WorktreeState, has_submodules, remove_worktree, worktree_state};
 use natamux_proto::tasks::task::Task;
@@ -71,13 +72,6 @@ impl WorkspaceService {
     /// branch.
     pub fn delete_branches_of(&self, task: &Task) -> WorkspaceResult<()> {
         let task_id = task.id.as_str();
-        let Some(branch) = &task.branch else {
-            return Ok(());
-        };
-        // The branch of the main checkout is the user's.
-        if task.main_checkout == Some(true) {
-            return Ok(());
-        }
         // A removed project must not block the delete of the task.
         let repo_dir = match self.repo_dir_of(task.repo.as_deref()) {
             Ok(dir) => dir,
@@ -88,6 +82,20 @@ impl WorkspaceService {
                 return Ok(());
             }
         };
+        // The pins are Natamux's own refs, so they go whatever the task used; a task that is not
+        // finished may hold them too.
+        if let Err(error) = unpin_task(&repo_dir, task_id) {
+            (self.log)(&format!(
+                "Could not remove the CI pins of {task_id}: {error}"
+            ));
+        }
+        let Some(branch) = &task.branch else {
+            return Ok(());
+        };
+        // The branch of the main checkout is the user's.
+        if task.main_checkout == Some(true) {
+            return Ok(());
+        }
         // An old record may hold a main branch.
         if self.is_main_branch(task, branch) {
             return Ok(());

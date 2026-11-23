@@ -150,8 +150,13 @@ fn base_url_of(env: impl Fn(&str) -> Option<String>) -> Result<String, ClientErr
     }
 }
 
-/// The app's user data folder is the OS's app data folder plus "Natamux".
 fn app_token_file() -> Option<PathBuf> {
+    Some(app_folder()?.join(APP_TOKEN_FILE))
+}
+
+/// The app's user data folder: the OS's app data folder plus "Natamux". The daemon's data folder
+/// is its `data` folder.
+pub fn app_folder() -> Option<PathBuf> {
     let base = if cfg!(target_os = "macos") {
         PathBuf::from(std::env::var_os("HOME")?).join("Library/Application Support")
     } else if cfg!(windows) {
@@ -161,7 +166,7 @@ fn app_token_file() -> Option<PathBuf> {
             .map(PathBuf::from)
             .or_else(|| Some(PathBuf::from(std::env::var_os("HOME")?).join(".config")))?
     };
-    Some(base.join("Natamux").join(APP_TOKEN_FILE))
+    Some(base.join("Natamux"))
 }
 
 fn app_daemon_url() -> Option<String> {

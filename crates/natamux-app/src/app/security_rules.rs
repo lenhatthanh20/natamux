@@ -69,6 +69,7 @@ fn rule_label(key: &str) -> &'static str {
         "agentApi.mode" => "Agent API",
         "agentApi.requireHumanForPush" => "Push needs a person",
         "agentApi.grants" => "Agent grants",
+        "data.auditLog" => "Audit log",
         _ => "Other rule",
     }
 }

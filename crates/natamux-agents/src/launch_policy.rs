@@ -161,13 +161,18 @@ fn config_hit(agent: &str, word: &str, next: Option<&String>) -> Option<String> 
     if agent != "codex" {
         return None;
     }
-    let (written, setting) = match word.split_once('=') {
-        Some(("--config", setting)) => (word.to_string(), setting),
-        _ if word == "-c" || word == "--config" => {
-            let next = next?;
-            (format!("{word} {next}"), next.as_str())
-        }
-        _ => return None,
+    let (written, setting) = if word == "-c" || word == "--config" {
+        let next = next?;
+        (format!("{word} {next}"), next.as_str())
+    } else if let Some(setting) = word.strip_prefix("--config=") {
+        (word.to_string(), setting)
+    } else {
+        // `-c=key=value` and `-ckey=value`: clap takes both.
+        let setting = word.strip_prefix("-c").filter(|rest| !rest.is_empty())?;
+        (
+            word.to_string(),
+            setting.strip_prefix('=').unwrap_or(setting),
+        )
     };
     let (key, value) = setting.split_once('=')?;
     let value = value.trim().trim_matches(|c| c == '"' || c == '\'');
@@ -193,6 +198,9 @@ fn hit_of(
     let next = next
         .map(String::as_str)
         .filter(|next| !next.starts_with('-'));
+    if let Some(hit) = short_hit(rules, word, next) {
+        return Some(hit);
+    }
     let value = inline.or(next);
     let rule = rules
         .iter()
@@ -206,6 +214,49 @@ fn hit_of(
         }
         _ => Some(word.to_string()),
     }
+}
+
+/// A word of more than one short flag letter: grouped flags (`-dy`), or a flag with its value
+/// attached (`-anever`, `-a=never`). clap and yargs read both. A flag whose rule names a value
+/// takes one; an `Always` flag takes none. Unknown letters are read as grouped flags, so a
+/// forbidden letter after them still counts.
+fn short_hit(rules: &[(&'static str, Unsafe)], word: &str, next: Option<&str>) -> Option<String> {
+    let letters = word
+        .strip_prefix('-')
+        .filter(|rest| rest.len() > 1 && !rest.starts_with('-'))?;
+    for (at, letter) in letters.char_indices() {
+        if !letter.is_ascii_alphabetic() {
+            // The rest is the value of an earlier, unknown flag.
+            return None;
+        }
+        let flag = format!("-{letter}");
+        let named: Vec<Unsafe> = rules
+            .iter()
+            .filter(|(name, _)| *name == flag)
+            .map(|(_, rule)| *rule)
+            .collect();
+        if named.is_empty() {
+            continue;
+        }
+        if named.iter().any(|rule| matches!(rule, Unsafe::Always)) {
+            return Some(word.to_string());
+        }
+        let rest = &letters[at + 1..];
+        let attached = rest.strip_prefix('=').unwrap_or(rest);
+        let value = if attached.is_empty() {
+            next
+        } else {
+            Some(attached)
+        };
+        if !named.iter().any(|rule| unsafe_with(*rule, value)) {
+            return None;
+        }
+        return match (attached.is_empty(), next) {
+            (true, Some(next)) => Some(format!("{word} {next}")),
+            _ => Some(word.to_string()),
+        };
+    }
+    None
 }
 
 #[cfg(test)]

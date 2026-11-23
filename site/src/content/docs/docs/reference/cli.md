@@ -38,6 +38,8 @@ Task ids look like `T-42`. Inside a Natamux terminal, the token, the daemon addr
 | `workspace remove <id>` | Remove the worktree of a task (needs `--yes`) |
 | `repo trust <repo>` | Show the commands a project runs, or approve them (`--approve`) |
 | `security` | Show whether Strict mode is on and what each of its keys blocks |
+| `support-bundle` | Save a support bundle for a bug report, with no task text |
+| `purge-data` | Remove task data, logs and the token from this machine; worktrees stay |
 | `hooks claude-code` | Print Claude Code settings that report a task's progress |
 | `hooks opencode\|qwen\|droid` | Print the hook file Natamux writes into a task's worktree (`.opencode/plugins/natamux.js`, `.qwen/settings.json`, `.factory/hooks.json`) |
 | `hook <agent> [event]` | For an agent's hook: send the JSON on stdin to the daemon |
@@ -195,6 +197,24 @@ natamux security --json
 ```
 
 Prints the security mode (Personal or Strict), the warning when `security.json` changed outside Natamux, each Strict key with its value and what it blocks, and how task shells are isolated in this daemon run (`GET /security`). It only reads: change the settings in the app, Settings > Security. Any token may run it, also the token of a task terminal. See [Strict mode](/docs/reference/configuration/#strict-mode-securityjson).
+
+## support-bundle
+
+```sh
+natamux support-bundle
+natamux support-bundle --out ~/Desktop/natamux.json
+```
+
+Saves the support bundle (`GET /support-bundle`) to `natamux-support-bundle.json`, or the `--out` file, readable only by you. It holds the versions, OS, uptime, the security state, the number of tasks in each state and the last 200 daemon log lines with secrets masked and typed input left out. It holds no task text, events or environment. Read it before you send it. The token of a task terminal gets 403.
+
+## purge-data
+
+```sh
+natamux purge-data
+natamux purge-data --yes
+```
+
+Removes Natamux's task data from this machine: the task files, events, screens and attachments, the index, the logs, the launch scripts, the sandbox folders, and the app's token and port files. Worktrees and settings stay. Without `--yes` it lists what it would remove. It refuses while a worktree in the data folder has uncommitted or untracked files (and lists them), while the app's daemon runs, and in a task's terminal. It needs no token. Running it again changes nothing. See the [data inventory](https://github.com/lenhatthanh20/natamux/blob/main/docs/data-inventory.md).
 
 ## hooks and hook
 

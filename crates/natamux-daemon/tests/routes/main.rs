@@ -22,6 +22,7 @@ mod git_repo;
 mod github;
 mod hook_client;
 mod hooks;
+mod privacy;
 mod raw_client;
 mod repo_trust;
 mod repos;
