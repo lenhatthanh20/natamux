@@ -763,7 +763,8 @@ jobs:
       - name: Check the exes have version info
         run: |
           for exe in natamux-app natamux-daemon natamux nmx; do
-            7z l "target/release/$exe.exe" | grep VERSION >/dev/null || { echo "$exe.exe has no version info"; exit 1; }
+            name=$(powershell -NoProfile -Command "(Get-Item '$(cygpath -w "target/release/$exe.exe")').VersionInfo.ProductName")
+            [ "$(echo "$name" | tr -d '\r')" = Natamux ] || { echo "$exe.exe: ProductName is '$name'"; exit 1; }
           done
       - name: Smoke test
         run: target/release/natamux-app.exe --smoke

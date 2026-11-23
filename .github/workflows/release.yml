@@ -278,7 +278,8 @@ jobs:
           7z l "$RUNNER_TEMP/unpacked/natamux-app.exe" | grep GROUP_ICON >/dev/null
           # Code signing checks the product name and version of every signed file (build.rs, .nsi).
           for exe in natamux-app natamux-daemon natamux nmx; do
-            7z l "$RUNNER_TEMP/unpacked/$exe.exe" | grep VERSION >/dev/null || { echo "$exe.exe has no version info"; exit 1; }
+            name=$(powershell -NoProfile -Command "(Get-Item '$(cygpath -w "$RUNNER_TEMP/unpacked/$exe.exe")').VersionInfo.ProductName")
+            [ "$(echo "$name" | tr -d '\r')" = Natamux ] || { echo "$exe.exe: ProductName is '$name'"; exit 1; }
           done
           ${{ matrix.py }} scripts/windows-crt-check.py "$RUNNER_TEMP"/unpacked/{natamux-app,natamux-daemon,natamux,nmx}.exe
           scripts/release-smoke.sh "$RUNNER_TEMP/unpacked/natamux-app.exe" \
