@@ -288,6 +288,7 @@ const PROMPT_ONLY: &str =
     "claude --settings '/data/claude code.json' --permission-mode auto 'Only this'\n";
 
 mod agents;
+mod isolation;
 mod launch;
 mod model;
 mod policy;

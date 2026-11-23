@@ -107,12 +107,38 @@ Strict mode is for companies with strict security rules. Turn it on in **Setting
 - Tamper check: the daemon keeps a copy of the last file it wrote. When `security.json` changes another way (while the daemon runs, or found at start), the daemon keeps the stricter of the old and the new settings, sends `security.changed` and shows a warning in the app (Settings > Security and the status bar's **Strict** item) until you save the settings again.
 - The daemon reads the file again at most once per second and at each sensitive decision, so a change applies to the next decision. A running agent keeps the mode it started with until its next start.
 - The app shows a **Strict** item in the status bar (its tooltip lists the rules), a note on the Agents page, and turns the **Check on CI** box off with the reason under `ciPush: forbid`.
-- Limits: without isolation, an agent runs as your user. It can read the daemon token and call `PUT /security`, or edit the file (the tamper check then keeps the stricter state, but it cannot stop a determined agent that has the token). Strict mode stops mistakes and repo content, not an agent that attacks Natamux on purpose. A person with `sudo`, or with your password, can turn it off. Isolation, network rules and an admin policy that IT sets are not part of Strict mode.
+- Limits: without isolation, an agent runs as your user. It can read the daemon token and call `PUT /security`, or edit the file (the tamper check then keeps the stricter state, but it cannot stop a determined agent that has the token). With isolation (below) the data folder, and so the token and `security.json`, are out of the agent's reach. Strict mode stops mistakes and repo content, not an agent that attacks Natamux on purpose. A person with `sudo`, or with your password, can turn it off. Isolation, network rules and an admin policy that IT sets are not part of Strict mode.
+
+### Isolation (Linux, Claude Code)
+
+Isolation is its own setting, not part of Strict mode: on macOS and Windows no backend exists yet, so Strict mode must not depend on it. Set it in `security.json` and restart Natamux:
+
+```json
+{ "isolation": { "mode": "required", "extraReadOnly": [], "extraReadWrite": [], "envAllow": [] } }
+```
+
+- `required` works on Linux (x86_64, aarch64) with Landlock (kernel 5.13 or later, `landlock` in `/sys/kernel/security/lsm`), and only for Claude Code. On another OS, without Landlock, or for another agent (also a custom agent based on Claude Code), the shell or agent does not start, and the reason is shown. Nothing ever runs unconfined while isolation is required. A `mode` that is not `off`, or a file that is not JSON, counts as `required`.
+- What runs isolated: every task terminal (also a stage's terminal, a resumed agent and the setup script, which run in one), every stage `check` command, and the commit-message agent. Each runs under Landlock with `NO_NEW_PRIVS`. The rules are built in the daemon before the fork; any error (no Landlock, a path that cannot be opened) stops the start before the shell runs.
+- Read only: `/usr`, `/bin`, `/sbin`, `/lib*`, `/etc`, `/proc`, `/dev`, the toolchain folders of the login `PATH` (a `.../bin` folder gives its parent, unless that parent is the home folder or holds the data folder), the Natamux bin folder, Claude Code's hook settings, the task's own `<data>/sandbox/<task>` folder (launch scripts, git config) and `extraReadOnly`.
+- Read and write: the task's worktree, `<data>/sandbox/<task>/tmp` (`TMPDIR`), `/dev/null`, `/dev/tty`, `/dev/pts`, `/dev/ptmx`, `~/.claude` and `~/.claude.json`, and `extraReadWrite`. `~/.claude*` is where Claude Code keeps its sign-in: that credential stays in the agent's reach.
+- Out of reach: the rest of your home folder (SSH keys, cloud credentials, `~/.gitconfig`), the data folder (the daemon token, `security.json`, other tasks' files), other worktrees, `/tmp` and `/run`. Landlock also stops a sandboxed process from reading the environment or memory of a process outside its sandbox, such as the daemon.
+- A linked worktree writes its own git folder, the shared `objects`, `refs/heads` and `logs/refs/heads`. The rest of the shared git folder (`config`, `hooks`, `info/exclude`, other worktrees' folders) is read only. Branch refs are shared, so a task can move another task's branch ref; it cannot change its files.
+- Environment: an isolated shell keeps only `PATH`, `LANG`, `LC_*`, `TERM`, `SHELL`, `USER`, `LOGNAME`, `HOME`, `TMPDIR`, the task's `NATAMUX_*` variables, `PORT`, the proxy variables, `CLAUDE_*`, `ANTHROPIC_*` and `envAllow`. `GIT_CONFIG_GLOBAL` points to a file Natamux writes with your git name and email and an empty `credential.helper`. A command or the commit agent never gets a task token.
+- The shell is interactive (`-i`), not a login shell: profiles in the home folder are out of reach.
+- Cleanup: a closed terminal gets SIGHUP, then SIGKILL for its process tree, then every process that still carries the shell's own mark in its environment is killed too (a program that left the tree with `setsid`). Once the last terminal of a task ends, its token stops working; the next shell gets a new one.
+- The daemon's own git hardens itself while isolation is on: no hooks (`core.hooksPath` set to an empty folder), `core.fsmonitor=false`, `protocol.ext.allow=never` and `GIT_CONFIG_NOSYSTEM=1`. An agent cannot get a command run outside its sandbox through a git setting.
+- `GET /security` shows `isolation { mode, backend, abi, ok, reason }` for this daemon run.
 
 ## Known limits
 
+- Isolation (above) does not cover macOS or Windows, or agents other than Claude Code. Without it an agent runs with all your rights.
+- Isolation does not block network connections yet, so an isolated agent can still send what it can read (the worktree, `~/.claude`) anywhere. Landlock before ABI 6 also does not stop a connection to a unix socket by path (for example a Docker or ssh-agent socket whose path it knows); the socket's own permissions still apply.
+- `NO_NEW_PRIVS` means `sudo` and other setuid programs do not gain rights in an isolated shell.
+- The cleanup sweep is best effort: a process that clears its own environment is not found. Killing every process of a task for sure needs a PID namespace or a cgroup, which need root.
+- Isolation follows the paths as they are at the shell's start. A folder made later in a granted place is covered; a new toolchain folder on the `PATH` needs a new shell.
+- Claude Code writes `~/.claude.json` by replacing it through a new file in your home folder, which an isolated shell cannot make. Sign in to Claude Code once outside Natamux first.
 - An agent runs as your user. It can read your files, including the daemon token file, and the daemon's environment. The agent token and the gate rules stop an agent that follows the API, for example one that follows bad instructions from a web page or an issue. They do not stop one that looks for the daemon token. Keeping the token in the system keychain, or running agents as another user, is future work.
-- In `auto` mode (the default in an approved repo) agents run commands without asking you, apart from Claude Code's own checks. `ask` keeps each agent's prompts. Natamux does not sandbox either mode.
+- In `auto` mode (the default in an approved repo) agents run commands without asking you, apart from Claude Code's own checks. `ask` keeps each agent's prompts. Without isolation Natamux does not sandbox either mode.
 - Repo trust covers Natamux's own commands and the trust it gives agents. It does not control what an agent does inside its worktree: it can run any command there with your rights, also in `ask` mode if you allow it.
 - A task terminal on Windows types the command stage ticket into that terminal, so the ticket shows there.
 

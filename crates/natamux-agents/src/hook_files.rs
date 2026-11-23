@@ -450,6 +450,7 @@ fn try_exclude(worktree: &Path, line: &str) -> std::io::Result<()> {
         return add_exclude_line(worktree, &common, line);
     }
     let mut git = Command::new("git");
+    natamux_core::security::harden_git(&mut git);
     git.args(["rev-parse", "--git-common-dir"])
         .current_dir(worktree)
         .stdin(Stdio::null())

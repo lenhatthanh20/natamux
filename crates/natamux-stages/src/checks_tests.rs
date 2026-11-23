@@ -285,6 +285,25 @@ fn kills_a_command_that_runs_too_long() {
 
 #[cfg(unix)]
 #[test]
+fn a_prepare_error_fails_the_check_without_running_it() {
+    let dir = TempDir::new("shell");
+    let marker = dir.path().join("ran");
+    let ran = run_shell_command_with("touch ran", dir.path(), Duration::from_secs(10), &|_| {
+        Err(std::io::Error::other("no sandbox"))
+    });
+    assert_eq!(ran.code, 1);
+    assert!(ran.output.contains("no sandbox"), "{}", ran.output);
+    assert!(!marker.exists());
+    let prepared =
+        run_shell_command_with("echo $SEEN", dir.path(), Duration::from_secs(10), &|c| {
+            c.env("SEEN", "prepared");
+            Ok(())
+        });
+    assert_eq!(prepared.output.trim(), "prepared");
+}
+
+#[cfg(unix)]
+#[test]
 fn stops_a_command_with_more_than_10_mb_of_output() {
     let dir = TempDir::new("shell");
     let ran = run_shell_command("yes | head -c 20000000", dir.path());

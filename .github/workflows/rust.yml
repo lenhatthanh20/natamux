@@ -126,6 +126,12 @@ jobs:
         with:
           name: fmt-patch
           path: ${{ runner.temp }}/fmt.patch
+      # The Landlock tests (T-0373 Part 7) need the kernel's LSM list to name landlock.
+      - name: Kernel and security modules
+        run: |
+          uname -r
+          cat /sys/kernel/security/lsm || true
+          echo
       - id: build
         run: cargo xtask ci${{ startsWith(github.ref, 'refs/heads/natamux-ci/daemon') && ' --no-app' || '' }}${{ startsWith(github.ref, 'refs/heads/natamux-ci/') && ' --all-errors' || '' }}
       # A main push saves the cache; a red lint or test still leaves the build in it.

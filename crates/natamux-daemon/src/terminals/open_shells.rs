@@ -31,6 +31,20 @@ pub trait ShellsView: Send + Sync {
     fn foreground(&self, task_id: &str, terminal: &str) -> Option<String>;
 }
 
+impl ShellsView for super::service::TerminalService {
+    fn list(&self, task_id: &str) -> Vec<String> {
+        super::service::TerminalService::list(self, task_id)
+    }
+
+    fn is_open(&self, task_id: &str, terminal: &str) -> bool {
+        super::service::TerminalService::is_open(self, task_id, terminal)
+    }
+
+    fn foreground(&self, task_id: &str, terminal: &str) -> Option<String> {
+        super::service::TerminalService::foreground(self, task_id, terminal)
+    }
+}
+
 pub type AgentRuns = dyn Fn(&str, &str) -> bool + Send + Sync;
 /// The agent whose process runs in a shell; may run `ps`, so it is called on the timer thread.
 pub type AgentIn = dyn Fn(&str, &str) -> Option<String> + Send + Sync;

@@ -120,6 +120,20 @@ pub fn load_config(env: &Env, cwd: &Path) -> Result<Config, String> {
     })
 }
 
+/// The user's home folder: where agents keep their sessions.
+pub fn home_dir() -> PathBuf {
+    std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .map_or_else(PathBuf::new, PathBuf::from)
+}
+
+/// The home folder in the daemon's own environment, where its hooks may read session files.
+pub fn home_of(env: &Env) -> PathBuf {
+    env.get("HOME")
+        .or_else(|| env.get("USERPROFILE"))
+        .map_or_else(PathBuf::new, PathBuf::from)
+}
+
 /// The environment of task shells, never with the daemon's token: each shell gets its own
 /// task's token when it starts, so an agent cannot pass a gate. With no locale (the Docker image,
 /// an app started from the Dock) a shell reads non-ASCII input, such as Vietnamese, as Meta keys

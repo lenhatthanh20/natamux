@@ -7,13 +7,12 @@ use std::time::Duration;
 
 use natamux_agents::hook_files::{
     WorkspaceHooks, claude_code_status_line, gemini_hook_settings, hook_file_text_of,
-    prepare_agent_hooks,
 };
 use natamux_agents::hooks::Signal;
 use natamux_agents::trust::trust_paths;
 use natamux_core::agents::hook_settings::claude_code_hook_settings;
 use natamux_core::workspaces::private_dir::private_dir;
-use natamux_pty::{Env, SpawnOptions};
+use natamux_pty::Env;
 use natamux_stages::ci_check::GhCi;
 use tokio::task::JoinHandle;
 
@@ -22,20 +21,21 @@ use crate::agents::hook_service::{HookOptions, HookService};
 use crate::agents::idle_pause::IdlePause;
 use crate::agents::runner::{AgentLaunch, AgentRunner, AgentRunnerOptions};
 use crate::agents::usage_service::{UsageOptions, UsageService};
-use crate::config::{Config, shell_env};
+use crate::config::{Config, home_dir, home_of, shell_env};
 use crate::http::server::{AppState, bind, serve};
 use crate::projects::repos::Repos;
 use crate::shared::event_bus::EventBus;
 use crate::shared::jobs::Jobs;
 use crate::shared::scheduler::Scheduler;
+use crate::stages::isolated_command::isolated_run_command;
 use crate::stages::run::StageRunOptions;
 use crate::stages::runner::StageRunner;
 use crate::tasks::errors::TaskError;
 use crate::tasks::service::{TaskService, is_task_ended};
 use crate::tasks::templates::TemplateService;
 use crate::terminals::input_trace::trace_input_at_start;
-use crate::terminals::login_path::use_login_path;
-use crate::terminals::open_shells::{OpenShells, OpenShellsOptions, ShellsView};
+use crate::terminals::isolation::{start_isolation, with_hook_files, with_isolation};
+use crate::terminals::open_shells::{OpenShells, OpenShellsOptions};
 use crate::terminals::service::{TerminalOptions, TerminalService};
 use crate::terminals::session_lifecycle::SpawnPty;
 use crate::terminals::types::TerminalError;
@@ -53,20 +53,6 @@ pub struct Daemon {
     pub server: JoinHandle<std::io::Result<()>>,
 }
 
-impl ShellsView for TerminalService {
-    fn list(&self, task_id: &str) -> Vec<String> {
-        TerminalService::list(self, task_id)
-    }
-
-    fn is_open(&self, task_id: &str, terminal: &str) -> bool {
-        TerminalService::is_open(self, task_id, terminal)
-    }
-
-    fn foreground(&self, task_id: &str, terminal: &str) -> Option<String> {
-        TerminalService::foreground(self, task_id, terminal)
-    }
-}
-
 /// The task's workspace (`workspaceOf`): 404 for no task, 409 for a task without one.
 pub fn workspace_of(tasks: TaskService) -> impl Fn(&str) -> Result<PathBuf, TerminalError> {
     move |task_id| match tasks.get_task(task_id) {
@@ -77,31 +63,6 @@ pub fn workspace_of(tasks: TaskService) -> impl Fn(&str) -> Result<PathBuf, Term
         Err(TaskError::NotFound(_)) => Err(TerminalError::TaskNotFound(task_id.into())),
         Err(error) => Err(TerminalError::Spawn(error.to_string())),
     }
-}
-
-/// The user's home folder: where agents keep their sessions.
-fn home_dir() -> PathBuf {
-    std::env::var_os("HOME")
-        .or_else(|| std::env::var_os("USERPROFILE"))
-        .map_or_else(PathBuf::new, PathBuf::from)
-}
-
-/// The home folder in the daemon's own environment, where its hooks may read session files.
-fn home_of(env: &Env) -> PathBuf {
-    env.get("HOME")
-        .or_else(|| env.get("USERPROFILE"))
-        .map_or_else(PathBuf::new, PathBuf::from)
-}
-
-/// An agent the user starts by hand in a shell finds its hooks there: the files are written at
-/// each shell start, and only there, not on the output path.
-fn with_hook_files(spawn: Arc<SpawnPty>, bin_dir: Option<String>) -> Arc<SpawnPty> {
-    Arc::new(move |mut options: SpawnOptions| {
-        // The shell is the program that needs the login PATH; the daemon itself does not wait.
-        use_login_path(&mut options.env, bin_dir.as_deref());
-        prepare_agent_hooks(&options.cwd, WorkspaceHooks { claude_code: true });
-        (*spawn)(options)
-    })
 }
 
 /// The task store of the data folder, loaded, and what shares it.
@@ -196,6 +157,7 @@ fn stage_runner(
 ) -> StageRunner {
     let paths = Arc::clone(&store.repos);
     let settings = Arc::clone(&store.repos);
+    let isolation = agents.isolation();
     let mut options = StageRunOptions::new(
         store.tasks.clone(),
         terminals.clone(),
@@ -209,6 +171,9 @@ fn stage_runner(
     options.jobs = Arc::clone(&store.jobs);
     options.ci = Arc::new(GhCi::default());
     options.trusted_of = trusted_of(&store.repos);
+    if let Some(isolation) = isolation {
+        options.run_command = isolated_run_command(isolation);
+    }
     StageRunner::new(options)
 }
 
@@ -257,6 +222,7 @@ fn terminal_service(
             }
             if let Some(runner) = agent_ended.get() {
                 runner.run.options.agents.agent_ended(task_id, terminal);
+                runner.run.options.agents.forget_token_if_last(task_id);
             }
         })),
         trace_input: trace_input_at_start(env.get("NATAMUX_INPUT_TRACE").map(String::as_str)),
@@ -365,7 +331,9 @@ pub async fn start(
     // Shells run on the same machine as the daemon, so they reach it on loopback.
     let daemon_url = format!("http://127.0.0.1:{}", address.port());
     let cells = Cells::default();
-    let spawn = with_hook_files(spawn, config.agents.bin_dir.clone());
+    let bin_dir = config.agents.bin_dir.clone();
+    let isolation = start_isolation(&config.data_dir, bin_dir.clone(), &home_of(env));
+    let spawn = with_hook_files(with_isolation(spawn, isolation.clone()), bin_dir);
     let terminals = terminal_service(
         env,
         spawn,
@@ -384,6 +352,9 @@ pub async fn start(
         &cells.idle,
         &daemon_url,
     )?);
+    if let Some(isolation) = isolation {
+        agents.isolate(isolation);
+    }
     let stages = stage_runner(
         config,
         &store,

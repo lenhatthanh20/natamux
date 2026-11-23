@@ -16,6 +16,7 @@ use natamux_git::commit_drafter::{AgentRun, DAEMON_VARIABLES, MAX_OUTPUT_CHARS, 
 use natamux_pty::Env;
 use natamux_pty::shell_command::shell_command;
 
+use crate::terminals::isolation::Isolation;
 use crate::workspaces::service::RunAgentOnce;
 
 const POLL: Duration = Duration::from_millis(10);
@@ -64,16 +65,44 @@ pub fn default_run_agent_once() -> RunAgentOnce {
     Arc::new(run_agent_once)
 }
 
+/// The commit-draft agent, isolated while isolation is on: then only Claude Code runs, and a
+/// sandbox that cannot apply means no start.
+pub fn run_agent_once_with(isolation: Option<Arc<Isolation>>) -> RunAgentOnce {
+    let Some(isolation) = isolation else {
+        return default_run_agent_once();
+    };
+    Arc::new(move |run: AgentRun| {
+        isolation.allows_agent(&run.agent)?;
+        let cwd = run.cwd.clone();
+        let prepare = |command: &mut Command| isolation.isolate_command(command, &cwd);
+        run_prepared(run, &daemon_env(), &prepare)
+    })
+}
+
+fn daemon_env() -> Env {
+    std::env::vars_os()
+        .filter_map(|(name, value)| Some((name.into_string().ok()?, value.into_string().ok()?)))
+        .collect()
+}
+
 /// Runs an agent once and gives what it printed, or the reason for the user.
 pub fn run_agent_once(run: AgentRun) -> Result<String, String> {
-    let env: Env = std::env::vars_os()
-        .filter_map(|(name, value)| Some((name.into_string().ok()?, value.into_string().ok()?)))
-        .collect();
-    run_with_env(run, &env)
+    run_with_env(run, &daemon_env())
 }
 
 // `daemon_env` is a parameter so a test can run with the variables a daemon has.
 fn run_with_env(run: AgentRun, daemon_env: &Env) -> Result<String, String> {
+    run_prepared(run, daemon_env, &|_| Ok(()))
+}
+
+/// Changes the command last, before it starts (isolation). An error means no start.
+type Prepare<'a> = &'a dyn Fn(&mut Command) -> std::io::Result<()>;
+
+pub(crate) fn run_prepared(
+    run: AgentRun,
+    daemon_env: &Env,
+    prepare: Prepare<'_>,
+) -> Result<String, String> {
     let windows = cfg!(windows);
     let platform = if windows {
         Platform::Windows
@@ -96,6 +125,7 @@ fn run_with_env(run: AgentRun, daemon_env: &Env) -> Result<String, String> {
         .stderr(Stdio::piped());
     natamux_core::login_path::apply(&mut command);
     detach(&mut command, shell.detached);
+    prepare(&mut command).map_err(|error| format!("{name} could not start: {error}"))?;
     let mut child = command
         .spawn()
         .map_err(|error| format!("{name} could not start: {error}"))?;

@@ -217,6 +217,7 @@ fn shell_first_output() -> Option<f64> {
             rows: ROWS,
             cwd: dir.0.clone(),
             env: env.clone(),
+            isolation: None,
         };
         let start = Instant::now();
         let mut pty = match spawn_shell(options) {

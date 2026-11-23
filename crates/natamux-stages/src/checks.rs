@@ -81,6 +81,20 @@ pub fn run_shell_command(command: &str, cwd: &Path) -> Ran {
 }
 
 pub fn run_shell_command_with_timeout(command: &str, cwd: &Path, timeout: Duration) -> Ran {
+    run_shell_command_with(command, cwd, timeout, &|_| Ok(()))
+}
+
+/// Changes a command before it starts, such as isolation. An error means it must not start.
+pub type Prepare<'a> = &'a dyn Fn(&mut Command) -> std::io::Result<()>;
+
+/// `run_shell_command_with_timeout` with `prepare` called last. When it fails the command never
+/// runs and the check fails with the reason.
+pub fn run_shell_command_with(
+    command: &str,
+    cwd: &Path,
+    timeout: Duration,
+    prepare: Prepare<'_>,
+) -> Ran {
     let mut process = Command::new(if cfg!(windows) { "cmd.exe" } else { "sh" });
     #[cfg(windows)]
     {
@@ -93,6 +107,12 @@ pub fn run_shell_command_with_timeout(command: &str, cwd: &Path, timeout: Durati
     process.args(["-c", command]);
     process.current_dir(cwd);
     natamux_core::login_path::apply(&mut process);
+    if let Err(error) = prepare(&mut process) {
+        return Ran {
+            code: 1,
+            output: format!("The command did not start: {error}"),
+        };
+    }
     let ran = capture(process, timeout, MAX_COMMAND_OUTPUT);
     let output = format!("{}{}", ran.stdout, ran.stderr);
     if ran.code == Some(0) && !ran.overflow {

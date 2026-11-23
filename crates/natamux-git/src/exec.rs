@@ -120,6 +120,7 @@ fn run(
         return Err(refused);
     }
     let mut command = Command::new("git");
+    natamux_core::security::harden_git(&mut command);
     command
         .args(args)
         .current_dir(cwd)
@@ -192,6 +193,7 @@ pub fn git_blob_limited(worktree: &Path, spec: &str, max: u64) -> Result<BlobRea
         return Err(fail(format!("Not a valid object name {spec}")));
     }
     let mut command = Command::new("git");
+    natamux_core::security::harden_git(&mut command);
     command
         .args(["cat-file", "--batch"])
         .current_dir(worktree)
@@ -249,7 +251,7 @@ fn read_blob(child: &mut Child, spec: &str, max: u64) -> std::io::Result<Option<
 
 /// The git folder of a checkout or linked worktree, and the folder its worktrees share. None
 /// when `worktree` has no `.git` of its own (a subfolder) or it is not one this knows.
-pub(crate) fn git_dirs(worktree: &Path) -> Option<(PathBuf, PathBuf)> {
+pub fn git_dirs(worktree: &Path) -> Option<(PathBuf, PathBuf)> {
     let dot_git = worktree.join(".git");
     let meta = std::fs::metadata(&dot_git).ok()?;
     if meta.is_dir() {

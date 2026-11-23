@@ -194,7 +194,7 @@ natamux security
 natamux security --json
 ```
 
-Prints the security mode (Personal or Strict), the warning when `security.json` changed outside Natamux, and each Strict key with its value and what it blocks (`GET /security`). It only reads: change the settings in the app, Settings > Security. Any token may run it, also the token of a task terminal. See [Strict mode](/docs/reference/configuration/#strict-mode-securityjson).
+Prints the security mode (Personal or Strict), the warning when `security.json` changed outside Natamux, each Strict key with its value and what it blocks, and how task shells are isolated in this daemon run (`GET /security`). It only reads: change the settings in the app, Settings > Security. Any token may run it, also the token of a task terminal. See [Strict mode](/docs/reference/configuration/#strict-mode-securityjson).
 
 ## hooks and hook
 

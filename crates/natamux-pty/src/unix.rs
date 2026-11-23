@@ -20,6 +20,8 @@ use nix::unistd::{Pid, setsid, tcgetpgrp};
 use crate::process_table::{ProcessTable, TableReader};
 use crate::process_tree::TreeKill;
 use crate::pty::{Pty, PtyEvents, Signal, SpawnOptions};
+use crate::sandbox_plan::prepare;
+use crate::sandbox_sweep::{holders, sweep};
 use crate::shell_command::shell_command;
 
 /// After the shell ended, how long the reader may take to hand over the last output before the
@@ -30,9 +32,19 @@ const DRAIN_WAIT: Duration = Duration::from_millis(200);
 const PROCESS_TABLE_TTL: Duration = Duration::from_secs(2);
 
 pub fn spawn(options: SpawnOptions) -> io::Result<Box<dyn Pty>> {
-    let (file, args) = shell_command(&options.env, false, &|path| {
+    let (file, mut args) = shell_command(&options.env, false, &|path| {
         std::path::Path::new(path).exists()
     });
+    // Before the fork, so a plan that cannot apply in full means no shell at all.
+    let prepared = options.isolation.as_ref().map(prepare).transpose()?;
+    if prepared.is_some() {
+        // A login profile lives in the home folder, which an isolated shell cannot read.
+        args = vec!["-i".to_string()];
+    }
+    let sweep_mark = options
+        .isolation
+        .as_ref()
+        .and_then(|plan| plan.sweep_mark.clone());
     let size = winsize(options.cols, options.rows);
     let pty = openpty(Some(&size), None).map_err(io::Error::from)?;
     let (master, slave) = (pty.master, pty.slave);
@@ -57,13 +69,16 @@ pub fn spawn(options: SpawnOptions) -> io::Result<Box<dyn Pty>> {
         .stdin(Stdio::from(slave.try_clone()?))
         .stdout(Stdio::from(slave.try_clone()?))
         .stderr(Stdio::from(slave));
-    // SAFETY: only async-signal-safe calls (setsid, ioctl) between fork and exec.
+    // SAFETY: only async-signal-safe calls (setsid, ioctl, prctl, landlock) between fork and exec.
     unsafe {
         command.pre_exec(move || {
             setsid().map_err(io::Error::from)?;
             // The pty is stdin by now; it becomes the controlling terminal of the new session.
             if nix::libc::ioctl(0, nix::libc::TIOCSCTTY as _, 0) == -1 {
                 return Err(io::Error::last_os_error());
+            }
+            if let Some(prepared) = &prepared {
+                prepared.restrict()?;
             }
             Ok(())
         });
@@ -79,6 +94,7 @@ pub fn spawn(options: SpawnOptions) -> io::Result<Box<dyn Pty>> {
         writer,
         paused: Arc::new((Mutex::new(false), Condvar::new())),
         tree: TreeKill::default(),
+        sweep_mark,
     }))
 }
 
@@ -99,6 +115,8 @@ struct UnixPty {
     writer: Sender<Vec<u8>>,
     paused: Arc<(Mutex<bool>, Condvar)>,
     tree: TreeKill,
+    /// The mark of an isolated shell, see `sandbox_sweep`.
+    sweep_mark: Option<String>,
 }
 
 fn start_writer(mut file: File) -> Sender<Vec<u8>> {
@@ -154,6 +172,9 @@ impl Pty for UnixPty {
             send(pid, signal)
         });
         send(self.pid, signal);
+        if let (Signal::Kill, Some(mark)) = (signal, &self.sweep_mark) {
+            sweep(mark);
+        }
     }
 
     fn leftover(&self) -> bool {
@@ -162,6 +183,10 @@ impl Pty for UnixPty {
 
     fn leftover_in(&self, table: &ProcessTable) -> bool {
         self.tree.leftover(table)
+            || self
+                .sweep_mark
+                .as_deref()
+                .is_some_and(|mark| !holders(mark).is_empty())
     }
 
     fn foreground(&self) -> Option<String> {
