@@ -3,6 +3,9 @@
 
 use std::fs;
 
+use natamux_daemon::terminals::screen_files::{save_screen, screens_dir};
+use natamux_store::task_files::task_file_path;
+
 use super::remove::path_of;
 use super::*;
 
@@ -176,4 +179,21 @@ fn removes_the_worktree_and_the_branch_of_a_deleted_task_with_changes_only_when_
     assert!(result.branch_deleted);
     assert!(!path.exists());
     assert!(!fx.branch_exists(BRANCH));
+}
+
+#[test]
+fn a_refused_delete_keeps_every_file_of_the_task() {
+    let fx = Fx::new();
+    let task = fx.task("Fix the bug");
+    let path = path_of(&fx.ws.create(&task.id, None, None).unwrap());
+    edit_and_add_file(&path);
+    save_screen(&fx.data, &task.id, "1", b"screen").unwrap();
+    let screen = screens_dir(&fx.data, &task.id).join("1.ans");
+
+    assert!(is_conflict(&fx.ws.remove_for_delete(&task.id, false)));
+
+    assert!(task_file_path(&fx.data, &task.id).is_file());
+    assert!(screen.is_file());
+    assert!(path.join("new.txt").exists());
+    assert!(fx.tasks.get_task(&task.id).is_ok());
 }

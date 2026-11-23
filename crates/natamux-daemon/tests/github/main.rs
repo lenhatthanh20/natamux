@@ -9,6 +9,7 @@ mod issue_linker;
 mod pull_request_branch_sync;
 mod pull_request_finding;
 mod pull_request_watcher;
+mod report_redaction;
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};

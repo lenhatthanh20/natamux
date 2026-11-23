@@ -15,6 +15,10 @@ Nothing. Natamux sends no usage data, crash reports or analytics anywhere. Its o
 
 `NATAMUX_INPUT_TRACE=1` makes the daemon write every key typed in a terminal, passwords too, to its log. Leave it unset unless you debug typing.
 
+These files are readable only by your user on macOS and Linux (`0600` files, `0700` folders). Logs never hold the password or token of a URL, or a token with a known prefix such as `ghp_` (see [SECURITY.md](SECURITY.md#secrets-on-disk)).
+
+Deleting a task removes all its files in the data folder and its rows in the index. It does not remove what was already pushed to a remote or a CI provider.
+
 You can delete any of these folders at any time.
 
 ## When data leaves your machine

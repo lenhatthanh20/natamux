@@ -7,6 +7,7 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
+use natamux_core::workspaces::private_dir::{private_dir, write_private};
 use natamux_proto::terminals::query::is_terminal_name;
 
 use super::shell_files::{read_open_shells, tasks_dir};
@@ -40,10 +41,10 @@ pub fn save_screen(
         return Ok(());
     };
     if let Some(folder) = path.parent() {
-        fs::create_dir_all(folder)?;
+        private_dir(folder)?;
     }
     let temporary = path.with_extension("ans.tmp");
-    fs::write(&temporary, screen)?;
+    write_private(&temporary, screen)?;
     fs::rename(&temporary, path)
 }
 

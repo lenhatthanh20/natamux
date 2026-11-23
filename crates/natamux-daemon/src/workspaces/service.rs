@@ -198,6 +198,11 @@ pub struct WorkspaceService {
     background: Arc<Background>,
 }
 
+// Every workspace log line passes here: git and gh messages can hold a token.
+fn redacted(log: LogFn) -> LogFn {
+    Arc::new(move |message| log(&natamux_core::privacy::redact::redact_text(message)))
+}
+
 impl WorkspaceService {
     pub fn new(options: WorkspaceOptions) -> Arc<WorkspaceService> {
         let now = options.now;
@@ -227,7 +232,7 @@ impl WorkspaceService {
             pull_request_body: options.pull_request_body,
             run_gh: options.run_gh,
             run_agent_once: options.run_agent_once,
-            log: options.log,
+            log: redacted(options.log),
             trust_paths: options.trust_paths,
             busy: Mutex::default(),
             steps: Mutex::default(),
@@ -380,5 +385,24 @@ impl WorkspaceService {
         self.steps
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_workspace_log_line_never_holds_a_token() {
+        let lines: Arc<Mutex<Vec<String>>> = Arc::default();
+        let sink = Arc::clone(&lines);
+        let log = redacted(Arc::new(move |line: &str| {
+            sink.lock().unwrap().push(line.to_string())
+        }));
+        log("Could not delete the CI branch: https://user:FAKE-TOKEN@host.test/x.git");
+        assert_eq!(
+            *lines.lock().unwrap(),
+            ["Could not delete the CI branch: https://host.test/x.git"]
+        );
     }
 }

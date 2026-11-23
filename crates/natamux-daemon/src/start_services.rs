@@ -224,8 +224,9 @@ fn io_error(error: TaskError) -> std::io::Error {
 
 /// The task store of the data folder, loaded, and what shares it.
 pub(super) fn task_store(config: &Config) -> std::io::Result<TaskStore> {
-    let index =
+    let mut index =
         TaskIndex::open(&config.data_dir.join("index.sqlite")).map_err(std::io::Error::other)?;
+    crate::start_privacy::prepare(&config.data_dir, &config.worktrees_dir, &mut index);
     let bus = EventBus::new();
     let jobs = Arc::new(Jobs::new(Some(Arc::clone(&bus)), system_clock()));
     // A folder that is gone does not stop the start: only repos.json that cannot be read does.

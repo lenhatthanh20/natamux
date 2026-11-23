@@ -6,6 +6,7 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
+use natamux_core::workspaces::private_dir::{private_dir, write_private};
 use natamux_proto::terminals::ended::{ENDED_SHELL_MAX_CHARS, EndedShell};
 use natamux_proto::terminals::query::is_terminal_name;
 use serde::{Deserialize, Serialize};
@@ -42,11 +43,11 @@ pub fn ended_shells_path(data_dir: &Path, task_id: &str) -> PathBuf {
 /// Written whole to a temporary file first, so a crash never leaves half a file.
 fn write_json(path: &Path, value: &impl Serialize) -> io::Result<()> {
     if let Some(folder) = path.parent() {
-        fs::create_dir_all(folder)?;
+        private_dir(folder)?;
     }
     let text = serde_json::to_string(value).map_err(io::Error::other)?;
     let temporary = path.with_extension("json.tmp");
-    fs::write(&temporary, text)?;
+    write_private(&temporary, text.as_bytes())?;
     fs::rename(&temporary, path)
 }
 

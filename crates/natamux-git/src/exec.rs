@@ -8,6 +8,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use natamux_core::js::js_trim;
+use natamux_core::privacy::redact::redact_text;
 
 use crate::process::{CapturedBytes, capture_bytes, text_of};
 
@@ -134,11 +135,12 @@ fn run(
     if ran.code == Some(0) && !ran.overflow {
         return Ok(ran.stdout);
     }
-    Err(GitError(format!(
+    // Git's stderr and the arguments can hold a remote URL with a token in it.
+    Err(GitError(redact_text(&format!(
         "git {} failed: {}",
         args.first().unwrap_or(&""),
         error_text(&ran, args)
-    )))
+    ))))
 }
 
 /// `errorText`: why a git call failed, as Node words it.

@@ -20,6 +20,11 @@ use crate::workspaces::errors::WorkspaceError;
 
 pub type Answer = Response<Full<Bytes>>;
 
+/// An error as the daemon log shows it: a git or gh message can hold a token.
+pub fn log_line(message: &str) -> String {
+    natamux_core::privacy::redact::redact_text(message)
+}
+
 pub fn json_answer(status: StatusCode, body: &Value) -> Answer {
     let mut answer = Response::new(Full::new(Bytes::from(to_js_string(body))));
     *answer.status_mut() = status;
@@ -148,7 +153,7 @@ pub fn task_error(error: &TaskError) -> Answer {
             error_answer(StatusCode::CONFLICT, "conflict", &message)
         }
         TaskError::Failed(_) => {
-            eprintln!("{message}");
+            eprintln!("{}", log_line(&message));
             internal_error()
         }
     }
@@ -184,7 +189,7 @@ pub fn hook_error(error: &HookError) -> Answer {
         HookError::Invalid(issues) => zod_answer(issues),
         HookError::Task(error) => task_error(error),
         HookError::Failed(message) => {
-            eprintln!("{message}");
+            eprintln!("{}", log_line(message));
             internal_error()
         }
     }
@@ -198,7 +203,7 @@ pub fn workspace_error(error: &WorkspaceError) -> Answer {
     }
     let (status, code) = error.status_and_code();
     if status == 500 {
-        eprintln!("{error}");
+        eprintln!("{}", log_line(&error.to_string()));
         return internal_error();
     }
     let status = StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
@@ -238,9 +243,24 @@ pub fn repo_error_answer(error: &RepoError) -> Answer {
     }
     let (status, code) = error.status_and_code();
     if status == 500 {
-        eprintln!("{error}");
+        eprintln!("{}", log_line(&error.to_string()));
         return internal_error();
     }
     let status = StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
     error_answer(status, code, &error.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_log_line_never_holds_a_token() {
+        let error = TaskError::Failed(
+            "git push failed: https://user:FAKE-TOKEN@host.test/x.git ghp_FAKEFAKE1234".into(),
+        );
+        let line = log_line(&error.to_string());
+        assert!(!line.contains("FAKE"), "{line}");
+        assert!(line.contains("https://host.test/x.git"), "{line}");
+    }
 }

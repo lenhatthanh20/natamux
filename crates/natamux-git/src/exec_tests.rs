@@ -91,3 +91,14 @@ fn checked_ref_refuses_empty_names_and_names_that_look_like_options() {
         assert!(error.0.starts_with("git ref refused: "), "{error}");
     }
 }
+
+#[test]
+fn a_git_error_never_shows_the_token_of_a_remote_url() {
+    let (_root, repo) = test_repo();
+    let url = "https://user:FAKE-TOKEN@host.test/x.git";
+    // Git names the pathspec it did not find, URL and all.
+    let error = git(&repo, &["checkout", url], None, &[]).unwrap_err();
+    assert!(error.0.starts_with("git checkout failed: "), "{error}");
+    assert!(error.0.contains("https://host.test/x.git"), "{error}");
+    assert!(!error.0.contains("FAKE-TOKEN"), "{error}");
+}

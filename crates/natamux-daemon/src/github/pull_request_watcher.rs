@@ -450,7 +450,8 @@ impl Inner {
             }
             state.last_error = Some(message.to_string());
         }
-        let line = format!("Pull request check: {message}");
+        let line =
+            natamux_core::privacy::redact::redact_text(&format!("Pull request check: {message}"));
         match &self.options.log {
             Some(log) => log(&line),
             None => eprintln!("{line}"),

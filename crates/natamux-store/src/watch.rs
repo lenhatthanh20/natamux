@@ -8,6 +8,7 @@ use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
 
+use natamux_core::workspaces::private_dir::private_dir;
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 
 use crate::task_files::{task_id_of_file, tasks_dir};
@@ -26,7 +27,7 @@ pub fn watch_task_files(
 ) -> TaskWatch {
     let folder = tasks_dir(data_dir);
     let (sender, names) = mpsc::channel::<String>();
-    let watcher = std::fs::create_dir_all(&folder).ok().and_then(|()| {
+    let watcher = private_dir(&folder).ok().and_then(|()| {
         let mut watcher =
             notify::recommended_watcher(move |event: notify::Result<notify::Event>| {
                 let Ok(event) = event else {

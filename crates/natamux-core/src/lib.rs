@@ -15,6 +15,9 @@ pub mod js;
 pub mod json;
 pub mod login_path;
 pub mod offline;
+pub mod privacy {
+    pub mod redact;
+}
 pub mod security;
 pub mod zod;
 pub mod events {
