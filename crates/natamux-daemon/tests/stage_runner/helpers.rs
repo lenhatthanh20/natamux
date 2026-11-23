@@ -8,7 +8,7 @@ use std::sync::mpsc::{Sender, channel};
 use std::time::{Duration, Instant};
 
 use natamux_core::js::parse_iso_millis;
-use natamux_stages::ci::{CiCheck, CiResult};
+use natamux_stages::ci::{CiCheck, CiResult, CiTarget};
 use serde_json::{Value, json};
 
 use crate::support::FakePty;
@@ -81,13 +81,15 @@ impl Drop for TempDir {
 #[derive(Default)]
 pub struct FakeCi {
     pub calls: Mutex<Vec<(PathBuf, String)>>,
+    /// The approved target of each check.
+    pub targets: Mutex<Vec<CiTarget>>,
     finish: Mutex<Option<Sender<CiResult>>>,
     // A check of a stopped runner stays unanswered, as a promise that never settles.
     parked: Mutex<Vec<Sender<CiResult>>>,
 }
 
 impl CiCheck for FakeCi {
-    fn check(&self, worktree: &Path, branch: &str) -> CiResult {
+    fn check(&self, worktree: &Path, target: &CiTarget) -> CiResult {
         let (send, receive) = channel();
         if let Some(old) = self.finish.lock().unwrap().replace(send) {
             self.parked.lock().unwrap().push(old);
@@ -95,7 +97,8 @@ impl CiCheck for FakeCi {
         self.calls
             .lock()
             .unwrap()
-            .push((worktree.to_path_buf(), branch.to_string()));
+            .push((worktree.to_path_buf(), target.branch.clone()));
+        self.targets.lock().unwrap().push(target.clone());
         receive
             .recv_timeout(Duration::from_secs(60))
             .unwrap_or_else(|_| natamux_stages::ci::ci_error("the test never finished CI"))

@@ -140,6 +140,7 @@ pub enum Command {
         json: bool,
     },
     RepoTrust(crate::repo_trust::RepoTrustCommand),
+    CiApprove(crate::ci_approve::CiApproveCommand),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -510,6 +511,10 @@ fn stage_command(line: &Line) -> Result<Command, UsageError> {
             STAGE_COMMANDS.join(", ")
         ));
     };
+    if second == "ci-approve" {
+        let parsed = crate::ci_approve::parse(line.rest, line.values, line.json);
+        return parsed.map(Command::CiApprove).map_err(UsageError);
+    }
     if second == "workflow" || second == "ci" {
         let id = line.first();
         let choice = line.rest.get(1).map(String::as_str);

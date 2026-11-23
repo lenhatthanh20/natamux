@@ -4,13 +4,14 @@
 use std::path::Path;
 
 use natamux_core::js::is_js_space;
+use natamux_core::security::CiMode;
 use natamux_proto::events::task_event::StoredEvent;
 use natamux_proto::stages::capabilities::stage_name;
 use natamux_proto::stages::schema::Stage;
 use natamux_proto::terminals::text::plain_text;
 
 /// The branch of origin that gets a snapshot of a task's work, for CI to run on.
-pub const CI_BRANCH_PREFIX: &str = "natamux-ci/";
+pub const CI_BRANCH_PREFIX: &str = natamux_git::commit_push::CI_REF_PREFIX;
 
 pub fn ci_branch_of(branch: &str) -> String {
     format!("{CI_BRANCH_PREFIX}{branch}")
@@ -27,17 +28,29 @@ pub struct CiResult {
     pub logs: Option<Vec<String>>,
 }
 
-/// Pushes the work of a task as it is now to its CI branch, waits for the CI runs of that commit,
-/// and tells how they ended (`checkOnCi`). Blocking.
+/// What a CI round was approved to push: `commit` (with `tree`) to `ci_branch_of(branch)` of the
+/// `remote`, under `mode`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CiTarget {
+    /// The task's branch at the approval.
+    pub branch: String,
+    pub commit: String,
+    pub tree: String,
+    pub remote: String,
+    pub mode: CiMode,
+}
+
+/// Pushes the approved commit of a task to its CI branch, waits for the CI runs of that commit,
+/// and tells how they ended (`checkOnCi`). Never makes a snapshot itself. Blocking.
 pub trait CiCheck: Send + Sync {
-    fn check(&self, worktree: &Path, branch: &str) -> CiResult;
+    fn check(&self, worktree: &Path, target: &CiTarget) -> CiResult;
 }
 
 /// For tests: the answer where `gh` is missing. `GhCi` (`ci_check.rs`) is the real check.
 pub struct NoCi;
 
 impl CiCheck for NoCi {
-    fn check(&self, _worktree: &Path, _branch: &str) -> CiResult {
+    fn check(&self, _worktree: &Path, _target: &CiTarget) -> CiResult {
         ci_error(
             "Could not read the CI runs: GitHub CLI failed: gh is not installed or not on the PATH",
         )
@@ -63,6 +76,41 @@ pub fn stages_waiting_for_ci(events: &[StoredEvent]) -> Vec<String> {
         }
     }
     waits
+}
+
+/// The `stage.ci-approved` event of a CI round, with its seq.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CiApproval {
+    pub seq: u64,
+    pub target: CiTarget,
+}
+
+/// The latest approval of the stage's CI push, None when there is none or it cannot be read.
+pub fn ci_approval_of(events: &[StoredEvent], stage: &str) -> Option<CiApproval> {
+    let stored = events.iter().rev().find(|stored| {
+        stored.event.kind == "stage.ci-approved"
+            && stored.event.payload.get("stage").and_then(|v| v.as_str()) == Some(stage)
+    })?;
+    let text = |name: &str| {
+        stored
+            .event
+            .payload
+            .get(name)
+            .and_then(|v| v.as_str())
+            .map(str::to_string)
+    };
+    let branch = text("branch")?;
+    let target = CiTarget {
+        branch: branch.strip_prefix(CI_BRANCH_PREFIX)?.to_string(),
+        commit: text("commit")?,
+        tree: text("tree")?,
+        remote: text("remote")?,
+        mode: CiMode::parse(&text("mode")?)?,
+    };
+    Some(CiApproval {
+        seq: stored.seq,
+        target,
+    })
 }
 
 /// A CI check that could not run, such as gh missing, is a failure no agent can fix.

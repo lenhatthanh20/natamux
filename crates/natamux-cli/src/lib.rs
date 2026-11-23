@@ -2,6 +2,7 @@
 //! command of packages/cli, with the same output, exit codes and hook forwarder.
 
 mod args;
+pub mod ci_approve;
 pub mod command;
 pub mod daemon;
 mod execute;

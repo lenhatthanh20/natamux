@@ -2,6 +2,7 @@ use std::path::Path;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
+use natamux_core::security::{CiPush, SecurityMode, StrictSettings, force};
 use natamux_git::gh::GitHubError;
 use serde_json::{Value, json};
 
@@ -55,7 +56,7 @@ struct Fakes {
     deps: CiDeps,
     pushed: Arc<Mutex<Vec<String>>>,
     calls: Arc<Mutex<Vec<Vec<String>>>>,
-    snapshots: Arc<AtomicUsize>,
+    verified: Arc<AtomicUsize>,
 }
 
 fn fakes(answers: Vec<Answer>, logs: &str, before: Answer) -> Fakes {
@@ -63,22 +64,26 @@ fn fakes(answers: Vec<Answer>, logs: &str, before: Answer) -> Fakes {
     let poll = Arc::new(AtomicUsize::new(0));
     let pushed = Arc::new(Mutex::new(Vec::new()));
     let calls = Arc::new(Mutex::new(Vec::new()));
-    let snapshots = Arc::new(AtomicUsize::new(0));
+    let verified = Arc::new(AtomicUsize::new(0));
     let logs = logs.to_string();
-    let (calls_in, poll_in, snapshots_in, pushed_in) = (
+    let (calls_in, poll_in, verified_in, pushed_in) = (
         calls.clone(),
         poll.clone(),
-        snapshots.clone(),
+        verified.clone(),
         pushed.clone(),
     );
     let gh_calls = calls_in;
     let deps = CiDeps {
-        snapshot: Arc::new(move |_, _| {
-            snapshots_in.fetch_add(1, Ordering::SeqCst);
-            Ok("abc123".into())
+        verify: Arc::new(move |_, _| {
+            verified_in.fetch_add(1, Ordering::SeqCst);
+            Ok(())
         }),
-        push: Arc::new(move |_, sha, ref_name| {
-            pushed_in.lock().unwrap().push(format!("{sha} {ref_name}"));
+        push: Arc::new(move |_, target: &CiTarget| {
+            let ref_name = ci_branch_of(&target.branch);
+            pushed_in
+                .lock()
+                .unwrap()
+                .push(format!("{} {ref_name}", target.commit));
             Ok(())
         }),
         gh: Arc::new(move |_, args| {
@@ -114,7 +119,7 @@ fn fakes(answers: Vec<Answer>, logs: &str, before: Answer) -> Fakes {
         deps,
         pushed,
         calls,
-        snapshots,
+        verified,
     }
 }
 
@@ -124,8 +129,18 @@ fn simple(answers: Vec<Answer>) -> Fakes {
 
 const BRANCH: &str = "natamux/t-0001-fix";
 
+fn target() -> CiTarget {
+    CiTarget {
+        branch: BRANCH.into(),
+        commit: "abc123".into(),
+        tree: "tree123".into(),
+        remote: "https://github.com/o/r.git".into(),
+        mode: CiMode::Snapshot,
+    }
+}
+
 fn check(deps: &CiDeps) -> CiResult {
-    check_on_ci(Path::new("/work/T-0001"), BRANCH, deps)
+    check_on_ci(Path::new("/work/T-0001"), &target(), deps)
 }
 
 fn pushed(fakes: &Fakes) -> Vec<String> {
@@ -185,7 +200,7 @@ fn pushes_nothing_for_a_commit_that_has_runs_already_and_waits_on_those() {
     let result = check(&fakes.deps);
 
     assert!(pushed(&fakes).is_empty());
-    assert_eq!(fakes.snapshots.load(Ordering::SeqCst), 1);
+    assert_eq!(fakes.verified.load(Ordering::SeqCst), 1);
     assert!(result.passed);
     assert_eq!(
         result.passes,
@@ -353,7 +368,7 @@ fn stops_for_the_user_when_ci_takes_too_long_or_the_push_or_gh_fails() {
 
     // No runs before the push, so the push is made.
     let mut no_push = simple(vec![Answer::Runs(vec![run()])]);
-    no_push.deps.push = Arc::new(|_, _, _| Err("denied".into()));
+    no_push.deps.push = Arc::new(|_, _| Err("denied".into()));
     let push_failed = check(&no_push.deps);
     assert!(!push_failed.passed && push_failed.final_);
     assert!(push_failed.reasons[0].contains("denied"));
@@ -394,4 +409,70 @@ fn an_empty_gh_answer_is_read_again() {
 
     assert_eq!(pushed(&fakes), ["abc123 natamux-ci/natamux/t-0001-fix"]);
     assert!(result.passed);
+}
+
+// F4: the check pushes the approved commit and never makes a snapshot of its own.
+#[test]
+fn pushes_the_approved_commit_and_never_snapshots() {
+    let fakes = simple(vec![Answer::Runs(vec![run()])]);
+    let mut other = target();
+    other.commit = "def456".into();
+
+    let result = check_on_ci(Path::new("/work/T-0001"), &other, &fakes.deps);
+
+    assert!(result.passed);
+    assert_eq!(pushed(&fakes), ["def456 natamux-ci/natamux/t-0001-fix"]);
+    assert_eq!(fakes.calls.lock().unwrap()[0][3], "def456");
+}
+
+#[test]
+fn a_refused_approval_stops_before_gh_and_the_push() {
+    let mut fakes = simple(vec![Answer::Runs(vec![run()])]);
+    fakes.deps.verify = Arc::new(|_, _| Err("CI push refused: the remote changed".into()));
+
+    let result = check(&fakes.deps);
+
+    assert!(!result.passed && result.final_);
+    assert_eq!(result.reasons, ["CI push refused: the remote changed"]);
+    assert!(fakes.calls.lock().unwrap().is_empty());
+    assert!(pushed(&fakes).is_empty());
+}
+
+#[test]
+fn a_changed_mode_stops_before_any_call() {
+    let fakes = simple(vec![Answer::Runs(vec![run()])]);
+    let mut old = target();
+    old.mode = CiMode::ApprovedCommit;
+
+    let result = check_on_ci(Path::new("/work/T-0001"), &old, &fakes.deps);
+
+    assert!(!result.passed && result.final_);
+    assert!(
+        result.reasons[0].contains("mode changed"),
+        "{:?}",
+        result.reasons
+    );
+    assert_eq!(fakes.verified.load(Ordering::SeqCst), 0);
+    assert!(fakes.calls.lock().unwrap().is_empty());
+    assert!(pushed(&fakes).is_empty());
+}
+
+#[test]
+fn forbid_calls_nothing_and_fails_for_good() {
+    let _forbid = force(SecurityMode::Strict(StrictSettings {
+        ci_push: CiPush::Forbid,
+        ..StrictSettings::default()
+    }));
+    let fakes = simple(vec![Answer::Runs(vec![run()])]);
+    let mut forbidden = target();
+    forbidden.mode = CiMode::Forbid;
+
+    for each in [target(), forbidden] {
+        let result = check_on_ci(Path::new("/work/T-0001"), &each, &fakes.deps);
+        assert!(!result.passed && result.final_);
+        assert_eq!(result.reasons, [CI_FORBID_REASON]);
+    }
+    assert_eq!(fakes.verified.load(Ordering::SeqCst), 0);
+    assert!(fakes.calls.lock().unwrap().is_empty());
+    assert!(pushed(&fakes).is_empty());
 }

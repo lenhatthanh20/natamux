@@ -247,6 +247,7 @@ pub async fn handle(request: Request<Incoming>, state: Arc<AppState>) -> Answer 
         | (&Method::PUT, ["repos", _, "settings"])
         | (&Method::POST, ["repos", _, "trust"])
         | (&Method::POST, ["tasks", _, "launch-check"])
+        | (&Method::POST, ["tasks", _, "stages", _, "ci-approve"])
         | (&Method::POST, ["github", "issues", "import"])
         | (&Method::PUT, ["tasks", _, "file"]) => {
             with_body(request, state, route, query.to_string(), who).await
@@ -388,6 +389,9 @@ async fn with_body(
         }
         (&Method::PUT, ["tasks", id, "files", name]) => {
             stages::write_file(state, id.to_string(), name.to_string(), body).await
+        }
+        (&Method::POST, ["tasks", id, "stages", stage, "ci-approve"]) => {
+            stages::ci_approve(state, id.to_string(), stage.to_string(), body, by_agent).await
         }
         (&Method::POST, ["tasks", id, "agent"]) => {
             agents::start_agent(state, id.to_string(), body).await

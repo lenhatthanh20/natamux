@@ -96,7 +96,8 @@ mod tests {
              \"stage.skipped\"|\"context.fetched\"|\"issue.linked\"|\"issue.created\"|\
              \"agent.waiting\"|\"agent.stopped\"|\"attachment.added\"|\"stage.workflow-set\"|\
              \"stage.ci-set\"|\"stage.ci-started\"|\"stage.skip-set\"|\"workspace.failed\"|\
-             \"agent.paused\"|\"workspace.warning\"|\"workspace.branch-changed\"; at: \
+             \"agent.paused\"|\"workspace.warning\"|\"workspace.branch-changed\"|\
+             \"stage.ci-approved\"|\"stage.ci-approval-needed\"|\"stage.ci-blocked\"; at: \
              Invalid input: expected string, received undefined"
         );
     }

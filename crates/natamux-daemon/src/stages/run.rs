@@ -269,8 +269,11 @@ impl StageRun {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner()) += 1;
         let guard = PendingGuard(Arc::clone(&self.pending));
+        // A test that forced a security mode sees it in the work it starts too.
+        let forced = natamux_core::security::forced();
         std::thread::spawn(move || {
             let _guard = guard;
+            let _mode = forced.map(natamux_core::security::force);
             work(run);
         });
     }

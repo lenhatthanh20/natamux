@@ -24,6 +24,7 @@ mod agent_review;
 mod agent_stages;
 mod attachments;
 mod branch;
+mod ci_approval;
 mod ci_branch_sync;
 mod ci_check;
 mod ci_testing;

@@ -216,6 +216,48 @@ pub async fn set_mark(
     .await
 }
 
+/// `{ tree }`: the tree id the person read in the approval.
+fn tree_body(value: Option<&Value>) -> Result<String, ZodError> {
+    let mut issues = Issues::default();
+    let mut parsed = None;
+    if let Some(map) = object(value, &[], &mut issues) {
+        parsed = string(
+            map.get("tree"),
+            &[json!("tree")],
+            &[Rule::Min(1), Rule::Max(64)],
+            &mut issues,
+        );
+    }
+    issues.into_result(parsed)
+}
+
+/// A person approves the exact tree a CI push under `ciPush: approved-snapshot` sends (F4). The
+/// agent token never may; another tree than the one waiting answers 409 and starts nothing.
+pub async fn ci_approve(
+    state: Arc<AppState>,
+    id: String,
+    stage: String,
+    body: Option<Value>,
+    by_agent: bool,
+) -> Answer {
+    if by_agent {
+        return forbidden("approve a CI push");
+    }
+    let id = match task_id_param(&id) {
+        Ok(id) => id,
+        Err(error) => return zod_answer(&error),
+    };
+    let tree = match tree_body(body.as_ref()) {
+        Ok(tree) => tree,
+        Err(error) => return zod_answer(&error),
+    };
+    stage_answer(StatusCode::OK, move || {
+        let task = state.stages.run.approve_ci(&id, &stage, &tree)?;
+        Ok(json!({ "task": to_value(&task) }))
+    })
+    .await
+}
+
 pub async fn list_files(state: Arc<AppState>, id: String) -> Answer {
     let id = match task_id_param(&id) {
         Ok(id) => id,

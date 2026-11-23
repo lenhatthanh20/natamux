@@ -4,21 +4,24 @@
 
 use std::path::Path;
 
+use natamux_core::security::{CI_FORBID_REASON, CiMode, ci_mode};
 use natamux_core::stages::capabilities::code_stage_before;
 use natamux_proto::stages::capabilities::{offers_ci, stage_name, stage_name_of_id};
 use natamux_proto::stages::schema::{Stage, StageKind};
 use natamux_proto::tasks::task::Task;
 use natamux_stages::actions::send_back_limit_reached;
-use natamux_stages::ci::{CiResult, ci_branch_of, ci_error, ci_reason, stages_waiting_for_ci};
+use natamux_stages::ci::{CiResult, ci_error, ci_reason, stages_waiting_for_ci};
 use serde_json::json;
 
+use crate::stages::ci_approval::NO_APPROVAL;
 use crate::stages::errors::StageResult;
 use crate::stages::run::{EventInput, StageRun, key};
 use crate::tasks::helpers::position_of;
 use crate::workspaces::branch_sync::sync_branch;
 
 impl StageRun {
-    /// A CI check that ran when the daemon stopped goes on: it pushes the work again and waits.
+    /// A CI check that ran when the daemon stopped goes on: it pushes the approved commit again and
+    /// waits. Under `ciPush: forbid` it stops with the reason instead.
     pub fn resume_ci_checks(&self) {
         if natamux_core::offline::offline() {
             return;
@@ -28,6 +31,12 @@ impl StageRun {
                 continue;
             }
             for stage_id in stages_waiting_for_ci(&self.events(&task.id)) {
+                if ci_mode() == CiMode::Forbid {
+                    if let Err(error) = self.block_ci(&task.id, &stage_id, CI_FORBID_REASON) {
+                        eprintln!("Could not stop the CI check of {}: {error}", task.id);
+                    }
+                    continue;
+                }
                 let seq = self.last_start(&task.id, &stage_id).seq;
                 self.start_ci_round(&task.id, &stage_id, seq, Vec::new());
             }
@@ -56,17 +65,19 @@ impl StageRun {
             return Ok(());
         }
         let task = self.synced_task(&task.id)?;
-        let branch = ci_branch_of(task.branch.as_deref().unwrap_or(""));
-        self.record(
-            &task.id,
-            "stage.ci-started",
-            json!({ "stage": stage_id, "branch": branch }),
-        )?;
-        self.start_ci_round(&task.id, stage_id, seq, passes);
+        if self.open_ci_round(&task, stage_id, &passes)? {
+            self.start_ci_round(&task.id, stage_id, seq, passes);
+        }
         Ok(())
     }
 
-    fn start_ci_round(&self, task_id: &str, stage_id: &str, seq: i64, passes: Vec<String>) {
+    pub(crate) fn start_ci_round(
+        &self,
+        task_id: &str,
+        stage_id: &str,
+        seq: i64,
+        passes: Vec<String>,
+    ) {
         let round = key(task_id, stage_id);
         if !self.state().ci_rounds.insert(round.clone()) {
             return;
@@ -118,8 +129,12 @@ impl StageRun {
         let task = self.synced_task(task_id)?;
         // The workspace can be removed while CI waits, then the daemon restarts. An empty
         // worktree would run git in the daemon's own folder and push that checkout.
+        // The approval was made before the round; a retry or a resume pushes the same commit.
         let ci: CiResult = match (&task.workspace, &task.branch) {
-            (Some(workspace), Some(branch)) => self.options.ci.check(Path::new(workspace), branch),
+            (Some(workspace), Some(_)) => match self.approved_target(task_id, stage_id, seq) {
+                Some(target) => self.options.ci.check(Path::new(workspace), &target),
+                None => ci_error(NO_APPROVAL),
+            },
             _ => ci_error("The task has no workspace or branch for the CI check."),
         };
         if self.last_start(task_id, stage_id).seq != seq {

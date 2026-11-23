@@ -7,7 +7,7 @@ sidebar:
 
 ## Does Natamux send my code anywhere?
 
-No. Natamux has no account, no server of its own and no telemetry. Your code leaves your machine when something you start makes it happen: the coding agents send prompts and code to their own companies, and git and `gh` talk to GitHub when you push or open a pull request. Natamux also runs your `gh` by itself to read pull request status. For a task with **Check on CI** ticked, each CI round force-pushes a snapshot of all files git does not ignore, also uncommitted ones, to `natamux-ci/<branch>` on `origin`. Offline mode turns these off. See [Security and privacy](/docs/help/security-and-privacy/).
+No. Natamux has no account, no server of its own and no telemetry. Your code leaves your machine when something you start makes it happen: the coding agents send prompts and code to their own companies, and git and `gh` talk to GitHub when you push or open a pull request. Natamux also runs your `gh` by itself to read pull request status. For a task with **Check on CI** ticked, each CI round force-pushes a snapshot of the last commit plus changes to tracked files (never untracked files) to `natamux-ci/<branch>` on `origin`. Offline mode turns these off. See [Security and privacy](/docs/help/security-and-privacy/).
 
 ## Which agents does it support?
 

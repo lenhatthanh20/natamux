@@ -245,7 +245,8 @@ pub fn ran_with_workflow(events: &[TaskEvent]) -> Vec<String> {
         .collect()
 }
 
-/// The stages whose CI check runs now, with the CI branch it runs on.
+/// The stages whose CI check runs now, with the CI branch it runs on and, when the daemon left
+/// files out, what CI does not get.
 pub fn waiting_for_ci(events: &[TaskEvent]) -> Vec<(String, String)> {
     let mut waits: Vec<(String, String)> = Vec::new();
     for event in events {
@@ -253,8 +254,13 @@ pub fn waiting_for_ci(events: &[TaskEvent]) -> Vec<(String, String)> {
             continue;
         };
         if event.kind == "stage.ci-started" {
-            let branch = event.payload.get("branch").and_then(|v| v.as_str());
-            put(&mut waits, stage, branch.unwrap_or_default().to_string());
+            let text = |name: &str| event.payload.get(name).and_then(|v| v.as_str());
+            let branch = text("branch").unwrap_or_default();
+            let shown = match text("note") {
+                Some(note) => format!("{branch}. {note}"),
+                None => branch.to_string(),
+            };
+            put(&mut waits, stage, shown);
         } else if matches!(
             event.kind.as_str(),
             "stage.started" | "stage.checked" | "stage.check-failed"

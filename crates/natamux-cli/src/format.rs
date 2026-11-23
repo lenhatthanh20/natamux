@@ -25,6 +25,7 @@ Commands:
   stage <command> <id>       approve, back, skip, pass, fail or start the task's stage
   stage workflow <id> on|off Run a stage as a workflow (Claude Code; needs --stage)
   stage ci <id> on|off       Check a stage on CI before it passes (needs --stage)
+  stage ci-approve <stage>   Approve the exact tree a Strict CI push sends (--task, --tree)
   event <id> <type>          Send an event to a task
   events <id>                Show the event log of a task
   workspace create <id>      Create a git worktree and a branch for a task
@@ -70,6 +71,7 @@ Options:
   --delete-branch       workspace remove: also delete the branch when it is merged
   --approve <hash>      repo trust: approve the commands with this hash (from the list)
   --digest <hash>       repo verify-launch: the digest the launch was approved with
+  --tree <id>           stage ci-approve: the tree id shown in the approval
   --json                Print JSON instead of text
   -h, --help            Show this help
 

@@ -3,17 +3,24 @@
 
 use std::cell::RefCell;
 
-/// The Strict keys the launch of an agent reads.
+mod ci_push;
+
+pub use ci_push::{CI_FORBID_REASON, CiMode, CiPush, ci_mode};
+
+/// The Strict keys the Strict rules read.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StrictSettings {
     /// Only agents that Natamux can hold to asking before each action may start.
     pub require_ask_guarantee: bool,
+    /// What a CI check may push (`ciPush`).
+    pub ci_push: CiPush,
 }
 
 impl Default for StrictSettings {
     fn default() -> Self {
         StrictSettings {
             require_ask_guarantee: true,
+            ci_push: CiPush::default(),
         }
     }
 }
@@ -48,6 +55,12 @@ pub fn mode() -> SecurityMode {
     FORCED
         .with(|forced| forced.borrow().clone())
         .unwrap_or_default()
+}
+
+/// The mode a test forced on this thread, so work this thread hands to another thread can force
+/// the same mode there.
+pub fn forced() -> Option<SecurityMode> {
+    FORCED.with(|forced| forced.borrow().clone())
 }
 
 /// Test hook: `mode()` gives `forced` on this thread until the guard is dropped.
