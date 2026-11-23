@@ -89,3 +89,22 @@ fn a_save_keeps_the_isolation_of_the_file_unless_the_body_sets_it() {
     assert_eq!(plain, "{}");
     std::fs::remove_dir_all(&root).unwrap();
 }
+
+#[test]
+fn a_save_keeps_the_network_of_the_file_unless_the_body_sets_it() {
+    let root = folder("network");
+    let file = root.join("security.json");
+    let network = r#"{"strict":false,"network":{"egress":"allowlist","updater":false}}"#;
+    std::fs::write(&file, network).unwrap();
+    let store = SecurityStore::open(&root);
+    store.save(&json!({ "strict": true })).unwrap();
+    let saved: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+    assert_eq!(saved["network"]["egress"], "allowlist");
+    assert_eq!(saved["network"]["updater"], false);
+    store
+        .save(&json!({ "strict": true, "network": { "egress": "loopback" } }))
+        .unwrap();
+    let saved: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+    assert_eq!(saved["network"]["egress"], "loopback");
+    std::fs::remove_dir_all(&root).unwrap();
+}

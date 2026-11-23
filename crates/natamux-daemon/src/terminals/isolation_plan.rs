@@ -165,6 +165,7 @@ pub fn plan_of(input: PlanInput<'_>) -> IsolationPlan {
         read_write,
         sweep_mark,
         max_abi: None,
+        tcp_connect: None,
     }
 }
 

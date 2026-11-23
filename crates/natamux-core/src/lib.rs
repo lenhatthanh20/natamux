@@ -5,6 +5,8 @@ pub mod agents {
     pub mod custom_agents;
     pub mod hook_settings;
 }
+pub mod child_env;
+pub mod egress;
 pub mod formats;
 pub mod git {
     pub mod commit_message;

@@ -107,6 +107,7 @@ pub fn run_shell_command_with(
     process.args(["-c", command]);
     process.current_dir(cwd);
     natamux_core::login_path::apply(&mut process);
+    natamux_core::child_env::scrub_command(&mut process);
     if let Err(error) = prepare(&mut process) {
         return Ran {
             code: 1,

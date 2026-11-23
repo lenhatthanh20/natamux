@@ -27,5 +27,6 @@ pub fn view_of(state: &SecurityState) -> SecurityView {
         ignored: state.ignored.clone(),
         warning: state.warning.clone(),
         isolation: None,
+        network: None,
     }
 }

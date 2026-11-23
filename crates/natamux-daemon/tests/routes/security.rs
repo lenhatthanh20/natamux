@@ -163,3 +163,23 @@ async fn a_file_changed_outside_while_running_keeps_strict_tells_and_warns() {
         .await;
     assert!(body["warning"].is_null(), "{body}");
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_body_tells_the_egress_and_that_children_are_not_confined() {
+    let d = daemon("security-network", true).await;
+    let (status, body) = d.call(Method::GET, "/security", Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(body["network"]["egress"], "open");
+    assert_eq!(body["network"]["credentials"], "inherit");
+    assert_eq!(body["network"]["confined"], false);
+    let note = body["network"]["note"].as_str().unwrap_or_default();
+    assert!(note.starts_with("child processes not confined"), "{note}");
+
+    let file = json!({ "strict": true, "network": { "egress": "allowlist", "updater": false } });
+    let (status, body) = d.send(Method::PUT, "/security", Some(TOKEN), &file).await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(body["network"]["egress"], "allowlist");
+    assert_eq!(body["network"]["updater"], false);
+    assert_eq!(body["network"]["credentials"], "strip");
+    assert!(file_text(&d).unwrap_or_default().contains("allowlist"));
+}

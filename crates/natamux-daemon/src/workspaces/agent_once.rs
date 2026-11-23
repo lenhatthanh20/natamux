@@ -111,7 +111,8 @@ pub(crate) fn run_prepared(
     };
     let one_shot = one_shot_command(&run.agent, &run.program, &run.prompt, platform);
     let cwd = run.cwd.to_string_lossy().into_owned();
-    let shell = shell_process(&one_shot.line, &cwd, daemon_env, windows);
+    let daemon_env = natamux_core::child_env::scrub(daemon_env);
+    let shell = shell_process(&one_shot.line, &cwd, &daemon_env, windows);
     let name = name_of(&run.program).to_string();
 
     let mut command = Command::new(&shell.program);

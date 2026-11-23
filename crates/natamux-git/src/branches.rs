@@ -8,6 +8,7 @@ use natamux_proto::projects::repo::{BranchList, ORIGIN_PREFIX};
 use serde_json::{Value, json};
 
 use crate::changes::locale_compare;
+use crate::egress::{RemoteOp, git_remote};
 use crate::exec::{GitError, checked_ref, current_branch, git};
 use crate::graph::FETCH_TIMEOUT;
 
@@ -50,9 +51,12 @@ pub fn list_remote_branches(repo: &Path) -> Result<Vec<String>, GitError> {
     if git(repo, &["remote", "get-url", "origin"], None, &[]).is_err() {
         return Ok(Vec::new());
     }
-    let output = git(
+    let args = |to: &str, _: bool| ["ls-remote", "--heads", to].map(str::to_string).to_vec();
+    let output = git_remote(
         repo,
-        &["ls-remote", "--heads", "origin"],
+        RemoteOp::Fetch,
+        "origin",
+        &args,
         Some(FETCH_TIMEOUT),
         &[],
     )?;

@@ -12,6 +12,7 @@ use natamux_core::js::js_trim;
 use natamux_proto::workspaces::changes::MAX_GRAPH_COMMITS;
 use natamux_proto::workspaces::workspace::{GitGraph, GraphCommit, PushStatus};
 
+use crate::egress::{RemoteOp, git_remote};
 use crate::exec::{GitError, checked_ref, current_branch, git, git_dirs};
 
 /// `FIELD`: the separator of the fields of one log record.
@@ -63,9 +64,19 @@ pub fn fetch_upstream(repo_dir: &Path, branch: &str) {
             repo_dir,
             &["config", "--get", &format!("branch.{branch}.merge")],
         )?;
-        git(
+        let (remote, merge) = (js_trim(&remote), js_trim(&merge));
+        // A fetch of a URL updates no remote-tracking ref by itself, so the pinned call names it.
+        let short = merge.strip_prefix("refs/heads/").unwrap_or(merge);
+        let tracking = format!("+{merge}:refs/remotes/{remote}/{short}");
+        let args = |to: &str, pinned: bool| {
+            let spec = if pinned { tracking.as_str() } else { merge };
+            ["fetch", "--quiet", to, spec].map(str::to_string).to_vec()
+        };
+        git_remote(
             repo_dir,
-            &["fetch", "--quiet", js_trim(&remote), js_trim(&merge)],
+            RemoteOp::Fetch,
+            remote,
+            &args,
             Some(FETCH_TIMEOUT),
             &[],
         )?;
@@ -83,9 +94,16 @@ pub fn fetch_origin_branch(repo_dir: &Path, name: &str) -> bool {
         return false;
     }
     let refspec = format!("+refs/heads/{name}:{local}");
-    let _ = git(
+    let args = |to: &str, _: bool| {
+        ["fetch", "--quiet", "--no-tags", to, refspec.as_str()]
+            .map(str::to_string)
+            .to_vec()
+    };
+    let _ = git_remote(
         repo_dir,
-        &["fetch", "--quiet", "--no-tags", "origin", &refspec],
+        RemoteOp::Fetch,
+        "origin",
+        &args,
         Some(FETCH_TIMEOUT),
         &[],
     );

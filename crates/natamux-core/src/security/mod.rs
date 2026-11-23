@@ -11,6 +11,7 @@ mod ci_push;
 mod decide;
 mod git_harden;
 mod isolation;
+mod network;
 mod settings;
 mod source;
 mod view;
@@ -21,6 +22,10 @@ pub use ci_push::{CI_FORBID_REASON, CiMode, CiPush, ci_mode};
 pub use decide::{Decision, KeyState, key_states, mode_in, tighten, tighten_with_repo};
 pub use git_harden::{harden_git, install_git_hardening};
 pub use isolation::{IsolationSettings, isolation_of, isolation_value, load_isolation};
+pub use network::{
+    Egress, ForcedNetwork, GH_ACTIONS, GIT_ACTIONS, GhRule, GitRule, NetworkSettings, UPDATE_HOSTS,
+    force_network, network, network_for, network_in, network_of, tighten_network,
+};
 pub use settings::{BAD_FILE_WARNING, FIXED_KEYS, SecurityState, read_text, read_value, to_text};
 pub use source::{FILE_NAME, OUTSIDE_CHANGE_WARNING, Source, WRITTEN_NAME, evaluate};
 pub use view::view_of;

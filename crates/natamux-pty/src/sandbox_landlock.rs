@@ -19,6 +19,8 @@ const SYS_ADD_RULE: libc::c_long = 445;
 const SYS_RESTRICT_SELF: libc::c_long = 446;
 const CREATE_RULESET_VERSION: libc::c_long = 1;
 const RULE_PATH_BENEATH: libc::c_long = 1;
+const RULE_NET_PORT: libc::c_long = 2;
+const CONNECT_TCP: u64 = 1 << 1;
 const NO_FLAGS: libc::c_long = 0;
 const ON: libc::c_ulong = 1;
 const UNUSED: libc::c_ulong = 0;
@@ -39,6 +41,14 @@ const READ_RIGHTS: u64 = EXECUTE | READ_FILE | READ_DIR;
 #[repr(C)]
 struct RulesetAttr {
     handled_access_fs: u64,
+    /// ABI 4: the size passed stops before this field when TCP is not handled.
+    handled_access_net: u64,
+}
+
+#[repr(C)]
+struct NetPortAttr {
+    allowed_access: u64,
+    port: u64,
 }
 
 #[repr(C, packed)]
@@ -99,15 +109,23 @@ pub fn build(plan: &IsolationPlan) -> io::Result<Ruleset> {
         ));
     }
     let handled = handled(abi);
+    let tcp = plan.tcp_connect.as_deref().filter(|_| abi >= 4);
     let attr = RulesetAttr {
         handled_access_fs: handled,
+        handled_access_net: if tcp.is_some() { CONNECT_TCP } else { 0 },
+    };
+    // An older kernel knows only the first field.
+    let size = if tcp.is_some() {
+        std::mem::size_of::<RulesetAttr>()
+    } else {
+        std::mem::size_of::<u64>()
     };
     // SAFETY: the attribute lives for the call and its size is given.
     let fd = unsafe {
         libc::syscall(
             SYS_CREATE_RULESET,
             &attr as *const RulesetAttr,
-            std::mem::size_of::<RulesetAttr>(),
+            size,
             NO_FLAGS,
         )
     };
@@ -121,6 +139,9 @@ pub fn build(plan: &IsolationPlan) -> io::Result<Ruleset> {
     }
     for path in &plan.read_write {
         add(&ruleset, path, handled)?;
+    }
+    for port in tcp.unwrap_or_default() {
+        add_port(&ruleset, *port)?;
     }
     Ok(Ruleset(ruleset))
 }
@@ -159,6 +180,31 @@ fn add(ruleset: &OwnedFd, path: &Path, access: u64) -> io::Result<()> {
     Ok(())
 }
 
+fn add_port(ruleset: &OwnedFd, port: u16) -> io::Result<()> {
+    let attr = NetPortAttr {
+        allowed_access: CONNECT_TCP,
+        port: u64::from(port),
+    };
+    // SAFETY: the attribute lives for the call; the ruleset is open.
+    let done = unsafe {
+        libc::syscall(
+            SYS_ADD_RULE,
+            libc::c_long::from(ruleset.as_raw_fd()),
+            RULE_NET_PORT,
+            &attr as *const NetPortAttr,
+            NO_FLAGS,
+        )
+    };
+    if done < 0 {
+        let error = io::Error::last_os_error();
+        return Err(io::Error::new(
+            error.kind(),
+            format!("TCP port {port}: {error}"),
+        ));
+    }
+    Ok(())
+}
+
 /// In the child, between fork and exec: only async-signal-safe calls. NO_NEW_PRIVS is what lets
 /// a process without root turn Landlock on; it also keeps setuid programs such as sudo from
 /// gaining rights.
@@ -193,6 +239,7 @@ mod tests {
     #[test]
     fn the_packed_rule_has_the_size_the_kernel_reads() {
         assert_eq!(std::mem::size_of::<PathBeneathAttr>(), 12);
-        assert_eq!(std::mem::size_of::<RulesetAttr>(), 8);
+        assert_eq!(std::mem::size_of::<RulesetAttr>(), 16);
+        assert_eq!(std::mem::size_of::<NetPortAttr>(), 16);
     }
 }

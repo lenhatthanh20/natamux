@@ -34,7 +34,9 @@ use crate::tasks::errors::TaskError;
 use crate::tasks::service::{TaskService, is_task_ended};
 use crate::tasks::templates::TemplateService;
 use crate::terminals::input_trace::trace_input_at_start;
-use crate::terminals::isolation::{start_isolation, with_hook_files, with_isolation};
+use crate::terminals::isolation::{
+    start_isolation, with_child_env, with_hook_files, with_isolation,
+};
 use crate::terminals::open_shells::{OpenShells, OpenShellsOptions};
 use crate::terminals::service::{TerminalOptions, TerminalService};
 use crate::terminals::session_lifecycle::SpawnPty;
@@ -333,7 +335,8 @@ pub async fn start(
     let cells = Cells::default();
     let bin_dir = config.agents.bin_dir.clone();
     let isolation = start_isolation(&config.data_dir, bin_dir.clone(), &home_of(env));
-    let spawn = with_hook_files(with_isolation(spawn, isolation.clone()), bin_dir);
+    let spawn = with_child_env(with_isolation(spawn, isolation.clone()));
+    let spawn = with_hook_files(spawn, bin_dir);
     let terminals = terminal_service(
         env,
         spawn,

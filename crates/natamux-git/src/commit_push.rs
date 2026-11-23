@@ -1,13 +1,18 @@
 //! Ports `packages/daemon/src/git/commit-push.ts`: commit, push and pull, the CI snapshot, and the
 //! diff that the commit drafter reads.
 
+use std::cell::Cell;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use natamux_core::js::{js_trim, utf16_len};
+use natamux_core::security::{Egress, network_for};
 
-use crate::exec::{GITHUB_CREDENTIALS, GitError, checked_ref, git, with_git_config};
+use crate::egress::{RemoteOp, git_remote};
+use crate::exec::{
+    GITHUB_CREDENTIALS, GitError, checked_ref, current_branch, git, with_git_config,
+};
 use crate::graph::FIELD;
 use crate::rollback::path_batches;
 
@@ -68,20 +73,56 @@ pub fn commit_all(worktree: &Path, message: &str) -> Result<CommitResult, Commit
     })
 }
 
-/// A remote call: when git asks for a password for github.com, it asks the GitHub CLI, which uses
-/// GH_TOKEN or the login of `gh auth login`. Helpers that are set up already come first.
-fn remote(worktree: &Path, args: &[&str]) -> Result<(), GitError> {
+/// A remote call to origin: when git asks for a password for github.com, it asks the GitHub CLI,
+/// which uses GH_TOKEN or the login of `gh auth login`. Helpers that are set up already come
+/// first. Under egress `allowlist` the URL is checked first (`crate::egress`).
+fn remote(
+    worktree: &Path,
+    op: RemoteOp,
+    args: &dyn Fn(&str, bool) -> Vec<String>,
+) -> Result<(), GitError> {
     let env = with_git_config(
         std::env::var("GIT_CONFIG_COUNT").ok().as_deref(),
         &GITHUB_CREDENTIALS,
     );
-    git(worktree, args, Some(PUSH_TIMEOUT), &env)?;
+    git_remote(worktree, op, "origin", args, Some(PUSH_TIMEOUT), &env)?;
     Ok(())
+}
+
+fn owned(args: &[&str]) -> Vec<String> {
+    args.iter().map(|arg| arg.to_string()).collect()
 }
 
 pub fn push_branch(worktree: &Path, branch: &str) -> Result<(), GitError> {
     let branch = checked_ref(branch)?;
-    remote(worktree, &["push", "--set-upstream", "origin", branch])
+    let pinned = Cell::new(false);
+    let target = format!("refs/heads/{branch}:refs/heads/{branch}");
+    remote(worktree, RemoteOp::Push, &|to, is_pinned| {
+        pinned.set(is_pinned);
+        if is_pinned {
+            owned(&["push", to, &target])
+        } else {
+            owned(&["push", "--set-upstream", "origin", branch])
+        }
+    })?;
+    if pinned.get() {
+        // A push to a URL updates no remote-tracking ref and sets no upstream by itself.
+        let tracking = format!("refs/remotes/origin/{branch}");
+        run(
+            worktree,
+            &["update-ref", &tracking, &format!("refs/heads/{branch}")],
+        )?;
+        run(
+            worktree,
+            &["config", &format!("branch.{branch}.remote"), "origin"],
+        )?;
+        let merge = format!("refs/heads/{branch}");
+        run(
+            worktree,
+            &["config", &format!("branch.{branch}.merge"), &merge],
+        )?;
+    }
+    Ok(())
 }
 
 /// Brings in the new commits of the branch's upstream, such as the merged pull requests of
@@ -90,7 +131,35 @@ pub fn pull_fast_forward(worktree: &Path) -> Result<bool, GitError> {
     if run(worktree, &["rev-parse", "--abbrev-ref", "@{upstream}"]).is_err() {
         return Ok(false);
     }
-    remote(worktree, &["pull", "--ff-only", "--quiet"])?;
+    if network_for(worktree).egress != Egress::Allowlist {
+        remote(worktree, RemoteOp::Fetch, &|_, _| {
+            owned(&["pull", "--ff-only", "--quiet"])
+        })?;
+        return Ok(true);
+    }
+    // Under the allowlist: a fetch of the checked URL, then a fast-forward to what came.
+    let branch = current_branch(worktree).unwrap_or_default();
+    let name = run(
+        worktree,
+        &["config", "--get", &format!("branch.{branch}.remote")],
+    )?;
+    let merge = run(
+        worktree,
+        &["config", "--get", &format!("branch.{branch}.merge")],
+    )?;
+    let (name, merge) = (js_trim(&name).to_string(), js_trim(&merge).to_string());
+    let short = merge.strip_prefix("refs/heads/").unwrap_or(&merge);
+    let refspec = format!("+{merge}:refs/remotes/{name}/{short}");
+    // Only the pinned call runs here; it sets its own credential helper.
+    git_remote(
+        worktree,
+        RemoteOp::Fetch,
+        &name,
+        &|to, _| owned(&["fetch", "--quiet", to, &refspec]),
+        Some(PUSH_TIMEOUT),
+        &[],
+    )?;
+    run(worktree, &["merge", "--ff-only", "--quiet", "FETCH_HEAD"])?;
     Ok(true)
 }
 
@@ -245,7 +314,9 @@ pub fn read_commit_diff(worktree: &Path, max_chars: usize) -> Result<String, Com
 /// Puts a commit on a branch of origin, in place of what is there.
 pub fn push_ref(worktree: &Path, sha: &str, ref_name: &str) -> Result<(), GitError> {
     let target = format!("{sha}:refs/heads/{ref_name}");
-    remote(worktree, &["push", "--force", "--quiet", "origin", &target])
+    remote(worktree, RemoteOp::Push, &|to, _| {
+        owned(&["push", "--force", "--quiet", to, &target])
+    })
 }
 
 /// The branches of origin that only hold CI snapshots. Natamux pushes to and deletes only these.
@@ -258,7 +329,9 @@ pub fn delete_remote_ref(cwd: &Path, ref_name: &str) -> Result<(), GitError> {
             "Natamux deletes only CI branches ({CI_REF_PREFIX}...), not {ref_name:?}"
         )));
     }
-    remote(cwd, &["push", "--quiet", "origin", "--delete", ref_name])
+    remote(cwd, RemoteOp::Push, &|to, _| {
+        owned(&["push", "--quiet", to, "--delete", ref_name])
+    })
 }
 
 #[cfg(test)]

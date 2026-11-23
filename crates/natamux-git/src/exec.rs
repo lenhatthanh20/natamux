@@ -42,31 +42,7 @@ pub fn checked_ref(name: &str) -> Result<&str, GitError> {
     Ok(name)
 }
 
-/// `withGitConfig`: the `GIT_CONFIG_*` variables that add `entries` after the ones the
-/// environment has (`current_count` is its `GIT_CONFIG_COUNT`).
-pub fn with_git_config(
-    current_count: Option<&str>,
-    entries: &[(&str, &str)],
-) -> Vec<(String, String)> {
-    let start: usize = current_count
-        .and_then(|count| count.trim().parse().ok())
-        .unwrap_or(0);
-    let mut env = vec![(
-        "GIT_CONFIG_COUNT".to_string(),
-        (start + entries.len()).to_string(),
-    )];
-    for (offset, (key, value)) in entries.iter().enumerate() {
-        env.push((
-            format!("GIT_CONFIG_KEY_{}", start + offset),
-            key.to_string(),
-        ));
-        env.push((
-            format!("GIT_CONFIG_VALUE_{}", start + offset),
-            value.to_string(),
-        ));
-    }
-    env
-}
+pub use natamux_core::child_env::with_git_config;
 
 static SPAWNS: AtomicU64 = AtomicU64::new(0);
 
@@ -116,7 +92,19 @@ fn run(
     timeout: Option<Duration>,
     env: &[(String, String)],
 ) -> Result<Vec<u8>, GitError> {
-    if let Some(refused) = crate::offline::refusal(args) {
+    run_checked(cwd, args, timeout, env, false)
+}
+
+/// `pinned`: a remote call whose URL `crate::egress` resolved and checked, the only kind that
+/// passes the allowlist backstop.
+pub(crate) fn run_checked(
+    cwd: &Path,
+    args: &[&str],
+    timeout: Option<Duration>,
+    env: &[(String, String)],
+    pinned: bool,
+) -> Result<Vec<u8>, GitError> {
+    if let Some(refused) = crate::offline::backstop(cwd, args, pinned) {
         return Err(refused);
     }
     let mut command = Command::new("git");

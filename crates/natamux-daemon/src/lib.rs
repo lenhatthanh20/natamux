@@ -86,6 +86,7 @@ pub mod shared {
 pub mod terminals {
     pub mod input_trace;
     pub mod isolation;
+    pub mod isolation_network;
     pub mod isolation_plan;
     pub mod limits;
     pub mod login_path;

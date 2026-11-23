@@ -1,4 +1,10 @@
-//! The offline switch for git: a call that talks to a remote is refused before git starts.
+//! The offline switch for git: a call that talks to a remote is refused before git starts. Under
+//! egress `loopback` the same; under `allowlist` only a call through `crate::egress` (its URL
+//! resolved and checked) may run.
+
+use std::path::Path;
+
+use natamux_core::security::{Egress, network_for};
 
 use crate::exec::GitError;
 
@@ -46,6 +52,22 @@ pub fn refusal(args: &[&str]) -> Option<GitError> {
             "git {name} failed: offline mode: the network is not reached"
         ))
     })
+}
+
+/// The refusal of a network call by the offline switch or the egress setting, or None.
+pub fn backstop(cwd: &Path, args: &[&str], pinned: bool) -> Option<GitError> {
+    let name = network_command(args)?;
+    if let Some(refused) = refusal(args) {
+        return Some(refused);
+    }
+    let reason = match network_for(cwd).egress {
+        Egress::Open => return None,
+        Egress::Allowlist if pinned => return None,
+        Egress::Allowlist => "egress policy: a remote call goes only through a checked remote",
+        Egress::Loopback => "egress policy: loopback only, so the network is not reached",
+    };
+    eprintln!("{reason} (git {name})");
+    Some(GitError(format!("git {name} failed: {reason}")))
 }
 
 #[cfg(test)]
