@@ -12,6 +12,7 @@ Nothing. Natamux sends no usage data, crash reports or analytics anywhere. Its o
 - Worktrees: in `data/worktrees/`, or the folder you set.
 - The daemon token, the update setting, the offline setting, downloaded updates and the logs of the desktop app: in its user data folder (`~/Library/Application Support/Natamux` on macOS, `%APPDATA%\Natamux` on Windows, `~/.config/Natamux` on Linux). `settings.json` there holds the update setting and the offline setting.
 - App preferences (theme, layout): in `view.json` in the desktop app's user data folder.
+- With isolation on (Linux): `data/sandbox/<task>/` holds the task's launch scripts, a git config with your git name and email, and the private `tmp` folder of its terminals. It goes with the task. `data/sandbox/no-hooks/` is an empty folder for the daemon's own git.
 
 `NATAMUX_INPUT_TRACE=1` makes the daemon write every key typed in a terminal, passwords too, to its log. Leave it unset unless you debug typing. In Strict mode the trace is blocked: the daemon logs only `input trace blocked by Strict mode`, and a trace that was on stops at the next key once Strict mode is on.
 

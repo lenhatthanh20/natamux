@@ -1,6 +1,7 @@
 //! Removes every file a task left in the data folder: its task file, events, usage, shells,
-//! screens, archive and attachments, and its launch and stage-command scripts. A delete writes a
-//! marker first, so a crash in the middle is finished at the next start.
+//! screens, archive and attachments, its launch and stage-command scripts and its sandbox
+//! folder. A delete writes a marker first, so a crash in the middle is finished at the next
+//! start.
 
 use std::fs;
 use std::io;
@@ -46,6 +47,13 @@ pub fn task_paths(data_dir: &Path, task_id: &str) -> io::Result<Vec<PathBuf>> {
             .filter(|name| task_of_script(name) == Some(task_id))
             .map(|name| data_dir.join(name)),
     );
+    // The private folder of an isolated task: launch scripts, git config, tmp.
+    let sandbox = data_dir
+        .join(crate::terminals::isolation::SANDBOX_DIR)
+        .join(task_id);
+    if sandbox.exists() {
+        paths.push(sandbox);
+    }
     paths.sort();
     Ok(paths)
 }

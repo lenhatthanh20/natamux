@@ -48,6 +48,29 @@ fn text_names_the_mode_the_warning_and_each_key() {
 }
 
 #[test]
+fn text_tells_the_isolation_of_the_daemon_run() {
+    let ready = json!({ "strict": false, "isolation":
+        { "mode": "required", "backend": "landlock", "abi": 5, "ok": true, "reason": null } });
+    let result = run(&["security"], move |_| json_reply(ready.clone()));
+    assert_eq!(
+        result.stdout,
+        "Security mode: Personal\nIsolation: required (landlock, ABI 5)\n"
+    );
+    let broken = json!({ "strict": false, "isolation":
+        { "mode": "required", "backend": "none", "abi": null, "ok": false, "reason": "No Landlock" } });
+    let result = run(&["security"], move |_| json_reply(broken.clone()));
+    assert!(
+        result
+            .stdout
+            .ends_with("Isolation: required, cannot run: No Landlock\n")
+    );
+    let off = json!({ "strict": false, "isolation":
+        { "mode": "off", "backend": "none", "abi": null, "ok": false, "reason": "No Landlock" } });
+    let result = run(&["security"], move |_| json_reply(off.clone()));
+    assert!(result.stdout.ends_with("Isolation: off\n"));
+}
+
+#[test]
 fn takes_no_argument() {
     let result = run(&["security", "off"], |_| json_reply(json!({})));
     assert_eq!(result.code, EXIT_USAGE);

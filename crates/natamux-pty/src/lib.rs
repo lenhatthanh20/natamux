@@ -9,6 +9,10 @@ pub mod no_proxy;
 pub mod process_table;
 pub mod process_tree;
 mod pty;
+#[cfg(target_os = "linux")]
+mod sandbox_landlock;
+pub mod sandbox_plan;
+pub mod sandbox_sweep;
 pub mod shell_command;
 #[cfg(unix)]
 mod unix;
@@ -17,3 +21,4 @@ mod windows;
 
 pub use process_table::{ProcessTable, TableReader};
 pub use pty::{Env, Pty, PtyEvents, Signal, SpawnOptions, spawn_shell};
+pub use sandbox_plan::IsolationPlan;

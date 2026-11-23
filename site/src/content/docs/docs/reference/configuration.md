@@ -421,6 +421,19 @@ Strict mode is not part of `.natamux.json`: it is a setting of the app, kept in 
 - A file that cannot be read turns Strict mode on with its defaults, with a warning.
 - `natamux security` prints the state. See [SECURITY.md](https://github.com/lenhatthanh20/natamux/blob/main/SECURITY.md#strict-mode) for what Strict mode does not stop.
 
+### Isolation (`isolation` in `security.json`)
+
+Isolation is its own setting, not set by Strict mode. Edit `security.json` and restart Natamux; a save on the Security page keeps it.
+
+| Key | Values | Meaning |
+|---|---|---|
+| `isolation.mode` | `off` (default) or `required` | `required`: every task terminal, stage check command and the commit-message agent runs under Landlock, or does not run. Linux with Landlock and Claude Code only. |
+| `isolation.extraReadOnly` | list of absolute paths | More folders an isolated shell may read. |
+| `isolation.extraReadWrite` | list of absolute paths | More folders an isolated shell may write. |
+| `isolation.envAllow` | list of names | More variables an isolated shell keeps. |
+
+See [SECURITY.md](https://github.com/lenhatthanh20/natamux/blob/main/SECURITY.md#isolation-linux-claude-code) for what is granted and the limits.
+
 ## Examples
 
 ### Drop the planning stages

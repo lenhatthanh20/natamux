@@ -5,7 +5,9 @@ use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use natamux_core::security::{SecurityState, Source, installed, read_value, to_text, view_of};
+use natamux_core::security::{
+    SecurityState, Source, installed, isolation_of, isolation_value, read_value, to_text, view_of,
+};
 use serde_json::Value;
 
 use crate::shared::event_bus::{DaemonMessage, EventBus};
@@ -46,7 +48,7 @@ impl SecurityStore {
 
     /// The save of `PUT /security`.
     pub fn save(&self, body: &Value) -> Result<SecurityState, String> {
-        let text = checked_text(body)?;
+        let text = with_isolation_kept(checked_text(body)?, body, self.source.path());
         self.source
             .write(&text)
             .map_err(|error| format!("security.json could not be written: {error}"))
@@ -70,6 +72,29 @@ pub fn checked_text(body: &Value) -> Result<String, String> {
         ));
     }
     Ok(to_text(&state.mode))
+}
+
+/// `isolation` is its own setting, which the Security page does not show: a save keeps the
+/// file's own unless the body sets it. It applies at the next start.
+pub fn with_isolation_kept(text: String, body: &Value, file: &Path) -> String {
+    let kept = match body.get("isolation") {
+        Some(_) => Some(isolation_of(body)),
+        None => std::fs::read_to_string(file)
+            .ok()
+            .and_then(|old| serde_json::from_str::<Value>(&old).ok())
+            .filter(|old| old.get("isolation").is_some())
+            .map(|old| isolation_of(&old)),
+    };
+    let Some(settings) = kept else {
+        return text;
+    };
+    let Ok(mut value) = serde_json::from_str::<Value>(&text) else {
+        return text;
+    };
+    if let Some(keys) = value.as_object_mut() {
+        keys.insert("isolation".into(), isolation_value(&settings));
+    }
+    serde_json::to_string_pretty(&value).unwrap_or(text)
 }
 
 /// The body of `GET /security` and `PUT /security`. No secrets: task tokens may read it.

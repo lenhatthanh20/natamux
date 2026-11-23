@@ -3,6 +3,7 @@ use std::io;
 use std::path::PathBuf;
 
 use crate::process_table::{ProcessTable, TableReader};
+use crate::sandbox_plan::IsolationPlan;
 
 /// The environment of a shell, whole: nothing of the daemon's own environment is added to it.
 pub type Env = BTreeMap<String, String>;
@@ -12,6 +13,8 @@ pub struct SpawnOptions {
     pub rows: u16,
     pub cwd: PathBuf,
     pub env: Env,
+    /// Set: the shell runs isolated, or does not start at all.
+    pub isolation: Option<IsolationPlan>,
 }
 
 /// The signals the daemon sends to a shell. Windows has none: any kill ends the shell and what

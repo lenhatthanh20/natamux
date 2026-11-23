@@ -23,6 +23,25 @@ pub struct SecurityView {
     pub ignored: Vec<String>,
     #[serde(default)]
     pub warning: Option<String>,
+    /// How task shells are isolated while this daemon runs. None from an older daemon.
+    #[serde(default)]
+    pub isolation: Option<IsolationView>,
+}
+
+/// `isolation` of `GET /security`: the mode the daemon started with (a change needs a restart),
+/// the backend and whether it can run here.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct IsolationView {
+    /// `off` or `required`.
+    pub mode: String,
+    /// `landlock`, or `none` where no backend exists.
+    pub backend: String,
+    #[serde(default)]
+    pub abi: Option<u32>,
+    /// Required and able to run. Off is never ok: nothing is isolated.
+    pub ok: bool,
+    #[serde(default)]
+    pub reason: Option<String>,
 }
 
 impl SecurityView {

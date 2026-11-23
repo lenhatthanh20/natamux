@@ -69,3 +69,23 @@ fn tells_each_change_once_and_an_outside_edit_with_its_warning() {
         "{last}"
     );
 }
+
+#[test]
+fn a_save_keeps_the_isolation_of_the_file_unless_the_body_sets_it() {
+    let root = folder("isolation");
+    let file = root.join("security.json");
+    std::fs::write(&file, r#"{"strict":false,"isolation":{"mode":"required"}}"#).unwrap();
+    let store = SecurityStore::open(&root);
+    store.save(&json!({ "strict": true })).unwrap();
+    let saved: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+    assert_eq!(saved["isolation"]["mode"], "required");
+    assert_eq!(saved["strict"], true);
+    store
+        .save(&json!({ "strict": true, "isolation": { "mode": "off" } }))
+        .unwrap();
+    let saved: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+    assert_eq!(saved["isolation"]["mode"], "off");
+    let plain = with_isolation_kept("{}".into(), &json!({}), &root.join("missing.json"));
+    assert_eq!(plain, "{}");
+    std::fs::remove_dir_all(&root).unwrap();
+}

@@ -85,6 +85,8 @@ pub mod shared {
 }
 pub mod terminals {
     pub mod input_trace;
+    pub mod isolation;
+    pub mod isolation_plan;
     pub mod limits;
     pub mod login_path;
     pub mod open_shells;
@@ -108,6 +110,7 @@ pub mod stages {
     pub mod errors;
     mod gate;
     mod gate_ci;
+    pub mod isolated_command;
     pub mod launcher;
     mod launcher_resume;
     pub mod run;

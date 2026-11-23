@@ -57,6 +57,7 @@ fn shell(name: &str, extra: &[(&str, &str)]) -> Shell {
         rows: 24,
         cwd: home.clone(),
         env,
+        isolation: None,
     };
     let mut pty = spawn_shell(options).unwrap();
     let output = Arc::new(Mutex::new(Vec::new()));

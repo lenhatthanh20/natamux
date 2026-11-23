@@ -71,6 +71,7 @@ pub fn spawn_session(new: NewSession<'_>) -> Result<SessionRef, TerminalError> {
         rows: new.size.rows,
         cwd: new.cwd.to_path_buf(),
         env,
+        isolation: None,
     })
     .map_err(|error| TerminalError::Spawn(error.to_string()))?;
     let program = pty.foreground();

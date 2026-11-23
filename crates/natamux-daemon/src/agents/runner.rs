@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use natamux_agents::custom::{agent_kind, custom_agent};
 use natamux_agents::hook_files::{WorkspaceHooks, prepare_workspace};
@@ -31,10 +31,14 @@ use crate::projects::repo_trust_worktree::TrustedOf;
 use crate::shared::jobs::system_clock;
 use crate::stages::launcher::write_private;
 use crate::tasks::service::TaskService;
+use crate::terminals::isolation::Isolation;
 use crate::terminals::limits::MAIN_TERMINAL;
 use crate::terminals::service::TerminalService;
 use crate::terminals::types::DEFAULT_SIZE;
 use crate::workspaces::setup_script::WORKSPACE_WARNING_EVENT;
+
+#[path = "runner_isolation.rs"]
+mod runner_isolation;
 
 /// On Windows the program of a terminal is always the shell, so the end of an agent cannot be
 /// seen there. Its launch line sets these window titles, which reach the terminal as escape
@@ -159,6 +163,7 @@ pub struct AgentRunner {
     /// First prompts of agents that take none on their command line.
     pasted: Arc<PastedPrompts>,
     watch: HookConfigWatch,
+    isolation: OnceLock<Arc<Isolation>>,
 }
 
 impl AgentRunner {
@@ -196,6 +201,7 @@ impl AgentRunner {
         AgentRunner {
             pasted,
             watch: HookConfigWatch::default(),
+            isolation: OnceLock::new(),
             gemini_settings_path: options
                 .gemini_settings_path
                 .clone()
@@ -215,14 +221,6 @@ impl AgentRunner {
     /// The first prompts that wait to be pasted.
     pub fn pasted_prompts(&self) -> &Arc<PastedPrompts> {
         &self.pasted
-    }
-
-    fn platform(&self) -> Platform {
-        if self.options.windows {
-            Platform::Windows
-        } else {
-            Platform::Posix
-        }
     }
 
     /// Where the agents keep their trusted folders.
@@ -256,6 +254,7 @@ impl AgentRunner {
         if !is_launchable(agent) {
             return Err(AgentError::Unknown(agent.into()));
         }
+        self.check_isolation(agent)?;
         let tasks = &self.options.tasks;
         let task = tasks.get_task(task_id)?;
         let waiting = waiting_on(&task, &tasks.list_tasks(None)?);
@@ -471,14 +470,13 @@ impl AgentRunner {
         let io = |error: std::io::Error| {
             AgentError::Task(crate::tasks::errors::TaskError::Failed(error.to_string()))
         };
-        std::fs::create_dir_all(&self.launch_dir).map_err(io)?;
+        let launch_dir = self.launch_dir_of(task_id);
+        std::fs::create_dir_all(&launch_dir).map_err(io)?;
         let suffix = match terminal {
             None | Some("1") => String::new(),
             Some(terminal) => format!("-{terminal}"),
         };
-        let script = self
-            .launch_dir
-            .join(format!("agent-launch-{task_id}{suffix}.sh"));
+        let script = launch_dir.join(format!("agent-launch-{task_id}{suffix}.sh"));
         let path = self
             .options
             .bin_dir

@@ -29,7 +29,7 @@ use crate::terminals::limits::MAIN_TERMINAL;
 use crate::terminals::open_shells::OpenShells;
 use crate::terminals::service::TerminalService;
 use crate::terminals::types::DEFAULT_SIZE;
-use crate::workspaces::agent_once::default_run_agent_once;
+use crate::workspaces::agent_once::run_agent_once_with;
 use crate::workspaces::branch_sync::sync_branch;
 use crate::workspaces::errors::WorkspaceError;
 use crate::workspaces::service::{WorkspaceOptions, WorkspaceService};
@@ -122,7 +122,7 @@ pub(super) fn workspace_service(
     let linking = Arc::clone(linker);
     options.pull_request_body =
         Arc::new(move |task: &Task| linking.pull_request_body(task).map_err(link_failure));
-    options.run_agent_once = default_run_agent_once();
+    options.run_agent_once = run_agent_once_with(agents.isolation());
     options.trust_paths = Some(agents.trust_paths().clone());
     WorkspaceService::new(options)
 }

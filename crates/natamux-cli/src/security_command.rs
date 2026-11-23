@@ -55,5 +55,23 @@ pub fn text_of(body: &Value) -> String {
             names.join(", ")
         ));
     }
+    if let Some(line) = isolation_line(&body["isolation"]) {
+        text.push_str(&line);
+    }
     text
+}
+
+/// `Isolation: required (landlock, ABI 5)`, or why it cannot run. None from an older daemon.
+fn isolation_line(isolation: &Value) -> Option<String> {
+    let mode = isolation["mode"].as_str()?;
+    let line = match (isolation["ok"].as_bool(), isolation["reason"].as_str()) {
+        (Some(true), _) => format!(
+            "Isolation: {mode} ({}, ABI {})\n",
+            isolation["backend"].as_str().unwrap_or_default(),
+            isolation["abi"]
+        ),
+        (_, Some(reason)) if mode != "off" => format!("Isolation: {mode}, cannot run: {reason}\n"),
+        _ => format!("Isolation: {mode}\n"),
+    };
+    Some(line)
 }

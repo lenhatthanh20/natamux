@@ -29,6 +29,7 @@ fn exclude_file(worktree: &Path) -> Option<PathBuf> {
         Some(common) => common,
         None => {
             let mut git = Command::new("git");
+            natamux_core::security::harden_git(&mut git);
             git.args(["rev-parse", "--git-common-dir"])
                 .current_dir(worktree)
                 .stdin(Stdio::null())
@@ -59,6 +60,7 @@ pub fn is_excluded(worktree: &Path, path: &str) -> bool {
 /// Whether git tracks `path` in `worktree`. No git, or not a repository: not tracked.
 pub fn is_tracked(worktree: &Path, path: &str) -> bool {
     let mut git = Command::new("git");
+    natamux_core::security::harden_git(&mut git);
     git.args(["ls-files", "--error-unmatch", "--", path])
         .current_dir(worktree)
         .stdin(Stdio::null())

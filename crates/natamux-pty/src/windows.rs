@@ -29,6 +29,12 @@ enum Input {
 }
 
 pub fn spawn(options: SpawnOptions) -> io::Result<Box<dyn Pty>> {
+    if options.isolation.is_some() {
+        return Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            crate::sandbox_plan::UNSUPPORTED,
+        ));
+    }
     let (program, args) = shell_command(&options.env, true, &|_| false);
     let config = Options {
         shell: Some(Shell::new(program, args)),
