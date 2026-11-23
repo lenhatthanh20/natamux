@@ -22,7 +22,7 @@ use natamux_stages::ci::{CiCheck, NoCi};
 use serde_json::{Map, Value, json};
 
 use crate::agents::runner::AgentRunner;
-use crate::projects::repo_trust::TrustedOf;
+use crate::projects::repo_trust_worktree::{TrustedOf, trust_always};
 use crate::shared::event_bus::EventBus;
 use crate::shared::jobs::{Clock, Jobs, system_clock};
 use crate::shared::scheduler::TimerId;
@@ -102,7 +102,7 @@ impl StageRunOptions {
             home,
             open_shells: None,
             end_shell_grace_ms: END_SHELL_GRACE_MS,
-            trusted_of: Arc::new(|_| true),
+            trusted_of: trust_always(true),
             stage_tickets: Arc::default(),
         }
     }
@@ -342,9 +342,10 @@ impl StageRun {
         (self.options.settings_of)(task.repo.as_deref())
     }
 
-    /// Whether the commands of the task's project may run.
+    /// Whether the commands of the task's project may run, as its worktree is now.
     pub fn repo_trusted(&self, task: &Task) -> bool {
-        (self.options.trusted_of)(task.repo.as_deref())
+        let workspace = task.workspace.as_deref().map(Path::new);
+        (self.options.trusted_of)(task.repo.as_deref(), workspace).is_trusted()
     }
 
     /// A path condition that runs a command of a project that is not approved fails the move:

@@ -25,8 +25,26 @@ pub fn title(name: &str) -> String {
 /// The dialog opens only when there is something to approve; the daemon approves a project with
 /// no commands on its own.
 pub fn needs_review(view: &RepoTrustView) -> bool {
-    !view.trusted
-        && (!view.commands.is_empty() || !view.setup.is_empty() || !view.agent_files.is_empty())
+    let something = !view.commands.is_empty()
+        || !view.setup.is_empty()
+        || !view.agent_files.is_empty()
+        || !view.changed.is_empty()
+        || view.unverifiable.is_some();
+    !view.trusted && something
+}
+
+/// Over the commands: what changed since the last approval, or why nothing can be approved.
+pub fn changed_note(view: &RepoTrustView) -> Option<String> {
+    if let Some(reason) = &view.unverifiable {
+        return Some(format!("This folder cannot be approved: {reason}"));
+    }
+    if view.changed.is_empty() {
+        return None;
+    }
+    Some(format!(
+        "Changed since the last approval: {}",
+        view.changed.join(", ")
+    ))
 }
 
 /// The name the dialog shows; the id while the project list has not caught up with an add.

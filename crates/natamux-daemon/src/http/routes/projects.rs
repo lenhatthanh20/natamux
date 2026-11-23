@@ -1,7 +1,7 @@
 //! The project routes (`routes/projects.ts`): the list, add and remove of projects, their
 //! settings and skills, and the branches of a repository, which a new workspace can start from.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use http_body_util::Full;
@@ -20,6 +20,7 @@ use crate::http::routes::workspace_files::if_match;
 use crate::http::routes::workspaces::answer;
 use crate::http::server::{AppState, query_value};
 use crate::projects::errors::RepoError;
+use crate::projects::repos::DEFAULT_REPO;
 use crate::shared::event_bus::DaemonMessage;
 
 /// `repoQuerySchema`: the project, by id; none is the default one.
@@ -172,24 +173,44 @@ pub async fn put_settings(
     .await
 }
 
-/// `GET /repos/:id/trust`: the commands of a project, for the user to review.
-pub async fn get_trust(state: Arc<AppState>, id: String, by_agent: bool) -> Answer {
+/// `?task=<id>`: the worktree of a task of project `id`, where its agent reads its config.
+fn task_folder(state: &AppState, id: &str, query: &str) -> Result<Option<PathBuf>, RepoError> {
+    let task = query_value(query, "task");
+    let Some(task_id) = task.as_ref().and_then(Value::as_str) else {
+        return Ok(None);
+    };
+    let task = state.tasks.get_task(task_id);
+    let task = task.map_err(|_| RepoError::NotFound(format!("Task {task_id} not found")))?;
+    if task.repo.as_deref().unwrap_or(DEFAULT_REPO) != id {
+        return Err(RepoError::Input(format!("{task_id} is not a task of {id}")));
+    }
+    let workspace = task
+        .workspace
+        .ok_or_else(|| RepoError::Input(format!("{task_id} has no worktree yet")))?;
+    Ok(Some(PathBuf::from(workspace)))
+}
+
+/// `GET /repos/:id/trust[?task=<id>]`: the commands of a project, for the user to review, read
+/// in the task's worktree when one is named.
+pub async fn get_trust(state: Arc<AppState>, id: String, query: String, by_agent: bool) -> Answer {
     if by_agent {
         return forbidden("review project commands");
     }
     run(StatusCode::OK, move || {
-        let view = state.repos.trust_view(&repo_param(&id)?)?;
+        let id = repo_param(&id)?;
+        let folder = task_folder(&state, &id, &query)?;
+        let view = state.repos.trust_view_in(&id, folder.as_deref())?;
         Ok(Some(json!(view)))
     })
     .await
 }
 
-/// `POST /repos/:id/trust` with `{hash}`: approves the commands the user saw. 409 when they
-/// changed since.
+/// `POST /repos/:id/trust[?task=<id>]` with `{hash}`: approves the commands the user saw, or
+/// the digest of the task's worktree. 409 when they changed since.
 pub async fn post_trust(
     state: Arc<AppState>,
     id: String,
-    body: Option<Value>,
+    (body, query): (Option<Value>, String),
     by_agent: bool,
 ) -> Answer {
     if by_agent {
@@ -206,7 +227,9 @@ pub async fn post_trust(
         ));
     };
     run(StatusCode::OK, move || {
-        let view = state.repos.approve(&repo_param(&id)?, &hash)?;
+        let id = repo_param(&id)?;
+        let folder = task_folder(&state, &id, &query)?;
+        let view = state.repos.approve_in(&id, folder.as_deref(), &hash)?;
         Ok(Some(json!(view)))
     })
     .await

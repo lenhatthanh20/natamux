@@ -14,6 +14,7 @@ fn untrusted(platform: Platform) -> LaunchOptions {
         workspace: Some("/w/T-0001".into()),
         trust: false,
         workspace_hooks: false,
+        bypass_hook_trust: true,
     }
 }
 
@@ -50,4 +51,20 @@ fn finds_a_quoted_no_alt_screen_word_among_the_extra_words_of_codex() {
     };
     let codex = launch_command("codex", &options);
     assert_eq!(codex.matches("--no-alt-screen").count(), 1, "{codex}");
+}
+
+// T-0373: Strict mode passes Codex's hook trust bypass only for an approved digest.
+#[test]
+fn gives_codex_the_hook_trust_bypass_only_when_asked() {
+    let with = launch_command("codex", &untrusted(Platform::Posix));
+    assert!(with.contains("--dangerously-bypass-hook-trust"), "{with}");
+    let options = LaunchOptions {
+        bypass_hook_trust: false,
+        ..untrusted(Platform::Posix)
+    };
+    let without = launch_command("codex", &options);
+    assert!(
+        !without.contains("--dangerously-bypass-hook-trust"),
+        "{without}"
+    );
 }

@@ -50,6 +50,7 @@ POST /stage
 POST /agent
 POST /agent/message
 POST /agent/reopen
+POST /launch-check
 POST /workspace
 POST /commit
 POST /rollback

@@ -68,3 +68,52 @@ fn needs_trust_and_a_project_id() {
         assert!(result.calls.is_empty());
     }
 }
+
+// T-0373: the trust of a task's worktree, and the check a Strict launch script runs.
+#[test]
+fn reads_and_approves_the_worktree_of_a_task() {
+    let result = run(&["repo", "trust", "my-app", "--task", "T-7"], |_| {
+        json_reply(view(false))
+    });
+    assert_eq!(result.code, EXIT_OK, "{}", result.stderr);
+    assert_eq!(
+        result.lines(),
+        ["GET http://127.0.0.1:4317/repos/my-app/trust?task=T-7"]
+    );
+    assert!(
+        result
+            .stdout
+            .contains("natamux repo trust my-app --task T-7 --approve ab12")
+    );
+}
+
+#[test]
+fn verify_launch_passes_only_when_the_daemon_says_the_digest_is_the_same() {
+    let argv = ["repo", "verify-launch", "--task", "T-7", "--digest", "d1"];
+    let passed = run(&argv, |_| json_reply(json!({ "ok": true })));
+    assert_eq!(passed.code, EXIT_OK, "{}", passed.stderr);
+    assert_eq!(
+        passed.lines(),
+        ["POST http://127.0.0.1:4317/tasks/T-7/launch-check"]
+    );
+    assert_eq!(passed.calls[0].json().unwrap(), json!({ "digest": "d1" }));
+    assert_eq!(passed.stdout, "");
+
+    let changed = json!({ "error": "conflict", "message": "The agent config changed." });
+    let refused = run(&argv, move |_| json_status(409, changed.clone()));
+    assert_eq!(refused.code, EXIT_FAILED);
+    assert!(refused.stderr.contains("The agent config changed."));
+}
+
+#[test]
+fn verify_launch_needs_a_task_and_a_digest() {
+    for argv in [
+        &["repo", "verify-launch", "--task", "T-7"][..],
+        &["repo", "verify-launch", "--digest", "d1"],
+        &["repo", "verify-launch", "--task", "nope", "--digest", "d1"],
+    ] {
+        let result = run(argv, |_| json_reply(json!({ "ok": true })));
+        assert_eq!(result.code, EXIT_USAGE, "{argv:?}");
+        assert!(result.calls.is_empty());
+    }
+}

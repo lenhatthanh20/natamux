@@ -21,6 +21,8 @@ fn view(trusted: bool, commands: usize, scripts: usize) -> RepoTrustView {
             })
             .collect(),
         agent_files: Vec::new(),
+        changed: Vec::new(),
+        unverifiable: None,
     }
 }
 
@@ -62,4 +64,27 @@ fn the_name_comes_from_the_project_list_or_falls_back_to_the_id() {
 #[test]
 fn the_title_names_the_project() {
     assert_eq!(title("My Shop"), "Approve the commands of My Shop?");
+}
+
+#[test]
+fn names_the_changed_files_or_why_the_folder_cannot_be_checked() {
+    assert_eq!(changed_note(&view(false, 1, 0)), None);
+    let changed = RepoTrustView {
+        changed: vec![".mcp.json".into(), ".claude/agents/x.md".into()],
+        ..view(false, 0, 0)
+    };
+    assert_eq!(
+        changed_note(&changed).as_deref(),
+        Some("Changed since the last approval: .mcp.json, .claude/agents/x.md")
+    );
+    assert!(needs_review(&changed));
+    let link = RepoTrustView {
+        unverifiable: Some(".mcp.json is a link".into()),
+        ..view(false, 0, 0)
+    };
+    assert_eq!(
+        changed_note(&link).as_deref(),
+        Some("This folder cannot be approved: .mcp.json is a link")
+    );
+    assert!(needs_review(&link));
 }

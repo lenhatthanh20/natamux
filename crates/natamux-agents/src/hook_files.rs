@@ -14,6 +14,7 @@ use natamux_proto::agents::claude_code::{
 };
 use serde_json::{Map, Value, json};
 
+use crate::hook_origin;
 use crate::launch::{HOOK, LAUNCHABLE_AGENTS};
 
 /// Codex takes hooks for one session as `-c` overrides (see `codex_hook_args`).
@@ -122,7 +123,7 @@ pub fn claude_code_workspace_settings(bin_dir: Option<&str>) -> Value {
 }
 
 /// Copilot CLI does not tell a hook which event it is, so each event names itself.
-const COPILOT_EVENTS: [&str; 7] = [
+pub(crate) const COPILOT_EVENTS: [&str; 7] = [
     "userPromptSubmitted",
     "preToolUse",
     "postToolUse",
@@ -331,16 +332,22 @@ pub fn is_natamux_hook(hook: &Value) -> bool {
     !commands.is_empty()
         && commands
             .iter()
-            .all(|each| each.as_str().is_some_and(|text| text.starts_with(HOOK)))
+            .all(|each| each.as_str().is_some_and(hook_origin::is_hook_command))
 }
 
 /// The JSON of a hook file that holds Natamux's hooks only, so writing them again loses no hook
-/// of the user's. Other keys (Claude Code keeps the permissions the user allowed here) stay. None
-/// for any other file. Claude Code and Gemini put the handlers of an event in `hooks`.
+/// of the user's. None for any other file, also one with a top-level key Natamux never writes.
+/// Claude Code and Gemini put the handlers of an event in `hooks`.
 pub fn natamux_hook_json(text: &str) -> Option<Map<String, Value>> {
     let Value::Object(parsed) = parse_js(text).ok()? else {
         return None;
     };
+    let foreign_key = parsed
+        .keys()
+        .any(|key| !hook_origin::HOOK_FILE_KEYS.contains(&key.as_str()));
+    if parsed.contains_key("hooks") && foreign_key {
+        return None;
+    }
     // Droid's file has the events at the top, all lists; any other file needs a `hooks` key.
     let hooks = match parsed.get("hooks") {
         Some(Value::Object(hooks)) => hooks,
@@ -401,10 +408,12 @@ pub fn prepare_workspace(agent: &str, workspace: &Path, hooks: WorkspaceHooks) -
         return false;
     };
     let target = workspace.join(file.path);
-    // A link at the target is never read or written: the repo may point it outside.
+    // A link is never followed (the repo may point it outside); a tracked file stays the repo's.
     let text = match fs::symlink_metadata(&target) {
         Ok(meta) if meta.file_type().is_symlink() => return false,
         Ok(_) => match fs::read(&target) {
+            Ok(bytes) if bytes == file.content.as_bytes() => Some(file.content.clone()),
+            Ok(_) if hook_origin::is_tracked(workspace, file.path) => None,
             Ok(bytes) => hook_file_text(&file, &String::from_utf8_lossy(&bytes)),
             Err(_) => return false,
         },

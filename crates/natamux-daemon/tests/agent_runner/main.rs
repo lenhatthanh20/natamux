@@ -158,7 +158,7 @@ impl Env {
             on_launch: None,
             trust_paths: trust_paths(|_| None, &self.data_dir),
             permission_mode_of: Arc::new(|_| "auto".into()),
-            trusted_of: Arc::new(|_| true),
+            trusted_of: natamux_daemon::projects::repo_trust_worktree::trust_always(true),
         }
     }
 
@@ -253,7 +253,7 @@ fn dummy_runner() -> AgentRunner {
         on_launch: None,
         trust_paths: trust_paths(|_| None, &dir.0),
         permission_mode_of: Arc::new(|_| "auto".into()),
-        trusted_of: Arc::new(|_| true),
+        trusted_of: natamux_daemon::projects::repo_trust_worktree::trust_always(true),
     })
 }
 
@@ -290,4 +290,5 @@ const PROMPT_ONLY: &str =
 mod agents;
 mod launch;
 mod model;
+mod strict;
 mod trust;

@@ -134,3 +134,59 @@ async fn runs_the_setup_script_once_its_project_is_approved() {
         "{lines:?}"
     );
 }
+
+/// T-0001 with a worktree that holds an MCP server config: not approved yet.
+async fn task_with_config(name: &str) -> (TestDaemon, std::path::PathBuf) {
+    let d = bare(name).await;
+    d.make_task("A").await;
+    let worktree = d.give_workspace("T-0001");
+    std::fs::write(worktree.join(".mcp.json"), "{}\n").unwrap();
+    (d, worktree)
+}
+
+const TASK_TRUST: &str = "/repos/default/trust?task=T-0001";
+
+async fn launch_check(d: &TestDaemon, task: &str, token: &str, digest: &Value) -> u16 {
+    let path = format!("/tasks/{task}/launch-check");
+    let body = json!({ "digest": digest });
+    d.send(Method::POST, &path, Some(token), &body).await.0
+}
+
+// T-0373: the approval of a task's worktree digest, and the pre-exec check of a launch.
+#[tokio::test(flavor = "multi_thread")]
+async fn approves_a_worktree_digest_and_checks_it_before_the_agent_runs() {
+    let (d, worktree) = task_with_config("trust-launch-check").await;
+    d.make_task("B").await;
+    let (status, shown) = d.get(TASK_TRUST).await;
+    assert_eq!(status, 200, "{shown}");
+    assert_eq!(shown["trusted"], false);
+    assert_eq!(shown["changed"], json!([".mcp.json"]));
+    let digest = shown["hash"].clone();
+    let own = d.agent_token("T-0001");
+    assert_eq!(launch_check(&d, "T-0001", &own, &digest).await, 409);
+
+    let (approved, body) = d.post(TASK_TRUST, &json!({ "hash": digest })).await;
+    assert_eq!(approved, 200, "{body}");
+    assert_eq!(launch_check(&d, "T-0001", &own, &digest).await, 200);
+    let other = d.agent_token("T-0002");
+    assert_eq!(launch_check(&d, "T-0001", &other, &digest).await, 403);
+
+    std::fs::write(worktree.join(".mcp.json"), "{ }\n").unwrap();
+    assert_eq!(launch_check(&d, "T-0001", &own, &digest).await, 409);
+    let (stale, _) = d.post(TASK_TRUST, &json!({ "hash": digest })).await;
+    assert_eq!(stale, 409);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn refuses_the_agent_token_on_the_trust_routes_of_a_task() {
+    let (d, _) = task_with_config("trust-task-agent").await;
+    let own: &str = &d.agent_token("T-0001");
+    let (read, _) = d.call(Method::GET, TASK_TRUST, Some(own)).await;
+    assert_eq!(read, 403);
+    let hash = d.get(TASK_TRUST).await.1["hash"].clone();
+    let body = json!({ "hash": hash });
+    let (approved, _) = d.send(Method::POST, TASK_TRUST, Some(own), &body).await;
+    assert_eq!(approved, 403);
+    let (_, view) = d.get(TASK_TRUST).await;
+    assert_eq!(view["trusted"], false);
+}

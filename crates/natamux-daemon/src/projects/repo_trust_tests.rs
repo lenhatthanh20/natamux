@@ -2,12 +2,17 @@ use std::fs::{create_dir_all, read_to_string, write};
 use std::sync::atomic::{AtomicI64, AtomicUsize, Ordering};
 use std::time::{Duration, SystemTime};
 
-use natamux_git::test_support::TempDir;
+use natamux_agents::hook_files::{WorkspaceHooks, exclude_from_git, workspace_file};
+use natamux_git::test_support::{TempDir, run_git};
+use natamux_proto::projects::repo_trust::SetupScript;
 use serde_json::json;
+use sha2::{Digest, Sha256};
 
 use super::*;
+use crate::projects::repo_trust_files::{feed, hex};
 use crate::projects::repos::RepoOptions;
 use crate::projects::settings_parse::SETTINGS_FILE;
+use crate::workspaces::setup_script::SETUP_SCRIPT;
 
 const CHECKED: &str = r#"{"stages":[{"id":"context","kind":"context","gate":"manual"},{"id":"test","kind":"agent","gate":"auto","check":"pnpm test"}]}"#;
 
@@ -305,26 +310,38 @@ fn a_changed_byte_in_an_agent_config_file_needs_a_new_approval() {
     write(s.folder().join(".mcp.json"), "{ }\n").unwrap();
 
     assert!(!s.repos.is_trusted(None));
-    // The agent files come from the project folder, also for the check of a worktree.
+    // The check of a worktree reads the worktree: the approved bytes there are trusted.
     let worktree = s.base.path().join("worktree");
     create_dir_all(&worktree).unwrap();
+    write(worktree.join(".mcp.json"), "{ }\n").unwrap();
     assert!(!s.repos.is_trusted_in(None, &worktree));
+    write(worktree.join(".mcp.json"), "{}\n").unwrap();
+    assert!(s.repos.is_trusted_in(None, &worktree));
 }
 
+// T-0373: only Natamux's exact text, untracked and kept out of git, is its own. The old rule
+// left out every file at a Natamux path, also one a repo committed.
 #[test]
-fn the_agent_config_files_natamux_writes_itself_need_no_approval() {
+fn only_the_exact_agent_config_natamux_writes_and_keeps_out_of_git_needs_no_approval() {
     let s = setup();
+    run_git(&s.folder(), &["init", "-q"]);
     for agent in ["codex", "gemini"] {
         let file = workspace_file(agent, WorkspaceHooks::default()).unwrap();
         let path = s.folder().join(file.path);
         create_dir_all(path.parent().unwrap()).unwrap();
         write(path, file.content).unwrap();
+        exclude_from_git(&s.folder(), &format!("/{}", file.path));
     }
-    create_dir_all(s.folder().join(".cursor")).unwrap();
-    write(s.folder().join(".cursor/hooks.json"), "{}\n").unwrap();
 
     assert!(s.view().trusted);
     assert!(s.view().agent_files.is_empty());
+
+    create_dir_all(s.folder().join(".cursor")).unwrap();
+    write(s.folder().join(".cursor/hooks.json"), "{}\n").unwrap();
+    exclude_from_git(&s.folder(), "/.cursor/hooks.json");
+    let view = s.view();
+    assert!(!view.trusted);
+    assert_eq!(view.changed, [".cursor/hooks.json"]);
 }
 
 #[test]
@@ -370,4 +387,5 @@ fn reads_an_approval_stored_before_agent_files_counted() {
     let text = r#"{"path":"/p","hash":"ab","setup":"cd"}"#;
     let approval: Approval = serde_json::from_str(text).unwrap();
     assert_eq!(approval.agents, "");
+    assert!(approval.extra.is_empty());
 }

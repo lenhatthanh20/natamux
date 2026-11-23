@@ -17,7 +17,7 @@ use crate::config::Config;
 use crate::github::issue_importer::{IssueImporter, IssueImporterOptions};
 use crate::github::issue_linker::{IssueLinker, IssueLinkerOptions, LinkError};
 use crate::github::pull_request_watcher::{PullRequestWatcher, PullRequestWatcherOptions};
-use crate::projects::repo_trust::TrustedOf;
+use crate::projects::repo_trust_worktree::TrustedOf;
 use crate::projects::repos::{RepoOptions, Repos, TaskRef};
 use crate::shared::event_bus::EventBus;
 use crate::shared::jobs::{Jobs, system_clock};
@@ -149,10 +149,12 @@ fn run_setup(task: &Task, terminals: &TerminalService, repos: &Repos, tasks: &Ta
     let _ = terminals.run(&task.id, &command, MAIN_TERMINAL, DEFAULT_SIZE);
 }
 
-/// Whether a project's commands are approved, asked at each use.
+/// Whether a project is approved as the folder (a task's worktree) is now, asked at each use.
 pub(super) fn trusted_of(repos: &Arc<Repos>) -> TrustedOf {
     let repos = Arc::clone(repos);
-    Arc::new(move |repo| repos.is_trusted(repo))
+    Arc::new(move |repo: Option<&str>, folder: Option<&Path>| {
+        repos.is_trusted_in_task(repo, folder)
+    })
 }
 
 /// An issue that could not be opened for a pull request: 409 as Node, or the task's own error.

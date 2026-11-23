@@ -26,6 +26,8 @@ fn view() -> RepoTrustView {
             file: ".mcp.json".into(),
             text: "{ \"mcpServers\": {} }\n".into(),
         }],
+        changed: Vec::new(),
+        unverifiable: None,
     }
 }
 

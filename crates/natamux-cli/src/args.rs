@@ -60,6 +60,7 @@ const OPTIONS: &[Spec] = &[
     spec("parent", Kind::Text),
     spec("attach", Kind::Texts),
     spec("approve", Kind::Text),
+    spec("digest", Kind::Text),
 ];
 
 #[derive(Debug, Default, PartialEq, Eq)]

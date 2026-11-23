@@ -133,7 +133,7 @@ fn gives_no_model_to_a_stages_other_agent() {
 fn passes_the_model_in_a_project_that_is_not_trusted_but_not_its_stage_words() {
     let env = Env::new();
     let runner = AgentRunner::new(AgentRunnerOptions {
-        trusted_of: Arc::new(|_| false),
+        trusted_of: natamux_daemon::projects::repo_trust_worktree::trust_always(false),
         ..env.options()
     });
     let task = with_model(&env, "opus");

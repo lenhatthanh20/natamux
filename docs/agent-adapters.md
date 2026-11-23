@@ -297,3 +297,18 @@ Any agent started in a task's first terminal is followed by its output (`generic
 - Output is a sign of life. A running task whose terminal stays silent for 10 minutes shows as quiet.
 - The terminal bell (`\x07`) moves a running task to needs input. Claude Code, Codex, Gemini and OpenCode use their wait hooks instead; Cursor, Copilot, Qwen Code and Droid still use the bell as a fallback. Qwen Code runs project hooks only after the user approved them, so until then only the bell tells that it waits.
 - `natamux ask` and `natamux done` let such an agent report the rest (see the plugin skill in `plugins/natamux`).
+
+## Ask mode in Strict mode
+
+In Strict mode Natamux starts an agent only in a mode where it asks before each action (`crates/natamux-agents/src/launch_ask.rs`). The words come before the user's own `NATAMUX_<AGENT>_ARGS`, and auto mode is off. An agent with no documented ask mode does not start, and has no one-shot run (commit message drafts) either. A test fails when an adapter has no row.
+
+| Agent | How it asks |
+|---|---|
+| Claude Code | `--permission-mode default` |
+| Codex | `--ask-for-approval on-request --sandbox workspace-write` |
+| Gemini CLI | `--approval-mode default` |
+| Qwen Code | `--approval-mode default` |
+| Goose | `GOOSE_MODE=approve` before the command |
+| Copilot, Cursor, OpenCode, Droid, Amp, Kimi, Aider, Crush, Cline, Kiro, Muse Code, any other CLI | blocked |
+
+Codex's `workspace-write` sandbox has no network, so a `natamux` command of a stage asks for approval before it reaches the daemon. That is the point of the mode.

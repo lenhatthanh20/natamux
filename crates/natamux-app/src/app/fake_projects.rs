@@ -166,6 +166,8 @@ impl Data {
                 text: "pnpm install --frozen-lockfile\ncp .env.example .env\n".into(),
             }],
             agent_files: Vec::new(),
+            changed: Vec::new(),
+            unverifiable: None,
         };
         #[cfg(test)]
         if self.projects.changed.contains(repo_id) {

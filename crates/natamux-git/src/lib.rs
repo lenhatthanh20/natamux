@@ -17,4 +17,7 @@ pub mod process;
 pub mod rollback;
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;
+pub mod tracked;
 pub mod worktrees;
+
+pub use tracked::tracked_paths;

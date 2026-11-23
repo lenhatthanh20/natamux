@@ -158,7 +158,8 @@ pub fn task_error(error: &TaskError) -> Answer {
 pub fn stage_error(error: &StageError) -> Answer {
     let message = error.to_string();
     match error {
-        StageError::Action(_) | StageError::Agent(AgentError::Waiting { .. }) => {
+        StageError::Action(_)
+        | StageError::Agent(AgentError::Waiting { .. } | AgentError::Untrusted(_)) => {
             error_answer(StatusCode::CONFLICT, "conflict", &message)
         }
         StageError::Input(_) | StageError::File(_) => {
