@@ -96,6 +96,7 @@ fn fixed_reason(key: &str) -> &'static str {
         "agents.permissionMode" => "Agents start in the ask permission mode.",
         "agents.requireAskGuarantee" => "Only agents that ask before each action may start.",
         "agentApi.mode" => "An agent token reaches only its own task, with the listed grants.",
+        "data.auditLog" => "Blocked actions and security changes are written to logs/audit.log.",
         _ => "An agent never pushes; a person does.",
     }
 }

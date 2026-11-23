@@ -415,6 +415,7 @@ Strict mode is not part of `.natamux.json`: it is a setting of the app, kept in 
 | `agentApi.mode` | `scoped` | An agent token reaches only its own task. |
 | `agentApi.requireHumanForPush` | `true` | An agent token never gets the push grant. |
 | `agentApi.grants` | list, default empty | Extra actions for agent tokens. See [the HTTP API](/docs/reference/http-api/). |
+| `data.auditLog` | `true` | Blocked actions and security changes are written to `logs/audit.log`. |
 
 - A key can only be stricter than its Strict value. A looser value in the file is ignored (`GET /security` lists it in `ignored`), and `PUT /security` refuses it.
 - A project can tighten Strict mode with a `security` object in its `.natamux.json`, with the same keys. It never loosens it.
@@ -433,6 +434,18 @@ Isolation is its own setting, not set by Strict mode. Edit `security.json` and r
 | `isolation.envAllow` | list of names | More variables an isolated shell keeps. |
 
 See [SECURITY.md](https://github.com/lenhatthanh20/natamux/blob/main/SECURITY.md#isolation-linux-claude-code) for what is granted and the limits.
+
+### Data (`data` in `security.json`)
+
+Not set by Strict mode, except the audit log. Save it with `PUT /security` (a body with a `data` object); a save on the Security page keeps it. A hand-edited file never starts a retention delete.
+
+| Key | Values | Meaning |
+|---|---|---|
+| `data.retentionDays` | number, default `0` (off) | At daemon start and every 24 hours, Done and Cancelled tasks not changed for more than this many days are deleted through the normal delete. A task with uncommitted changes, or with commits only its branch holds, is kept. |
+| `data.logMaxBytes` | number, default `1048576` | Size cap of the audit, app, daemon and update logs (at least 4096). |
+| `data.auditLog` | `true` or `false`; default `true` in Strict mode, else `false` | One JSON line per blocked action or security change in `logs/audit.log` of the data folder: `ts`, `event`, `id`, `result`, `settingsVersion` only. |
+
+See the [data inventory](https://github.com/lenhatthanh20/natamux/blob/main/docs/data-inventory.md) for every file Natamux keeps.
 
 ## Examples
 

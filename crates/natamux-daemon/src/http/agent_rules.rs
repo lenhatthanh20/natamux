@@ -164,6 +164,11 @@ pub async fn refusal(
     };
     let denied = agent_decision(method, parts, own, |_| is_child, &security::mode()).err()?;
     eprintln!("{}", denial_line(denied, method, parts, own));
+    let (data_dir, own_id) = (state.data_dir.clone(), own.to_string());
+    let _ = tokio::task::spawn_blocking(move || {
+        crate::privacy::audit::write(&data_dir, "agent-api.denied", &own_id, "denied");
+    })
+    .await;
     Some(error_answer(
         StatusCode::FORBIDDEN,
         "forbidden",

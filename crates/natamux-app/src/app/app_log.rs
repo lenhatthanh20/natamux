@@ -1,20 +1,20 @@
 //! The app's own log, `logs/app.log` in the data folder beside `daemon.log`: one line per
 //! event that is hard to see later, such as the link to the daemon going down.
 
-use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use gpui::App;
 use natamux_client::{DashboardEvent, LinkStatus};
+use natamux_core::privacy::log_trim::trim_file;
+use natamux_core::security::data_in;
 use natamux_core::workspaces::private_dir::append_log_line;
 
 use super::source::Source;
 use super::view_state;
 
 const FILE: &str = "logs/app.log";
-const KEEP: usize = 1024 * 1024;
 
 /// Adds `<UTC time> <line>`. A log that cannot be written must never stop the app.
 pub fn write(line: &str) {
@@ -27,10 +27,18 @@ pub fn write(line: &str) {
     }
 }
 
-/// Keeps the last 1 MB, from a line start. Called once when the app starts.
+/// The logs the app keeps beside `app.log`, cut together at start.
+const OTHER_LOGS: [&str; 2] = ["logs/daemon.log", "logs/update.log"];
+
+/// Keeps the last `data.logMaxBytes` (1 MB by default) of each log, from a line start. Called
+/// once when the app starts, before the daemon writes to its log.
 pub fn trim_at_start() {
     if let Some(folder) = view_state::folder() {
-        trim_in(&folder, KEEP);
+        let keep = data_in(&folder.join("data")).log_max_bytes;
+        trim_in(&folder, keep);
+        for log in OTHER_LOGS {
+            let _ = trim_file(&folder.join(log), keep);
+        }
     }
 }
 
@@ -38,25 +46,8 @@ fn write_in(folder: &Path, now: SystemTime, line: &str) {
     let _ = append_log_line(&folder.join(FILE), &format!("{} {line}", rfc3339(now)));
 }
 
-fn trim_in(folder: &Path, keep: usize) {
-    let path = folder.join(FILE);
-    let Ok(bytes) = fs::read(&path) else {
-        return;
-    };
-    let Some(start) = bytes.len().checked_sub(keep).filter(|start| *start > 0) else {
-        return;
-    };
-    let at_line_start = bytes.get(start - 1) == Some(&b'\n');
-    let from = if at_line_start {
-        start
-    } else {
-        let rest = bytes.get(start..).unwrap_or_default();
-        match rest.iter().position(|byte| *byte == b'\n') {
-            Some(index) => start + index + 1,
-            None => bytes.len(),
-        }
-    };
-    let _ = fs::write(&path, bytes.get(from..).unwrap_or_default());
+fn trim_in(folder: &Path, keep: u64) {
+    let _ = trim_file(&folder.join(FILE), keep);
 }
 
 /// One `app.log` line per change of the link, so a "Reconnecting" can be read later. The fake
@@ -135,6 +126,7 @@ fn rfc3339(time: SystemTime) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
     use std::path::PathBuf;
     use std::time::Duration;
 

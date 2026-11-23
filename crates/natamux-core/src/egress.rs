@@ -214,9 +214,24 @@ fn what(target: &Target<'_>) -> String {
     }
 }
 
-/// `check` that logs a refusal as one line (host and action only).
+/// `check` that logs a refusal as one line (host and action only), and an audit line.
 pub fn enforce(settings: &NetworkSettings, target: &Target<'_>) -> Result<(), String> {
-    check(settings, target).inspect_err(|reason| eprintln!("{reason}"))
+    check(settings, target).inspect_err(|reason| {
+        eprintln!("{reason}");
+        crate::privacy::audit::record("egress.denied", &host_of(target), "denied");
+    })
+}
+
+/// The host a target reaches, for the audit line; never the URL.
+fn host_of(target: &Target<'_>) -> String {
+    match *target {
+        Target::Git { url, .. } => match parse_remote(url) {
+            Remote::Network { host, .. } => host,
+            Remote::Local => "local".to_string(),
+            Remote::Refused(_) => "refused".to_string(),
+        },
+        Target::Gh { host, .. } | Target::Update { host } => host.to_string(),
+    }
 }
 
 /// Offline mode or egress `loopback`: Natamux reaches nothing beyond this machine.

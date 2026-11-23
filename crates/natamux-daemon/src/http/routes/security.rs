@@ -10,6 +10,7 @@ use serde_json::Value;
 
 use crate::http::errors::{Answer, error_answer, internal_error, json_answer};
 use crate::http::server::AppState;
+use crate::privacy::audit;
 use crate::security::store::security_body;
 use crate::terminals::isolation::isolation_body;
 use crate::terminals::isolation_network::network_view;
@@ -62,6 +63,14 @@ pub async fn put_security(state: Arc<AppState>, body: Option<Value>, by_agent: b
     let body = body.unwrap_or(Value::Null);
     let saved = tokio::task::spawn_blocking(move || {
         let saved = state.security.save(&body);
+        if let Ok(now) = &saved {
+            let mode = if now.mode.is_strict() {
+                "strict"
+            } else {
+                "personal"
+            };
+            audit::write(&state.data_dir, "security.changed", mode, "ok");
+        }
         state.security.tell(&state.bus);
         saved.map(|now| (now, isolation_value(&state)))
     })

@@ -29,6 +29,7 @@ use crate::http::routes::agent_fields;
 use crate::http::routes::stages::stage_answer;
 use crate::http::routes::workspaces::bool_query;
 use crate::http::server::AppState;
+use crate::privacy::audit;
 use crate::stages::run::EventInput;
 use crate::tasks::errors::{TaskError, TaskResult};
 use crate::tasks::upload::decode_attachments;
@@ -110,25 +111,10 @@ pub async fn delete_task(state: Arc<AppState>, id: String, query: &str) -> Answe
     };
     let work = move || -> Result<Value, Box<Answer>> {
         let id = task_id_param(&id).map_err(|error| Box::new(zod_answer(&error)))?;
-        // The branch the agent switched to goes, not the one the worktree was made with.
-        let current = state
-            .workspaces
-            .sync_branch(&id)
-            .map_err(|error| Box::new(workspace_error(&error)))?;
-        if current.workspace.is_some() {
-            state
-                .workspaces
-                .remove_for_delete(&id, force)
-                .map_err(|error| Box::new(workspace_error(&error)))?;
-        }
-        state
-            .workspaces
-            .delete_branches_of(&current)
-            .map_err(|error| Box::new(workspace_error(&error)))?;
-        let tasks = state
-            .tasks
-            .delete_task(&id)
-            .map_err(|error| Box::new(task_error(&error)))?;
+        let deleted = state.workspaces.delete_task_and_workspace(&id, force);
+        let result = if deleted.is_ok() { "ok" } else { "refused" };
+        audit::write(&state.data_dir, "task.delete", &id, result);
+        let tasks = deleted.map_err(|error| Box::new(workspace_error(&error)))?;
         state.terminals.revoke_agent(&id);
         Ok(json!({ "id": id, "tasks": to_value(&tasks) }))
     };

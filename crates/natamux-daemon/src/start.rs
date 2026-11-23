@@ -406,6 +406,7 @@ pub async fn start(
     };
     let state = app_state(config, home_of(env), store, &scheduler, built);
     crate::agents::access_revoke::watch_tasks(&state);
+    crate::start_privacy::after_start(&state);
     let server = tokio::spawn(serve(listener, Arc::clone(&state)));
     // After the listen, so the hooks of the agents reach the daemon.
     stages.run.background(|run| run.resume_agents());

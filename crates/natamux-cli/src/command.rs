@@ -144,6 +144,8 @@ pub enum Command {
     Security {
         json: bool,
     },
+    SupportBundle(crate::support_command::SupportCommand),
+    PurgeData(crate::purge_data_command::PurgeCommand),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -322,6 +324,12 @@ pub fn parse_command(argv: &[String]) -> Result<Command, UsageError> {
             .map_err(UsageError),
         "security" => crate::security_command::parse(line.words)
             .map(|()| Command::Security { json: line.json })
+            .map_err(UsageError),
+        "support-bundle" => crate::support_command::parse(line.words, line.values)
+            .map(Command::SupportBundle)
+            .map_err(UsageError),
+        "purge-data" => crate::purge_data_command::parse(line.words, line.values)
+            .map(Command::PurgeData)
             .map_err(UsageError),
         _ => usage(format!("Unknown command \"{group}\"")),
     }

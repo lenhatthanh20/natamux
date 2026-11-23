@@ -135,3 +135,19 @@ fn an_empty_list_or_a_bad_entry_denies() {
         "{reason}"
     );
 }
+
+#[test]
+fn a_denial_writes_one_audit_line_with_the_host_and_never_the_url() {
+    let (sink, lines) = crate::privacy::audit::catcher();
+    let _forced = crate::privacy::audit::force(sink);
+    let loopback = with_egress("loopback");
+    let target = Target::Git {
+        url: "https://user:FAKE-PASS@github.com/acme/app.git",
+        action: "push",
+    };
+    assert!(enforce(&loopback, &target).is_err());
+    assert!(enforce(&with_egress("open"), &target).is_ok());
+    let lines = lines.lock().unwrap().clone();
+    assert_eq!(lines.len(), 1);
+    assert_eq!(lines[0], ["egress.denied", "github.com", "denied"]);
+}

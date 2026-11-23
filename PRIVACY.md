@@ -20,7 +20,17 @@ These files are readable only by your user on macOS and Linux (`0600` files, `07
 
 Deleting a task removes all its files in the data folder and its rows in the index. It does not remove what was already pushed to a remote or a CI provider.
 
-You can delete any of these folders at any time.
+You can delete any of these folders at any time. Every path, how private it is and how it goes away is in [docs/data-inventory.md](docs/data-inventory.md).
+
+## Data lifecycle
+
+The `data` key of `security.json` (saved through `PUT /security`):
+
+- `retentionDays` (default `0`, off): finished tasks older than N days are deleted at daemon start and every 24 hours, through the normal delete. A task with uncommitted changes, or with commits only its branch holds, is kept.
+- `logMaxBytes` (default 1 MB): the size cap of the audit, app, daemon and update logs.
+- `auditLog` (on in Strict mode, off otherwise): `logs/audit.log` in the data folder gets one line per blocked action or security change, with only a time, the event, a task id or host, a result word and a hash of the settings. No titles, prompts, reasons or URLs.
+
+`natamux support-bundle` saves a file for a bug report with versions, the security state, task counts and the last 200 daemon log lines (secrets masked, typed input left out): no task text. `natamux purge-data --yes` removes the task data, logs and token from this machine and keeps the worktrees; it refuses while a worktree has uncommitted work.
 
 ## When data leaves your machine
 

@@ -94,6 +94,7 @@ To do these from a script, use the daemon's own token, not the one in a task ter
 | `POST /repos/:id/trust` | Approve the commands `{ hash }`, with the hash `GET` gave. Answers the new view. Answers 409 `conflict` when the commands changed since |
 | `GET /security` | Strict mode: `{ strict, keys, ignored, warning, isolation }`. Each key is `{ value, blocked, reason }`. `isolation` is `{ mode, backend, abi, ok, reason }` for this daemon run. Any token may read it, also an agent token |
 | `PUT /security` | Save Strict mode with a body in the shape of `security.json`. Daemon token only: an agent token gets 403. Answers 400 for a key looser than its Strict value, else the new state. Sends `security.changed` |
+| `GET /support-bundle` | The support bundle: `{ createdAt, daemonVersion, os, arch, uptimeSecs, security, tasks, log }`, no task text. Daemon token only: an agent token gets 403 |
 | `GET /repos/:id/skills` | The skills of every agent for the project: `{ skills, notices }`. A skill is `{ name, description, origin, agents, path }`, and `origin` is `project`, `plugin` or `user`. A notice says, for example, that a plugin is on but not installed |
 
 The task is named in a hook by the `X-Natamux-Task` header. The `X-Natamux-Terminal` header names the terminal.

@@ -92,6 +92,8 @@ pub const AGENT_DENIED: &[(&str, &str)] = &[
     ("PUT", "custom-agents"),
     // Turning Strict off or loosening a key needs the person at the app.
     ("PUT", "security"),
+    // The bundle shows the security state an agent could plan around.
+    ("GET", "support-bundle"),
     // Saved templates and plan limits have no task to cut them to.
     ("GET", "templates"),
     ("GET", "limits"),

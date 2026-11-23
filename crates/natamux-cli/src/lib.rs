@@ -9,10 +9,12 @@ mod execute;
 pub mod format;
 mod hook;
 mod hooks;
+pub mod purge_data_command;
 pub mod repo_trust;
 pub mod run;
 pub mod security_command;
 mod statusline;
+pub mod support_command;
 
 use std::io::{IsTerminal, Read, Write};
 use std::process::ExitCode;

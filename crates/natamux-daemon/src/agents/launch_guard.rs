@@ -9,6 +9,7 @@ use std::path::Path;
 use natamux_agents::launch::{Platform, quote_argument};
 use natamux_agents::launch_ask::ask_guaranteed;
 use natamux_agents::trust::{TrustPaths, untrust_workspace};
+use natamux_core::privacy::audit::record;
 use natamux_core::security::{SecurityMode, mode, mode_in};
 use natamux_proto::tasks::task::Task;
 
@@ -51,9 +52,11 @@ pub fn guard(
     if let Some(strict) = mode.strict() {
         if !state.is_trusted() {
             drop_trust(task, paths);
+            record("agent.blocked", &task.id, "untrusted");
             return Err(AgentError::Untrusted(state.reason()));
         }
         if strict.require_ask_guarantee && !ask_guaranteed(kind) {
+            record("agent.blocked", &task.id, "no-ask-mode");
             return Err(AgentError::Untrusted(format!(
                 "Strict mode starts only agents that ask before each action, and {kind} has no \
                  such mode."
@@ -90,6 +93,7 @@ impl LaunchGate {
         if self.strict() {
             drop_trust(task, paths);
         }
+        record("agent.blocked", &task.id, "config-changed");
         Err(AgentError::Untrusted(format!(
             "The agent config changed while the agent started. {}",
             now.reason()
