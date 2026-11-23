@@ -75,6 +75,11 @@ pub enum DaemonMessage {
     LimitsChanged {
         limits: Value,
     },
+    /// The security settings changed: saved, or edited outside Natamux (`warning`).
+    SecurityChanged {
+        strict: bool,
+        warning: Option<String>,
+    },
     /// Sent to one socket only, which missed messages: load everything.
     Resync,
 }
@@ -101,6 +106,7 @@ impl DaemonMessage {
             DaemonMessage::ReposChanged
             | DaemonMessage::JobsChanged { .. }
             | DaemonMessage::LimitsChanged { .. }
+            | DaemonMessage::SecurityChanged { .. }
             | DaemonMessage::Resync => None,
         }
     }
@@ -122,6 +128,7 @@ impl DaemonMessage {
             DaemonMessage::WorkspacePreparing { .. } => "workspace.preparing",
             DaemonMessage::UsageChanged { .. } => "usage.changed",
             DaemonMessage::LimitsChanged { .. } => "limits.changed",
+            DaemonMessage::SecurityChanged { .. } => "security.changed",
             DaemonMessage::Resync => "resync",
         }
     }
@@ -175,6 +182,9 @@ impl DaemonMessage {
                 json!({ "kind": kind, "taskId": task_id, "usage": usage })
             }
             DaemonMessage::LimitsChanged { limits } => json!({ "kind": kind, "limits": limits }),
+            DaemonMessage::SecurityChanged { strict, warning } => {
+                json!({ "kind": kind, "strict": strict, "warning": warning })
+            }
         };
         to_js_string(&value)
     }

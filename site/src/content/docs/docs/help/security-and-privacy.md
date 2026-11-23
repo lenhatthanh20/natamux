@@ -29,6 +29,14 @@ An agent can read and change files and run commands as your user. Natamux does n
 
 Each task works in its own git worktree. Natamux pushes, merges or deletes a branch only when you click the button or run the command. The exceptions are the automatic git and `gh` commands and the CI snapshot push listed above.
 
+## Strict mode
+
+For work with strict security rules, turn on **Settings > Security > Strict mode**. Agents then start in their ask mode, agent config is approved per worktree and checked right before each start, agent tokens reach only their own task, CI gets only what you allow, and typed terminal input is never traced. The status bar shows **Strict**; its tooltip lists the rules. `natamux security` prints the same.
+
+- Only the app changes the setting. An agent token cannot.
+- If `security.json` changes outside Natamux, Natamux keeps the stricter settings and shows a warning until you save them again.
+- Strict mode stops mistakes and repo content. It does not stop an agent that looks for the daemon token on purpose: see the [configuration reference](/docs/reference/configuration/#strict-mode-securityjson) and `SECURITY.md`.
+
 ## The daemon
 
 - It listens on `127.0.0.1` (loopback) by default. `NATAMUX_HOST` is not checked: any address works, including `0.0.0.0`. The Docker image sets `0.0.0.0` inside its container, and `compose.prod.yaml` publishes the port on `${NATAMUX_BIND:-127.0.0.1}`, which is loopback unless you change it.

@@ -132,10 +132,11 @@ pub fn forbidden_word(agent: &str, words: &str) -> Option<Forbidden> {
     rules.extend_from_slice(extras(agent));
     let words = split_words(words);
     for (index, word) in words.iter().enumerate() {
+        let next = words.get(index + 1);
         let hit = if word.contains("GOOSE_MODE") {
             Some(word.clone())
         } else {
-            hit_of(agent, &rules, word, words.get(index + 1))
+            config_hit(agent, word, next).or_else(|| hit_of(agent, &rules, word, next))
         };
         if let Some(word) = hit {
             let reason = format!(
@@ -146,6 +147,34 @@ pub fn forbidden_word(agent: &str, words: &str) -> Option<Forbidden> {
         }
     }
     None
+}
+
+/// Codex config overrides that turn approvals or the sandbox off: `key=value` after `-c` or
+/// `--config`, a TOML value with or without quotes.
+const CODEX_OVERRIDES: [(&str, &str); 3] = [
+    ("approval_policy", "never"),
+    ("sandbox_mode", "danger-full-access"),
+    ("sandbox_workspace_write.network_access", "true"),
+];
+
+fn config_hit(agent: &str, word: &str, next: Option<&String>) -> Option<String> {
+    if agent != "codex" {
+        return None;
+    }
+    let (written, setting) = match word.split_once('=') {
+        Some(("--config", setting)) => (word.to_string(), setting),
+        _ if word == "-c" || word == "--config" => {
+            let next = next?;
+            (format!("{word} {next}"), next.as_str())
+        }
+        _ => return None,
+    };
+    let (key, value) = setting.split_once('=')?;
+    let value = value.trim().trim_matches(|c| c == '"' || c == '\'');
+    CODEX_OVERRIDES
+        .iter()
+        .any(|(bad_key, bad)| key.trim() == *bad_key && value == *bad)
+        .then_some(written)
 }
 
 fn hit_of(

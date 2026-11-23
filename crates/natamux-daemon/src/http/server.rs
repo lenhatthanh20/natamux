@@ -21,8 +21,8 @@ use super::errors::{Answer, json_answer, not_found, unauthorized};
 use super::health::health_body;
 use super::routes::stages::Mark;
 use super::routes::{
-    agent_views, agents, github, launch_check, projects, review_comments, stages, tasks, terminals,
-    workspace_files, workspace_rights, workspaces,
+    agent_views, agents, github, launch_check, projects, review_comments, security, stages, tasks,
+    terminals, workspace_files, workspace_rights, workspaces,
 };
 use super::{event_socket, terminal_socket};
 use crate::agents::hook_service::HookService;
@@ -33,6 +33,7 @@ use crate::github::issue_importer::IssueImporter;
 use crate::github::issue_linker::IssueLinker;
 use crate::github::pull_request_watcher::PullRequestWatcher;
 use crate::projects::repos::Repos;
+use crate::security::store::SecurityStore;
 use crate::shared::event_bus::EventBus;
 use crate::shared::jobs::Jobs;
 use crate::shared::scheduler::Scheduler;
@@ -74,6 +75,7 @@ pub struct AppState {
     pub issues: Arc<IssueImporter>,
     pub issue_linker: Arc<IssueLinker>,
     pub idle_pause: Arc<IdlePause>,
+    pub security: Arc<SecurityStore>,
 }
 
 /// Serves until the listener fails. Each connection runs on its own task.
@@ -208,6 +210,7 @@ pub async fn handle(request: Request<Incoming>, state: Arc<AppState>) -> Answer 
         (&Method::GET, ["usage"]) => agents::usage(&state),
         (&Method::GET, ["limits"]) => agents::limits(&state),
         (&Method::GET, ["custom-agents"]) => agents::custom_agents(),
+        (&Method::GET, ["security"]) => security::get_security(state).await,
         (&Method::POST, ["hooks", agent]) => {
             agents::post_hook(request, state, who, agent.to_string(), query.to_string()).await
         }
@@ -247,6 +250,7 @@ pub async fn handle(request: Request<Incoming>, state: Arc<AppState>) -> Answer 
         | (&Method::POST, ["tasks", _, "agent", "message"])
         | (&Method::POST, ["limits", _])
         | (&Method::PUT, ["custom-agents"])
+        | (&Method::PUT, ["security"])
         | (&Method::POST, ["tasks", _, "workspace" | "commit" | "rollback" | "fan-out"])
         | (&Method::POST, ["workspaces"])
         | (&Method::POST, ["repos"])
@@ -405,6 +409,7 @@ async fn with_body(
         }
         (&Method::POST, ["limits", agent]) => agents::post_limits(&state, agent, body),
         (&Method::PUT, ["custom-agents"]) => agents::put_custom_agents(state, body).await,
+        (&Method::PUT, ["security"]) => security::put_security(state, body, by_agent).await,
         (&Method::POST, ["tasks", id, "review-comments"]) => {
             review_comments::add(state, id.to_string(), body, by_agent).await
         }

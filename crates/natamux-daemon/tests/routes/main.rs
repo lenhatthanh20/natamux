@@ -26,6 +26,7 @@ mod raw_client;
 mod repo_trust;
 mod repos;
 mod review_comments;
+mod security;
 mod server;
 mod socket;
 mod stages;

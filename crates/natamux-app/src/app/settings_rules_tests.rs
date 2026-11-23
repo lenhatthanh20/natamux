@@ -266,6 +266,13 @@ fn app_pages_have_a_tile_and_a_summary() {
         page_tile(&SettingsPage::Agents),
         Some(("bot", TileColor::Green))
     );
+    assert_eq!(
+        page_tile(&SettingsPage::Security),
+        Some(("shield", TileColor::Red))
+    );
+    assert_eq!(page_title(&SettingsPage::Security, &[]), "Security");
+    assert_eq!(page_summary(&SettingsPage::Security), SECURITY_SUMMARY);
+    assert!(page_groups(&SettingsPage::Security).is_empty());
     assert_eq!(page_tile(&SettingsPage::Project("r1".to_owned())), None);
     assert_eq!(
         page_summary(&SettingsPage::General),

@@ -212,6 +212,7 @@ impl DetailsPanel {
                 self.busy_call(cx, move |d, cx| d.refresh_pull_request(&id, cx), |_, _| {});
             }
             PanelCommand::AddSubtask => self.add_subtask(task, window, cx),
+            PanelCommand::ApproveCi(stage) => self.open_ci_approval(task, &stage, window, cx),
             PanelCommand::KeepTry(kept) => self.keep_try(&kept, window, cx),
             PanelCommand::OpenTask(other) => dashboard.update(cx, |d, cx| d.choose(&other, cx)),
             PanelCommand::CopyText { text, what } => {

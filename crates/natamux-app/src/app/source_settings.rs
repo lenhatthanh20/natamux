@@ -4,6 +4,7 @@
 use natamux_client::Answer;
 use natamux_proto::agents::custom::CustomAgent;
 use natamux_proto::projects::repo::SavedSettings;
+use natamux_proto::projects::security::SecurityView;
 use serde_json::{Map, Value};
 
 use super::Source;
@@ -36,5 +37,16 @@ impl Source {
             |c| c.save_custom_agents(list),
             |f| f.save_custom_agents(fake),
         )
+    }
+
+    /// `GET /security`.
+    pub fn security(&self) -> Answer<SecurityView> {
+        self.ask(|c| c.security(), |f| f.security())
+    }
+
+    /// `PUT /security`: the body is the shape of `security.json`.
+    pub fn save_security(&self, body: Value) -> Answer<SecurityView> {
+        let fake = body.clone();
+        self.ask(|c| c.save_security(body), |f| f.save_security(&fake))
     }
 }

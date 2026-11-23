@@ -1,15 +1,25 @@
-//! The security mode: Personal (today's workflow) or Strict. Every Strict rule reads `mode()`.
-//! Until the user setting exists it is always Personal; tests turn Strict on with `force`.
+//! The security mode: Personal (today's workflow) or Strict. Every Strict rule reads `mode()`:
+//! a mode a test forced on this thread, else the user's `security.json` once the daemon
+//! installed it, else Personal.
 
 use std::cell::RefCell;
+use std::sync::{Arc, Mutex};
 
 mod agent_api;
 mod agent_mode;
 mod ci_push;
+mod decide;
+mod settings;
+mod source;
+mod view;
 
 pub use agent_api::AgentApi;
 pub use agent_mode::{AUTO_FORBID_REASON, INPUT_TRACE_BLOCKED, auto_allowed, input_trace_allowed};
 pub use ci_push::{CI_FORBID_REASON, CiMode, CiPush, ci_mode};
+pub use decide::{Decision, KeyState, key_states, mode_in, tighten, tighten_with_repo};
+pub use settings::{BAD_FILE_WARNING, FIXED_KEYS, SecurityState, read_text, read_value, to_text};
+pub use source::{FILE_NAME, OUTSIDE_CHANGE_WARNING, Source, WRITTEN_NAME, evaluate};
+pub use view::view_of;
 
 /// The Strict keys the Strict rules read.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -57,11 +67,30 @@ thread_local! {
     static FORCED: RefCell<Option<SecurityMode>> = const { RefCell::new(None) };
 }
 
-/// The mode for this check.
+// Process-wide: the daemon binary installs its data folder's settings before it starts.
+static INSTALLED: Mutex<Option<Arc<Source>>> = Mutex::new(None);
+
+/// Makes `source` the settings `mode()` reads in this process.
+pub fn install(source: Arc<Source>) {
+    if let Ok(mut installed) = INSTALLED.lock() {
+        *installed = Some(source);
+    }
+}
+
+/// The settings `install` set, if any.
+pub fn installed() -> Option<Arc<Source>> {
+    INSTALLED
+        .lock()
+        .ok()
+        .and_then(|installed| installed.clone())
+}
+
+/// The mode for this check. Read again on each decision, so a change applies to the next one.
 pub fn mode() -> SecurityMode {
-    FORCED
-        .with(|forced| forced.borrow().clone())
-        .unwrap_or_default()
+    if let Some(forced) = forced() {
+        return forced;
+    }
+    installed().map_or_else(SecurityMode::default, |source| source.current().mode)
 }
 
 /// The mode a test forced on this thread, so work this thread hands to another thread can force

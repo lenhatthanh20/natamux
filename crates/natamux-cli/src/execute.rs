@@ -163,6 +163,11 @@ pub async fn execute<T: Transport>(
             cx.io.stdout(&text);
             Ok(())
         }
+        Command::Security { json } => {
+            let text = crate::security_command::run(*json, cx.client).await?;
+            cx.io.stdout(&text);
+            Ok(())
+        }
         Command::CiApprove(approve) => {
             let text = crate::ci_approve::run(approve, cx.client).await?;
             cx.io.stdout(&text);

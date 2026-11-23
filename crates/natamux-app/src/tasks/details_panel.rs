@@ -433,6 +433,9 @@ mod run;
 #[path = "details_calls.rs"]
 mod calls;
 
+#[path = "details_ci.rs"]
+mod ci;
+
 #[path = "details_render.rs"]
 mod render;
 

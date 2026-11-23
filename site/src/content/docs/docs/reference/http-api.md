@@ -92,6 +92,8 @@ To do these from a script, use the daemon's own token, not the one in a task ter
 | `PUT /repos/:id/settings` | Save the settings to `.natamux.json`. Send the version you read in the header `If-Match: <version>`. Answers `{ settings, version }`. Answers 409 `conflict` when the file changed since that version. Keys of the file that Natamux does not know are kept. The saved commands count as approved, unless the setup script changed since the last approval |
 | `GET /repos/:id/trust` | The commands of a project that run on this machine: `{ trusted, hash, commands, setup }`. A command is `{ where, text }`; a setup script is `{ file, text }`. A project with no commands is `trusted` |
 | `POST /repos/:id/trust` | Approve the commands `{ hash }`, with the hash `GET` gave. Answers the new view. Answers 409 `conflict` when the commands changed since |
+| `GET /security` | Strict mode: `{ strict, keys, ignored, warning }`. Each key is `{ value, blocked, reason }`. Any token may read it, also an agent token |
+| `PUT /security` | Save Strict mode with a body in the shape of `security.json`. Daemon token only: an agent token gets 403. Answers 400 for a key looser than its Strict value, else the new state. Sends `security.changed` |
 | `GET /repos/:id/skills` | The skills of every agent for the project: `{ skills, notices }`. A skill is `{ name, description, origin, agents, path }`, and `origin` is `project`, `plugin` or `user`. A notice says, for example, that a plugin is on but not installed |
 
 The task is named in a hook by the `X-Natamux-Task` header. The `X-Natamux-Terminal` header names the terminal.
@@ -165,6 +167,7 @@ A browser cannot set headers on a WebSocket, so:
   - `review-comments.changed` with `{ taskId }` after a review comment is added, changed or deleted, a send, or when a file edit moved a comment. Read `GET /tasks/<id>/review-comments` again.
   - `workspace.preparing` with `{ taskId, step }` while a new workspace is made: `step` is `fetch` or `checkout`, then `null` when it ended. A failure also has `error`.
   - `jobs.changed` with `{ jobs }` when a background job starts or ends. `jobs` is the whole list, as `GET /jobs` gives it.
+  - `security.changed` with `{ strict, warning }` when Strict mode changes, or `security.json` changed outside Natamux, so a dashboard can read `GET /security` again.
   - `resync` to one socket that missed messages because it read too slowly. The dashboard loads everything again.
 - Terminals open with a one-time ticket. Call `POST /tasks/:id/terminal/ticket` to get `{ ticket }`, then open `GET /tasks/:id/terminal?ticket=...` (WebSocket) within 30 seconds.
 

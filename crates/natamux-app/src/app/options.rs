@@ -120,6 +120,8 @@ pub enum Shot {
     SettingsAgents,
     SettingsAgentSheet,
     SettingsSearch,
+    SettingsSecurity,
+    SettingsSecurityWarning,
     Projects,
     ProjectSettings,
     ProjectSettingsTabGeneral,
@@ -209,7 +211,7 @@ pub enum Shot {
 }
 
 impl Shot {
-    pub const ALL: [Shot; 174] = [
+    pub const ALL: [Shot; 176] = [
         Shot::TasksTable,
         Shot::TasksBoard,
         Shot::BoardHoverCard,
@@ -283,6 +285,8 @@ impl Shot {
         Shot::SettingsAgents,
         Shot::SettingsAgentSheet,
         Shot::SettingsSearch,
+        Shot::SettingsSecurity,
+        Shot::SettingsSecurityWarning,
         Shot::Projects,
         Shot::ProjectSettings,
         Shot::ProjectSettingsTabGeneral,
@@ -461,6 +465,8 @@ impl Shot {
             Shot::SettingsAgents => "settings-agents",
             Shot::SettingsAgentSheet => "settings-agent-sheet",
             Shot::SettingsSearch => "settings-search",
+            Shot::SettingsSecurity => "settings-security",
+            Shot::SettingsSecurityWarning => "settings-security-warning",
             Shot::Projects => "projects",
             Shot::ProjectSettings => "project-settings",
             Shot::ProjectSettingsTabGeneral => "project-settings-tab-general",

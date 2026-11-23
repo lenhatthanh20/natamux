@@ -42,6 +42,7 @@ mod app {
     pub mod notify_rules;
     pub mod options;
     pub mod read_pace;
+    pub mod security_rules;
     pub mod settings_agents;
     pub mod settings_font;
     pub mod settings_reads;
@@ -279,6 +280,7 @@ mod stages {
     pub mod branch_dialog_fields;
     pub mod branch_dialog_paths;
     pub mod card_rules;
+    pub mod ci_approval_rules;
     pub mod custom_stage_dialog;
     pub mod editor_branches;
     pub mod editor_catalog;

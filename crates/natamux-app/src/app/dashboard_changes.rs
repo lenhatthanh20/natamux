@@ -37,7 +37,8 @@ impl DashboardData {
             DashboardEvent::WorkspaceChanged { .. }
             | DashboardEvent::ShellsChanged { .. }
             | DashboardEvent::ReviewCommentsChanged { .. }
-            | DashboardEvent::TaskLogged { .. } => false,
+            | DashboardEvent::TaskLogged { .. }
+            | DashboardEvent::SecurityChanged => false,
         }
     }
 
@@ -65,7 +66,8 @@ impl DashboardData {
             | DashboardEvent::WorkspaceChanged { .. }
             | DashboardEvent::ShellsChanged { .. }
             | DashboardEvent::ReviewCommentsChanged { .. }
-            | DashboardEvent::TaskLogged { .. } => &[],
+            | DashboardEvent::TaskLogged { .. }
+            | DashboardEvent::SecurityChanged => &[],
         };
         for &part in parts {
             self.gens.bump(part);

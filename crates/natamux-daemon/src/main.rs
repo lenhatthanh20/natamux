@@ -36,6 +36,9 @@ async fn main() -> std::process::ExitCode {
             return std::process::ExitCode::FAILURE;
         }
     };
+    // Before `start`: a resume or restore at start already decides by the mode.
+    let security = natamux_core::security::Source::open(&config.data_dir);
+    natamux_core::security::install(Arc::new(security));
     let daemon = match start(&config, &env, Arc::new(spawn_shell), Scheduler::real()).await {
         Ok(daemon) => daemon,
         Err(error) => {

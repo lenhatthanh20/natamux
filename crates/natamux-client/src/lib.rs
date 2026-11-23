@@ -234,6 +234,13 @@ impl Client {
         })
     }
 
+    pub fn approve_ci(&self, task_id: &str, stage: &str, tree: &str) -> Answer<Task> {
+        let (task_id, stage, tree) = (task_id.to_string(), stage.to_string(), tree.to_string());
+        self.with_config(move |config| async move {
+            stages::api::approve_ci(&config, &task_id, &stage, &tree).await
+        })
+    }
+
     pub fn set_skip(&self, task_id: &str, stage: &str, on: bool) -> Answer<Task> {
         let (task_id, stage) = (task_id.to_string(), stage.to_string());
         self.with_config(move |config| async move {

@@ -80,6 +80,22 @@ impl Dashboard {
         self.panel_failed(answer, kind.failure(), cx)
     }
 
+    /// The CI approval dialog: a person approves the exact tree CI gets.
+    pub fn approve_ci(
+        &mut self,
+        task_id: &str,
+        stage: &str,
+        tree: &str,
+        cx: &mut Context<Self>,
+    ) -> Written<Task> {
+        let Some(source) = self.source.clone() else {
+            return Self::no_daemon();
+        };
+        let call = source.approve_ci(task_id, stage, tree);
+        let answer = self.write(call, true, cx, |this, task, _| this.take_task(task));
+        self.panel_failed(answer, "Could not approve the CI push.", cx)
+    }
+
     /// Save of the edit form (`PATCH /tasks/:id`).
     pub fn update_task(
         &mut self,

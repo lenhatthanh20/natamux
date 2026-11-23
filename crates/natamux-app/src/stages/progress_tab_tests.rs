@@ -43,6 +43,7 @@ impl Render for FirstStageView {
                     .collect(),
                 workflow_ran: Vec::new(),
                 ci: Vec::new(),
+                ci_asks: Vec::new(),
                 missing: Vec::new(),
                 on: &on,
             };
@@ -184,6 +185,7 @@ fn branch_input(taken: bool, expanded: bool) -> ProgressInput {
         agent_label: String::new(),
         can_answer: false,
         can_act: false,
+        ci_forbidden: false,
     }
 }
 

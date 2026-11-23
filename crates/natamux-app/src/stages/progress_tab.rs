@@ -16,6 +16,7 @@ use natamux_proto::tasks::task::Task;
 use ui::prelude::*;
 
 use super::card_rules::{card_facts, node_agent};
+use super::ci_approval_rules::pending_ci_asks;
 use super::flow_rules::{CaretAt, NodeLinks};
 use super::stage_card::{ActionsInput, CardInput, FileChip, details_card, stage_card};
 use super::stage_choices::ChoiceBox;
@@ -57,6 +58,8 @@ pub struct ProgressInput {
     pub can_answer: bool,
     /// Not done or cancelled.
     pub can_act: bool,
+    /// Strict `ciPush: forbid`: the CI box can only be unticked.
+    pub ci_forbidden: bool,
 }
 
 /// The pieces of one step's row.
@@ -65,6 +68,7 @@ pub(super) struct Ctx<'a> {
     by_id: BTreeMap<&'a str, &'a StageProgress>,
     workflow_ran: Vec<String>,
     ci: Vec<(String, String)>,
+    ci_asks: Vec<String>,
     missing: Vec<(String, super::stage_view_rules::MissingSkills)>,
     on: &'a OnCommand,
 }
@@ -127,7 +131,7 @@ impl Ctx<'_> {
                         .as_ref()
                         .is_some_and(|list| list.iter().any(|each| each == id)),
                     busy: toggling(StageToggle::Ci),
-                    allowed: true,
+                    allowed: !input.ci_forbidden,
                     started,
                 });
             }
@@ -201,6 +205,7 @@ impl Ctx<'_> {
                 .iter()
                 .find(|(stage, _)| stage == id)
                 .map(|(_, branch)| branch.clone()),
+            ci_ask: input.can_act && self.ci_asks.iter().any(|each| each == id),
             ran_workflow: self.workflow_ran.iter().any(|each| each == id),
             missing_skills: missing
                 .as_ref()
@@ -267,6 +272,10 @@ pub fn timeline(input: &ProgressInput, on: &OnCommand, cx: &App) -> Vec<AnyEleme
             .collect(),
         workflow_ran: ran_with_workflow(&input.events),
         ci: waiting_for_ci(&input.events),
+        ci_asks: pending_ci_asks(&input.events)
+            .into_iter()
+            .map(|ask| ask.stage)
+            .collect(),
         missing: missing_skills(&input.events),
         on,
     };

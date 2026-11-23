@@ -310,6 +310,16 @@ impl FakeDaemon {
         Ok(task)
     }
 
+    /// As the daemon: the approval names the tree, and the CI round starts.
+    pub fn approve_ci(&self, task_id: &str, stage: &str, tree: &str) -> Answer<Task> {
+        let mut data = self.data();
+        let task = data.task_mut(task_id)?.clone();
+        let payload = json!({ "stage": stage, "tree": tree, "mode": "approved-snapshot" });
+        data.record(task_id, "human", "stage.ci-approved", payload);
+        data.tasks_changed();
+        Ok(task)
+    }
+
     pub fn list_stage_files(&self, task_id: &str) -> Answer<Vec<StageFile>> {
         let data = self.data();
         if !data.tasks.iter().any(|task| task.id == task_id) {

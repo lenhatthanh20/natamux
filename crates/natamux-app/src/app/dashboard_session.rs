@@ -105,6 +105,7 @@ impl Dashboard {
             return;
         };
         self.read_custom_agents(&source, cx);
+        self.read_security(cx);
         let Feed { mut events, rows } = source.watch_dashboard();
         self.rows = Some(rows);
         self.data.link = Link::Loading;
@@ -293,6 +294,9 @@ impl Dashboard {
         }
     }
 }
+
+#[path = "security.rs"]
+mod security;
 
 #[cfg(test)]
 #[path = "dashboard_signal_tests.rs"]

@@ -144,4 +144,11 @@ fn names_the_actions_as_the_strict_grants_do() {
     assert_eq!(FilesRwOwn.on_child(), SubtaskReadWorkspace);
     assert_eq!(TaskReadOwn.on_child(), SubtaskReadStatus);
     assert_eq!(GitPushOwn.name(), "git.push.own");
+    // T-0373 Part 6: an agent reads the security state, never writes it.
+    assert_eq!(
+        of(Method::GET, "security"),
+        Some((TaskReadOwn, Scope::Global))
+    );
+    assert_eq!(of(Method::PUT, "security"), None);
+    assert!(is_denied(&Method::PUT, &["security"]));
 }

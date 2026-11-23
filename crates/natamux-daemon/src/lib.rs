@@ -48,6 +48,7 @@ pub mod http {
         pub mod launch_check;
         pub mod projects;
         pub mod review_comments;
+        pub mod security;
         pub mod stages;
         pub mod tasks;
         pub mod terminals;
@@ -69,6 +70,9 @@ pub mod projects {
     pub mod settings;
     pub mod settings_parse;
     pub mod settings_trim;
+}
+pub mod security {
+    pub mod store;
 }
 pub mod shared {
     pub mod event_bus;

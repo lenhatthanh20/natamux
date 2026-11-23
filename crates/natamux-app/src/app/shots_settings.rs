@@ -79,6 +79,8 @@ pub fn is_screen7_shot(shot: Shot) -> bool {
             | Shot::SettingsAgents
             | Shot::SettingsAgentSheet
             | Shot::SettingsSearch
+            | Shot::SettingsSecurity
+            | Shot::SettingsSecurityWarning
             | Shot::Projects
             | Shot::ProjectSettings
             | Shot::ProjectSettingsTabGeneral
@@ -102,6 +104,11 @@ pub fn prepare(shot: Shot) {
     fake_daemon::shared().set_gh_missing(shot == Shot::ImportIssues);
     if matches!(shot, Shot::RepoTrustDialog | Shot::ProjectSettingsTrust) {
         fake_daemon::shared().distrust_repo(PROJECT);
+    }
+    match shot {
+        Shot::SettingsSecurity => fake_daemon::shared().use_security_fixture("strict"),
+        Shot::SettingsSecurityWarning => fake_daemon::shared().use_security_fixture("warning"),
+        _ => {}
     }
 }
 
@@ -191,6 +198,9 @@ fn enter(
             root.settings_view().update(cx, |settings, cx| {
                 settings.set_query(SETTINGS_QUERY, window, cx)
             });
+        }
+        Shot::SettingsSecurity | Shot::SettingsSecurityWarning => {
+            root.show_settings(SettingsPage::Security, window, cx);
         }
         Shot::Projects => projects_dialog::open(&dashboard, window, cx),
         Shot::ProjectSettings

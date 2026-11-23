@@ -90,6 +90,8 @@ pub const AGENT_DENIED: &[(&str, &str)] = &[
     ("GET", "health"),
     ("GET", "custom-agents"),
     ("PUT", "custom-agents"),
+    // Turning Strict off or loosening a key needs the person at the app.
+    ("PUT", "security"),
     // Saved templates and plan limits have no task to cut them to.
     ("GET", "templates"),
     ("GET", "limits"),
@@ -136,6 +138,8 @@ pub fn classify(method: &Method, parts: &[&str]) -> Option<(AgentAction, Scope)>
         // `create_task` checks that it is a subtask of the own task.
         ["tasks"] if post => Some((SubtaskCreate, Scope::Global)),
         ["events"] if get => Some((EventsSubscribe, Scope::Global)),
+        // No secrets: an agent may see which rules hold it.
+        ["security"] if get => Some((TaskReadOwn, Scope::Global)),
         ["hooks", _] if post => Some((HookPost, Scope::Global)),
         ["limits", _] if post => Some((LimitsPost, Scope::Global)),
         ["jobs"] | ["activity"] | ["usage"] | ["diffstats"] | ["workspaces", "preparing"]

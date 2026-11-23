@@ -14,6 +14,27 @@ pub enum CiPush {
     Forbid,
 }
 
+impl CiPush {
+    /// The value in `security.json`.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            CiPush::ApprovedCommit => "approved-commit",
+            CiPush::ApprovedSnapshot => "approved-snapshot",
+            CiPush::Forbid => "forbid",
+        }
+    }
+
+    /// Higher is stricter: a person approving each push is stricter than the daemon approving
+    /// the last commit.
+    pub fn rank(self) -> u8 {
+        match self {
+            CiPush::ApprovedCommit => 0,
+            CiPush::ApprovedSnapshot => 1,
+            CiPush::Forbid => 2,
+        }
+    }
+}
+
 /// How the CI check of a stage gets the work, in every mode. `Snapshot` is Personal mode: HEAD
 /// plus the tracked changes, approved by the daemon.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

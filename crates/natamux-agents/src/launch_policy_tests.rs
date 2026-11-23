@@ -107,3 +107,25 @@ fn splits_words_as_a_posix_shell() {
     );
     assert_eq!(split_words("'it''s'"), vec!["its"]);
 }
+
+// T-0373 Part 6: codex config overrides are words too.
+#[test]
+fn codex_config_overrides_that_open_approvals_are_forbidden() {
+    for words in [
+        "-c approval_policy=never",
+        "-c 'approval_policy=\"never\"'",
+        "--config sandbox_mode=danger-full-access",
+        "--config=sandbox_mode=danger-full-access",
+        "-c sandbox_workspace_write.network_access=true",
+    ] {
+        assert!(word("codex", words).is_some(), "{words}");
+    }
+    for words in [
+        "-c approval_policy=on-request",
+        "-c model=o3",
+        "--config sandbox_mode=read-only",
+    ] {
+        assert_eq!(word("codex", words), None, "{words}");
+    }
+    assert_eq!(word("claude-code", "-c approval_policy=never"), None);
+}

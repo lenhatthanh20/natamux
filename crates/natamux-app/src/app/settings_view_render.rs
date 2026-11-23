@@ -289,6 +289,7 @@ impl Render for SettingsView {
                             self.agents.bottom_bar(cx),
                         ]
                     }
+                    SettingsPage::Security => vec![header, self.security_page(cx)],
                     SettingsPage::Project(_) => vec![header, div().flex_1().into_any_element()],
                     app => {
                         let body = self.app_page(app, cx);

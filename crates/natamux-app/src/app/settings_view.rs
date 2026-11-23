@@ -49,6 +49,8 @@ pub struct SettingsView {
     clean_focus: FocusHandle,
     update_focus: FocusHandle,
     check_focus: FocusHandle,
+    strict_focus: FocusHandle,
+    ci_push_focus: FocusHandle,
     pub(super) font: FontRows,
     pub(super) agents: AgentRows,
     /// One stop per nav row. Grown while drawing.
@@ -103,6 +105,8 @@ impl SettingsView {
             clean_focus: cx.focus_handle(),
             update_focus: cx.focus_handle(),
             check_focus: cx.focus_handle(),
+            strict_focus: cx.focus_handle(),
+            ci_push_focus: cx.focus_handle().tab_stop(true),
             font,
             agents,
             nav_stops: Vec::new(),
@@ -277,6 +281,12 @@ impl SettingsView {
                 ring.extend(self.font.stops(cx));
             }
             SettingsPage::Agents => ring.extend(self.agents.stops(cx)),
+            SettingsPage::Security => {
+                ring.push(self.strict_focus.clone());
+                if self.dashboard.read(cx).data.security.strict {
+                    ring.push(self.ci_push_focus.clone());
+                }
+            }
             SettingsPage::Project(id) => {
                 if let Some(page) = self.project_page(&id) {
                     ring.extend(page.read(cx).tab_ring(cx));
@@ -362,6 +372,9 @@ mod render;
 
 #[path = "settings_pages.rs"]
 mod pages;
+
+#[path = "settings_security.rs"]
+mod security_page;
 
 /// Text-only segmented control. Arrow keys and Home / End pick, as in `Segmented`.
 fn segment<const N: usize>(

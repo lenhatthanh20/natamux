@@ -8,6 +8,7 @@ use natamux_proto::agents::custom::CustomAgent;
 use ui::{Tooltip, prelude::*};
 
 use super::dashboard::Dashboard;
+use super::security_rules::permission_lock;
 use super::settings_view::SettingsView;
 use super::source::reason;
 use crate::agents::agent_choices::{AGENT_CHOICES, custom_agents, custom_agents_known};
@@ -195,8 +196,13 @@ impl AgentRows {
             SettingsAlert::new(AlertKind::Error, "Could not read the custom agents")
                 .muted_text(NOT_READ)
         });
+        // The native app has no permission mode control; Strict says here why agents ask.
+        let strict = permission_lock(&self.dashboard.read(cx).data.security).map(|why| {
+            SettingsAlert::new(AlertKind::Warning, "Strict mode holds agents to ask").text(why)
+        });
         v_flex()
             .w_full()
+            .children(strict)
             .children(save_failed)
             .children(not_read)
             .child(self.custom_group(cx))

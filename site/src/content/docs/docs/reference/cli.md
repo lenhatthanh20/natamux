@@ -37,6 +37,7 @@ Task ids look like `T-42`. Inside a Natamux terminal, the token, the daemon addr
 | `workspace create <id>` | Create a git worktree and a branch for a task |
 | `workspace remove <id>` | Remove the worktree of a task (needs `--yes`) |
 | `repo trust <repo>` | Show the commands a project runs, or approve them (`--approve`) |
+| `security` | Show whether Strict mode is on and what each of its keys blocks |
 | `hooks claude-code` | Print Claude Code settings that report a task's progress |
 | `hooks opencode\|qwen\|droid` | Print the hook file Natamux writes into a task's worktree (`.opencode/plugins/natamux.js`, `.qwen/settings.json`, `.factory/hooks.json`) |
 | `hook <agent> [event]` | For an agent's hook: send the JSON on stdin to the daemon |
@@ -185,6 +186,15 @@ A project's commands (stage checks, command stages, path conditions, stage `args
 - Without `--approve`, it prints each command with where it comes from, the setup scripts, and the hash.
 - With `--approve <hash>`, it approves them. The daemon refuses a hash that is no longer current: the commands changed since you read them, so read them again.
 - It needs the daemon's own token. The token of a task terminal gets 403.
+
+## security
+
+```sh
+natamux security
+natamux security --json
+```
+
+Prints the security mode (Personal or Strict), the warning when `security.json` changed outside Natamux, and each Strict key with its value and what it blocks (`GET /security`). It only reads: change the settings in the app, Settings > Security. Any token may run it, also the token of a task terminal. See [Strict mode](/docs/reference/configuration/#strict-mode-securityjson).
 
 ## hooks and hook
 

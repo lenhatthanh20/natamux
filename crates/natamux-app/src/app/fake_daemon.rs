@@ -57,6 +57,7 @@ struct Data {
     files: files::FilesState,
     projects: projects::ProjectsState,
     custom_agents: Vec<CustomAgent>,
+    security: Option<natamux_core::security::SecurityState>,
     next_number: u32,
     feeds: Vec<UnboundedSender<DashboardEvent>>,
     link: FakeLink,
@@ -138,6 +139,7 @@ impl Data {
             files: files::FilesState::default(),
             projects: projects::ProjectsState::seeded(),
             custom_agents: Vec::new(),
+            security: None,
             next_number: 200,
             feeds: Vec::new(),
             link: FakeLink::Live,
@@ -603,6 +605,9 @@ mod custom_agents;
 
 #[path = "fake_bench.rs"]
 mod bench;
+
+#[path = "fake_security.rs"]
+mod security;
 
 #[cfg(test)]
 #[path = "fake_daemon_tests.rs"]

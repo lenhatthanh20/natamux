@@ -6,8 +6,8 @@ use natamux_proto::projects::repo::Repo;
 use crate::app::settings_rules::{SearchResults, SettingsPage, page_tile};
 use crate::components::colors::TileColor;
 
-/// General, Appearance, Agents and Keyboard shortcuts come before the projects in the nav.
-pub const APP_ITEMS: usize = 4;
+/// General, Appearance, Agents, Security and Keyboard shortcuts come before the projects.
+pub const APP_ITEMS: usize = 5;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NavItem {
@@ -37,6 +37,7 @@ pub fn nav_items(repos: &[Repo]) -> Vec<(NavItem, String)> {
             "Appearance".to_owned(),
         ),
         (NavItem::Page(SettingsPage::Agents), "Agents".to_owned()),
+        (NavItem::Page(SettingsPage::Security), "Security".to_owned()),
         (NavItem::Shortcuts, "Keyboard shortcuts".to_owned()),
     ];
     items.extend(repos.iter().map(|repo| {

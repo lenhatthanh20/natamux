@@ -32,6 +32,7 @@ Commands:
   workspace remove <id>      Remove the worktree of a task (needs --yes)
   repo trust <repo>          Show the commands a project runs; approve them with --approve
   repo verify-launch         For a launch script: check the worktree is still the approved one
+  security                   Show the security mode and what each rule blocks
   hooks claude-code          Print Claude Code settings that report a task's progress
   hooks opencode|qwen|droid  Print the hook file Natamux writes into a task's worktree
   hook <agent>               For an agent's hook: send the JSON on stdin to the daemon (silent)

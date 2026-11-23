@@ -84,6 +84,8 @@ pub enum DashboardEvent {
     TaskLogged {
         task_id: String,
     },
+    /// The security settings changed. No read of its own: the app reads `GET /security`.
+    SecurityChanged,
 }
 
 /// Why the feed stops following one socket.
@@ -229,6 +231,7 @@ impl Stale {
                 }
             }
             Resource::Preparing => return PreparingMessage::parse(text),
+            Resource::Security => self.passed.push(DashboardEvent::SecurityChanged),
             Resource::ReviewComments => {
                 if let Some(task_id) = task_id_of(text) {
                     self.passed

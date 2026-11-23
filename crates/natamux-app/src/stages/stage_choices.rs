@@ -33,6 +33,7 @@ fn hint_of(choice: &ChoiceBox) -> &'static str {
         StageToggle::Workflow if !choice.allowed => WORKFLOW_ONLY_CLAUDE,
         StageToggle::Workflow if choice.started => WORKFLOW_LATER,
         StageToggle::Workflow => WORKFLOW_HINT,
+        _ if !choice.allowed => natamux_core::security::CI_FORBID_REASON,
         _ => CI_HINT,
     }
 }
@@ -47,7 +48,7 @@ pub fn choice_box(choice: &ChoiceBox, on: &OnCommand, cx: &App) -> impl IntoElem
     // A task on another agent may still untick a choice made before.
     let disabled = (!choice.allowed && !choice.on) || choice.busy;
     let hint = hint_of(choice);
-    let inline = !choice.started || (choice.kind == StageToggle::Workflow && !choice.allowed);
+    let inline = !choice.started || !choice.allowed;
     let command = PanelCommand::Toggle {
         kind: choice.kind,
         stage: choice.stage.clone(),
@@ -114,4 +115,29 @@ pub fn open_agent_menu(position: Point<Pixels>, on: OnCommand, window: &mut Wind
         })
     });
     MenuLayer::open(menu, position, window, cx);
+}
+
+#[cfg(test)]
+mod hint_tests {
+    use super::*;
+
+    fn ci_box(allowed: bool) -> ChoiceBox {
+        ChoiceBox {
+            kind: StageToggle::Ci,
+            stage: "implement".into(),
+            on: false,
+            busy: false,
+            allowed,
+            started: true,
+        }
+    }
+
+    #[test]
+    fn a_ci_box_that_strict_forbids_says_why() {
+        assert_eq!(hint_of(&ci_box(true)), CI_HINT);
+        assert_eq!(
+            hint_of(&ci_box(false)),
+            natamux_core::security::CI_FORBID_REASON
+        );
+    }
 }

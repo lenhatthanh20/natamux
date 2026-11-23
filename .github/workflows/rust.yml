@@ -491,7 +491,7 @@ jobs:
             terminal-drop-target
             palette palette-query palette-no-match palette-jump shortcuts account-menu
             settings settings-general settings-appearance settings-agents settings-agent-sheet
-            settings-search projects project-settings
+            settings-search settings-security settings-security-warning projects project-settings
             project-settings-tab-general
             project-settings-tab-json project-settings-json-error project-settings-trust import-issues sign-in
             sign-in-error add-menu menu-bar details-empty rail-closed-panel changes-over-main
@@ -536,7 +536,7 @@ jobs:
             terminal-drop-target
             palette palette-query palette-no-match palette-jump shortcuts account-menu
             settings settings-general settings-appearance settings-agents settings-agent-sheet
-            settings-search projects project-settings
+            settings-search settings-security settings-security-warning projects project-settings
             project-settings-tab-general
             project-settings-tab-json project-settings-json-error project-settings-trust import-issues sign-in
             sign-in-error add-menu menu-bar details-empty rail-closed-panel changes-over-main

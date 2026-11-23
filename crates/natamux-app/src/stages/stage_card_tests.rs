@@ -148,6 +148,7 @@ pub(super) fn input(status: StageStatus, buttons: Vec<CardButton>) -> CardInput 
         usage: None,
         activity: None,
         ci_branch: None,
+        ci_ask: false,
         ran_workflow: false,
         missing_skills: Vec::new(),
         skills_agent: String::new(),
