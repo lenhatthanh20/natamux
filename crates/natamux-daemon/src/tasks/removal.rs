@@ -1,16 +1,12 @@
 //! Deleting a task and everything stored with it (`deleteTask` of `task-service.ts`).
 
-use std::path::Path;
-
 use natamux_proto::tasks::task::Task;
-use natamux_store::event_log::event_log_path;
-use natamux_store::task_files::{archive_dir, task_file_path};
 use serde_json::{Value, json};
 
 use crate::shared::event_bus::DaemonMessage;
 use crate::tasks::errors::{TaskError, TaskResult};
+use crate::tasks::purge::{mark_deleting, purge_task_files, unmark_deleting};
 use crate::tasks::store::{Store, logged, parse_task, task_value};
-use crate::terminals::shell_files::{delete_ended_shells, delete_open_shells};
 
 impl Store {
     /// Removes the task and everything stored with it. A workspace is refused here: the caller
@@ -74,52 +70,20 @@ impl Store {
         Ok(changed)
     }
 
+    /// Restartable: the marker goes first and last, so a crash in between is finished by
+    /// `sweep_orphans` at the next start.
     fn remove_stored_task(&mut self, task_id: &str) -> TaskResult<()> {
         // A write of the task left for after the lock would bring its file back.
         self.sync.settle(task_id);
         let data_dir = self.data_dir();
-        remove_file(&task_file_path(&data_dir, task_id))?;
-        remove_file(&event_log_path(&data_dir, task_id))?;
-        match std::fs::remove_dir_all(archive_dir(&data_dir, task_id)) {
-            Err(error) if error.kind() != std::io::ErrorKind::NotFound => return Err(error.into()),
-            _ => {}
-        }
-        delete_ended_shells(&data_dir, task_id)?;
-        delete_open_shells(&data_dir, task_id)?;
-        remove_file(
-            &natamux_store::task_files::tasks_dir(&data_dir).join(format!("{task_id}.usage.json")),
-        )?;
-        remove_launch_scripts(&data_dir, task_id)?;
+        mark_deleting(&data_dir, task_id)?;
+        purge_task_files(&data_dir, task_id)?;
         self.sync
             .index()
             .delete_task(task_id)
             .map_err(TaskError::Failed)?;
         self.sync.forget(task_id);
+        unmark_deleting(&data_dir, task_id)?;
         Ok(())
     }
-}
-
-fn remove_file(path: &Path) -> std::io::Result<()> {
-    match std::fs::remove_file(path) {
-        Err(error) if error.kind() != std::io::ErrorKind::NotFound => Err(error),
-        _ => Ok(()),
-    }
-}
-
-/// Launch scripts are named agent-launch-T-0001.sh and agent-launch-T-0001-2.sh.
-fn remove_launch_scripts(data_dir: &Path, task_id: &str) -> std::io::Result<()> {
-    let entries = match std::fs::read_dir(data_dir) {
-        Ok(entries) => entries,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-        Err(error) => return Err(error),
-    };
-    let exact = format!("agent-launch-{task_id}.sh");
-    let prefix = format!("agent-launch-{task_id}-");
-    for entry in entries {
-        let name = entry?.file_name().to_string_lossy().into_owned();
-        if name == exact || (name.starts_with(&prefix) && name.ends_with(".sh")) {
-            remove_file(&data_dir.join(name))?;
-        }
-    }
-    Ok(())
 }

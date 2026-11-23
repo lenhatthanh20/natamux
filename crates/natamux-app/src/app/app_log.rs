@@ -1,14 +1,14 @@
 //! The app's own log, `logs/app.log` in the data folder beside `daemon.log`: one line per
 //! event that is hard to see later, such as the link to the daemon going down.
 
-use std::fs::{self, OpenOptions};
-use std::io::Write;
+use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use gpui::App;
 use natamux_client::{DashboardEvent, LinkStatus};
+use natamux_core::workspaces::private_dir::append_log_line;
 
 use super::source::Source;
 use super::view_state;
@@ -35,13 +35,7 @@ pub fn trim_at_start() {
 }
 
 fn write_in(folder: &Path, now: SystemTime, line: &str) {
-    let path = folder.join(FILE);
-    if let Some(parent) = path.parent() {
-        let _ = fs::create_dir_all(parent);
-    }
-    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(&path) {
-        let _ = writeln!(file, "{} {line}", rfc3339(now));
-    }
+    let _ = append_log_line(&folder.join(FILE), &format!("{} {line}", rfc3339(now)));
 }
 
 fn trim_in(folder: &Path, keep: usize) {
@@ -176,6 +170,28 @@ mod tests {
             text,
             "2023-11-14T22:13:20Z link: refused\n2023-11-14T22:13:25Z link: live again after 5 s\n"
         );
+    }
+
+    #[test]
+    fn a_line_loses_its_secrets_and_the_file_is_private() {
+        let folder = temp_folder("secret");
+        write_in(
+            &folder,
+            at(0),
+            "link: reconnecting: https://user:FAKE-PASS-123@h.test/x?token=FAKE-PASS-123",
+        );
+        let path = folder.join(FILE);
+        let text = fs::read_to_string(&path).unwrap_or_default();
+        assert_eq!(
+            text,
+            "1970-01-01T00:00:00Z link: reconnecting: https://h.test/x?token=***\n"
+        );
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = fs::metadata(&path).map(|meta| meta.permissions().mode());
+            assert_eq!(mode.unwrap_or(0) & 0o777, 0o600);
+        }
     }
 
     #[test]

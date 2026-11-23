@@ -18,6 +18,7 @@ use natamux_agents::usage::limits::read_codex_limits;
 use natamux_agents::usage::{session_file, usage_reader};
 use natamux_core::js::{iso_now, parse_iso_millis};
 use natamux_core::json::to_js_string;
+use natamux_core::workspaces::private_dir::{private_dir, write_private};
 use natamux_proto::agents::limits::{AgentLimits, LimitWindow};
 use natamux_store::task_files::tasks_dir;
 use serde_json::{Map, Value};
@@ -302,10 +303,10 @@ impl Inner {
     }
 
     fn save(&self, task_id: &str, stored: &Stored) -> std::io::Result<()> {
-        std::fs::create_dir_all(tasks_dir(&self.options.data_dir))?;
+        private_dir(&tasks_dir(&self.options.data_dir))?;
         let path = usage_path(&self.options.data_dir, task_id);
         let temporary = path.with_file_name(format!("{task_id}.usage.json.tmp"));
-        std::fs::write(&temporary, to_js_string(&stored_value(stored)))?;
+        write_private(&temporary, to_js_string(&stored_value(stored)).as_bytes())?;
         std::fs::rename(&temporary, &path)
     }
 
@@ -375,9 +376,9 @@ impl Inner {
 
 fn save_atomic(path: &Path, value: &Value) -> std::io::Result<()> {
     if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir)?;
+        private_dir(dir)?;
     }
     let temporary = path.with_extension("json.tmp");
-    std::fs::write(&temporary, to_js_string(value))?;
+    write_private(&temporary, to_js_string(value).as_bytes())?;
     std::fs::rename(&temporary, path)
 }

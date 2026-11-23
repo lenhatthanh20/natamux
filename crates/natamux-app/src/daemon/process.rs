@@ -1,6 +1,6 @@
 //! Starts the daemon beside the packaged app and keeps it alive until the app quits.
 
-use std::fs::{self, OpenOptions};
+use std::fs;
 use std::io;
 #[cfg(unix)]
 use std::io::{Read, Write};
@@ -12,6 +12,7 @@ use std::time::{Duration, Instant};
 
 use natamux_client::Config;
 use natamux_client::config::save_access;
+use natamux_core::workspaces::private_dir::{append_options, private_dir};
 
 use crate::app::view_state;
 use crate::daemon::health_proof::daemon_proves_itself;
@@ -94,15 +95,13 @@ impl OwnedDaemon {
         }
         let port = pick_port(4317)?;
         let log_path = folder.join("logs/daemon.log");
-        fs::create_dir_all(
+        private_dir(
             log_path
                 .parent()
                 .ok_or_else(|| io::Error::other("No log folder"))?,
         )?;
-        let log = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&log_path)?;
+        let log = append_options().open(&log_path)?;
+        tighten(&log_path);
         let mut command = Command::new(binary);
         command
             .env("NATAMUX_HOST", "127.0.0.1")

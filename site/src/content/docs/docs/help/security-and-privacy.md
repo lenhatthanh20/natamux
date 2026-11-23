@@ -53,6 +53,9 @@ Each task works in its own git worktree. Natamux pushes, merges or deletes a bra
 - The app folder and the daemon data folder are private to your user (mode `0700`).
 - The desktop app keeps its token in its user data folder, readable only by your user (mode `0600`).
 - The scripts that start agents are written with mode `0600`.
+- Task files, event logs, saved screens, attachments, the SQLite index and the logs are written with mode `0600`. At start the daemon tightens wider files an older version left in the top two levels of the data folder. Worktrees keep their modes.
+- Deleting a task removes every file Natamux kept for it in the data folder (task file, events, usage, shells, screens, attachments, launch and stage-command scripts) and its index rows, with SQLite `secure_delete` on. If Natamux stops in the middle, the next start finishes the delete.
+- Logs and git errors never show the user name and password of a URL, secret URL query values (`token`, `access_token`, `key`, `password`, `secret`, `sig`), or words that start with `ghp_`, `github_pat_`, `gho_` or `sk-`. Other secrets in free text are not found.
 - Modes `0700` and `0600` are set on macOS and Linux only. On Windows the folders keep their default permissions.
 - The desktop app is native: it has no web page and no Sign out.
 

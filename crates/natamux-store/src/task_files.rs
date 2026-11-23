@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
 use natamux_core::tasks::task::{upgrade_task_fields, validate_task};
+use natamux_core::workspaces::private_dir::{private_dir, write_private};
 use natamux_proto::tasks::task::Task;
 use serde_json::{Map, Value};
 
@@ -126,7 +127,7 @@ pub fn write_task_file(data_dir: &Path, task: &Task) -> io::Result<FileStat> {
     // The folder is made only when it is missing, not on every write.
     match write_atomic(&path, text.as_bytes()) {
         Err(error) if error.kind() == ErrorKind::NotFound => {
-            fs::create_dir_all(tasks_dir(data_dir))?;
+            private_dir(&tasks_dir(data_dir))?;
             write_atomic(&path, text.as_bytes())?;
         }
         other => other?,
@@ -134,12 +135,12 @@ pub fn write_task_file(data_dir: &Path, task: &Task) -> io::Result<FileStat> {
     stat_file(&path)?.ok_or_else(|| io::Error::from(ErrorKind::NotFound))
 }
 
-/// `writeFileSync(path.tmp)` then `renameSync`.
+/// `writeFileSync(path.tmp)` then `renameSync`. The file is only the user's (0600).
 pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
     let mut temporary = path.as_os_str().to_owned();
     temporary.push(".tmp");
     let temporary = PathBuf::from(temporary);
-    fs::write(&temporary, bytes)?;
+    write_private(&temporary, bytes)?;
     fs::rename(&temporary, path)
 }
 

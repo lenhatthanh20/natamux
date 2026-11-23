@@ -57,6 +57,9 @@ Natamux runs coding agents on your machine. An agent can read and change files a
 - The app folder and the daemon data folder are private to your user (mode `0700`), and Natamux tightens a wider folder when it starts. Modes `0700` and `0600` are set on macOS and Linux only. On Windows the folders keep their default permissions.
 - The desktop app keeps its daemon token in its user data folder, readable only by your user (file mode `0600`).
 - The scripts that start agents (`agent-launch-<task>.sh`) are written with mode `0600`, so the prompt and settings in them are not readable by other users.
+- Task files, event logs, saved terminal screens, shell lists, usage files, attachments, the SQLite index (with its `-wal` and `-shm` files) and the app, daemon and update logs are written with mode `0600`, in folders with mode `0700`. At start the daemon tightens wider files and folders an older version left in the top two levels of the data folder. Worktrees keep their modes: they are your code.
+- Deleting a task removes every file Natamux kept for it: the task file, events, usage, shell lists, saved screens, archive, attachments, and its launch and stage-command scripts. The SQLite index deletes with `secure_delete` on and empties its WAL file after the delete. A delete writes `tasks/<task>.deleting` first; if Natamux stops in the middle, the next start finishes the delete. The next start also removes leftover files of a task that has neither a task file nor an index row. Deleting a task never deletes a worktree with uncommitted changes unless you choose to, and never deletes a folder that is not a worktree.
+- Log lines and git error messages pass a redaction step: the user name and password of a URL, the values of `token`, `access_token`, `key`, `password`, `secret` and `sig` in a URL query, and words that start with `ghp_`, `github_pat_`, `gho_` or `sk-` are replaced with `***`. Other secrets in free text are not found.
 
 ### Agents and hooks
 

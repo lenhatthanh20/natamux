@@ -1,7 +1,7 @@
 //! Signed desktop updates, run off the window thread.
 
-use std::fs::{self, OpenOptions};
-use std::io::{self, Write};
+use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -460,14 +460,10 @@ fn packaged() -> bool {
         || cfg!(windows) && exe.with_file_name("natamux-daemon.exe").is_file()
 }
 
+/// A release URL can carry a signed query, so the line passes the redaction.
 pub(super) fn log(folder: &Path, message: &str) {
     let path = folder.join("logs/update.log");
-    if let Some(parent) = path.parent() {
-        let _ = fs::create_dir_all(parent);
-    }
-    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
-        let _ = writeln!(file, "{message}");
-    }
+    let _ = natamux_core::workspaces::private_dir::append_log_line(&path, message);
 }
 
 #[cfg(test)]

@@ -112,9 +112,11 @@ pub mod stages {
     pub mod stage_tickets;
 }
 pub mod start;
+pub mod start_privacy;
 pub mod tasks {
     pub mod errors;
     pub mod helpers;
+    pub mod purge;
     pub mod records;
     mod records_ci;
     mod removal;

@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use natamux_core::tasks::attachments::{
     ATTACHMENTS_DIR, format_bytes, preview_type_of, safe_attachment_name,
 };
+use natamux_core::workspaces::private_dir::{private_dir, write_private};
 use natamux_core::workspaces::safe_write::copy_inside;
 use natamux_proto::tasks::attachments::Attachment;
 
@@ -40,9 +41,9 @@ pub fn save_attachments(
         return Ok(());
     }
     let dir = attachments_dir(data_dir, task_id);
-    fs::create_dir_all(&dir)?;
+    private_dir(&dir)?;
     for file in files {
-        fs::write(dir.join(safe_attachment_name(&file.name)), &file.bytes)?;
+        write_private(&dir.join(safe_attachment_name(&file.name)), &file.bytes)?;
     }
     Ok(())
 }

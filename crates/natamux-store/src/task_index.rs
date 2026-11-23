@@ -8,6 +8,7 @@ use std::path::Path;
 use natamux_core::events::schema::validate_task_event;
 use natamux_core::json::{parse_js, to_js_string, to_js_string_of};
 use natamux_core::tasks::task::validate_task;
+use natamux_core::workspaces::private_dir::private_file;
 use natamux_proto::events::task_event::{StoredEvent, TaskEvent};
 use natamux_proto::tasks::task::Task;
 use rusqlite::{Connection, OptionalExtension, params};
@@ -144,7 +145,10 @@ impl TaskIndex {
         // Safe with WAL. A crash loses at most the last commits, and init() reads those files again.
         db.pragma_update(None, "synchronous", "normal")
             .map_err(sql)?;
+        // A deleted task must not stay readable in the free pages of the file.
+        db.pragma_update(None, "secure_delete", "on").map_err(sql)?;
         db.execute_batch(SCHEMA).map_err(sql)?;
+        make_private(path);
         Ok(TaskIndex { db })
     }
 
@@ -162,7 +166,13 @@ impl TaskIndex {
             db.prepare_cached("delete from task_files where task_id = ?")?
                 .execute([task_id])?;
             Ok(())
-        })
+        })?;
+        // The old pages of the task are still in the WAL file until a checkpoint empties it.
+        // The rows are gone already, so a checkpoint that cannot run now is not an error.
+        let _ = self
+            .db
+            .query_row("pragma wal_checkpoint(truncate)", [], |_| Ok(()));
+        Ok(())
     }
 
     pub fn upsert_task(&mut self, task: &Task) -> IndexResult<()> {
@@ -367,6 +377,16 @@ impl TaskIndex {
     }
 }
 
+/// The index and its WAL files hold task text: only the user may read them. SQLite makes the
+/// WAL files with the mode of the index. A chmod that fails does not stop the start.
+fn make_private(path: &Path) {
+    for suffix in ["", "-wal", "-shm"] {
+        let mut file = path.as_os_str().to_owned();
+        file.push(suffix);
+        let _ = private_file(Path::new(&file));
+    }
+}
+
 /// Parsed with the schema: a row written by an older version may miss newer fields.
 fn parse_row(data: &str) -> IndexResult<Task> {
     let value = parse_js(data).map_err(|error| error.to_string())?;
@@ -440,3 +460,7 @@ fn store_files(db: &Connection, task_id: &str, files: TaskFiles) -> rusqlite::Re
 #[cfg(test)]
 #[path = "task_index_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "task_index_privacy_tests.rs"]
+mod privacy_tests;

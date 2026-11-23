@@ -1,12 +1,13 @@
 //! One JSON line per event of a task, next to its task file (`event-log.ts`). The index keeps the
 //! events too, for fast reads; this file is what survives when the index is lost.
 
-use std::fs::{self, OpenOptions};
+use std::fs;
 use std::io::{self, ErrorKind, Write};
 use std::path::{Path, PathBuf};
 
 use natamux_core::events::schema::validate_task_event;
 use natamux_core::json::{parse_js, to_js_string};
+use natamux_core::workspaces::private_dir::{append_options, private_dir, write_private};
 use natamux_proto::events::task_event::TaskEvent;
 use serde_json::Value;
 
@@ -40,17 +41,11 @@ pub fn append_event_line(
 ) -> io::Result<FileStat> {
     let path = event_log_path(data_dir, &event.task_id);
     let line = format!("{}\n", event_line(event, accepted));
-    let append = |path: &Path| {
-        OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(path)?
-            .write_all(line.as_bytes())
-    };
+    let append = |path: &Path| append_options().open(path)?.write_all(line.as_bytes());
     match append(&path) {
         // The folder is made only when it is missing, not once per event.
         Err(error) if error.kind() == ErrorKind::NotFound => {
-            fs::create_dir_all(tasks_dir(data_dir))?;
+            private_dir(&tasks_dir(data_dir))?;
             append(&path)?;
         }
         other => other?,
@@ -59,7 +54,7 @@ pub fn append_event_line(
 }
 
 pub fn write_event_log(data_dir: &Path, task_id: &str, events: &[LoggedEvent]) -> io::Result<()> {
-    fs::create_dir_all(tasks_dir(data_dir))?;
+    private_dir(&tasks_dir(data_dir))?;
     let text: Vec<String> = events
         .iter()
         .map(|logged| event_line(&logged.event, logged.accepted))
@@ -69,7 +64,7 @@ pub fn write_event_log(data_dir: &Path, task_id: &str, events: &[LoggedEvent]) -
     } else {
         format!("{}\n", text.join("\n"))
     };
-    fs::write(event_log_path(data_dir, task_id), body)
+    write_private(&event_log_path(data_dir, task_id), body.as_bytes())
 }
 
 /// The events of a task, oldest first; None when it has no log. A line that cannot be read (a crash
