@@ -12,7 +12,7 @@ use serde_json::{Map, Value};
 use super::task_time::parse_iso_ms;
 
 /// One short sentence for every kind of event in `EVENT_TYPES`; a test keeps the two in step.
-const EVENT_SENTENCE: [(&str, &str); 53] = [
+const EVENT_SENTENCE: [(&str, &str); 54] = [
     ("task.created", "Task created"),
     ("task.readied", "Marked ready"),
     ("task.blocked", "Blocked"),
@@ -69,6 +69,7 @@ const EVENT_SENTENCE: [(&str, &str); 53] = [
         "CI push waits for your approval",
     ),
     ("stage.ci-blocked", "CI push blocked"),
+    ("agent.policy-blocked", "Agent start blocked"),
 ];
 
 /// The name of a path of a branch by its id.
@@ -157,6 +158,10 @@ fn detail_of(event: &TaskEvent) -> Option<String> {
     if event.kind == "workspace.failed" || event.kind == "workspace.warning" {
         let message = event.payload.get("message")?.as_str()?;
         return (!message.is_empty()).then(|| message.to_string());
+    }
+    if event.kind == "agent.policy-blocked" {
+        let reason = event.payload.get("reason")?.as_str()?;
+        return (!reason.is_empty()).then(|| reason.to_string());
     }
     if event.kind == "workspace.branch-changed" {
         let to = event.payload.get("to")?.as_str()?;

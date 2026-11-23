@@ -3,6 +3,7 @@
 //! Vietnamese one) sends, when typed text comes out wrong in an agent. It logs typed text,
 //! passwords too, so it is off by default.
 
+use natamux_core::security::{INPUT_TRACE_BLOCKED, input_trace_allowed};
 use natamux_pty::input_gap::InputKind;
 
 use super::session_lifecycle::session_key;
@@ -14,6 +15,17 @@ const MAX_CHARS: usize = 200;
 /// Only exactly `1` turns the trace on: it logs passwords, so nothing else may.
 pub fn trace_input_on(value: Option<&str>) -> bool {
     value == Some("1")
+}
+
+/// The trace at start: asked by the env and allowed by the security mode. A blocked ask logs
+/// one line without any content.
+pub fn trace_input_at_start(value: Option<&str>) -> bool {
+    let asked = trace_input_on(value);
+    if asked && !input_trace_allowed() {
+        eprintln!("{INPUT_TRACE_BLOCKED}");
+        return false;
+    }
+    asked
 }
 
 #[derive(Clone, Copy)]
@@ -62,9 +74,15 @@ pub fn next_line(
     Some(line(key, step, since, data))
 }
 
+/// Whether an input is traced now: the session's trace is checked against the security mode
+/// on each input, so tracing stops once Strict mode is on.
+fn traced_now(session_on: bool) -> bool {
+    session_on && input_trace_allowed()
+}
+
 /// Logs to stderr, which the app writes to the daemon log.
 pub fn trace(session: &mut Session, step: Step, data: &str) {
-    if !session.trace_input {
+    if !traced_now(session.trace_input) {
         return;
     }
     let now = session.now();
@@ -76,7 +94,27 @@ pub fn trace(session: &mut Session, step: Step, data: &str) {
 
 #[cfg(test)]
 mod tests {
+    use natamux_core::security::{SecurityMode, StrictSettings, force};
+
     use super::*;
+
+    #[test]
+    fn strict_blocks_the_trace_at_start_and_on_the_next_input() {
+        let line_of = |on: bool| {
+            let mut at = None;
+            next_line(traced_now(on), &mut at, 0, "T-1/1", Step::Recv, "pw")
+        };
+        assert!(trace_input_at_start(Some("1")));
+        assert_eq!(
+            line_of(true),
+            Some(r#"input T-1/1 recv +0 "pw""#.to_string())
+        );
+        // Strict turned on while the session traces: the next input is not traced.
+        let _strict = force(SecurityMode::Strict(StrictSettings::default()));
+        assert_eq!(line_of(true), None);
+        assert!(!trace_input_at_start(Some("1")));
+        assert!(!trace_input_at_start(None));
+    }
 
     #[test]
     fn escapes_control_characters_and_names_the_step() {

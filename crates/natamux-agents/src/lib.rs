@@ -9,6 +9,7 @@ pub mod hook_origin;
 pub mod hooks;
 pub mod launch;
 pub mod launch_ask;
+pub mod launch_policy;
 mod paths;
 pub mod sign_in;
 pub mod skill_list;

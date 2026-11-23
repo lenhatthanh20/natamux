@@ -13,7 +13,7 @@ Nothing. Natamux sends no usage data, crash reports or analytics anywhere. Its o
 - The daemon token, the update setting, the offline setting, downloaded updates and the logs of the desktop app: in its user data folder (`~/Library/Application Support/Natamux` on macOS, `%APPDATA%\Natamux` on Windows, `~/.config/Natamux` on Linux). `settings.json` there holds the update setting and the offline setting.
 - App preferences (theme, layout): in `view.json` in the desktop app's user data folder.
 
-`NATAMUX_INPUT_TRACE=1` makes the daemon write every key typed in a terminal, passwords too, to its log. Leave it unset unless you debug typing.
+`NATAMUX_INPUT_TRACE=1` makes the daemon write every key typed in a terminal, passwords too, to its log. Leave it unset unless you debug typing. In Strict mode the trace is blocked: the daemon logs only `input trace blocked by Strict mode`, and a trace that was on stops at the next key once Strict mode is on.
 
 These files are readable only by your user on macOS and Linux (`0600` files, `0700` folders). Logs never hold the password or token of a URL, or a token with a known prefix such as `ghp_` (see [SECURITY.md](SECURITY.md#secrets-on-disk)).
 

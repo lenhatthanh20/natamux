@@ -25,6 +25,7 @@ use natamux_stages::prompts::{arg_values, fill};
 use crate::agents::errors::AgentError;
 use crate::agents::hook_config_watch::HookConfigWatch;
 use crate::agents::launch_guard::{LaunchGate, drop_trust, guard, with_verify};
+use crate::agents::launch_policy_check::{StartWords, args_variable, check_words};
 use crate::agents::pasted_prompt::PastedPrompts;
 use crate::projects::repo_trust_worktree::TrustedOf;
 use crate::shared::jobs::system_clock;
@@ -267,7 +268,7 @@ impl AgentRunner {
         let program = self.program_of(agent);
         let (trusted_of, paths) = (&self.options.trusted_of, &self.options.trust_paths);
         let gate = guard(trusted_of, &task, &agent_kind(agent), paths)?;
-        let (command, pasted) = self.command_of(&task, agent, prompt, session, own, &gate);
+        let (command, pasted) = self.command_of(&task, agent, prompt, session, own, &gate)?;
         gate.recheck(trusted_of, &task, paths)?;
         let shell = terminal.unwrap_or(MAIN_TERMINAL);
         let check = gate.verify_digest().map(|digest| (task_id, digest));
@@ -335,6 +336,34 @@ impl AgentRunner {
         task_model(task, agent, stage_args).map(str::to_string)
     }
 
+    /// The word check of `launch_policy_check`, before anything is written. Gives whether the
+    /// project's permission mode is `auto`, read at each start so a saved change counts.
+    fn checked_mode(
+        &self,
+        task: &Task,
+        kind: &str,
+        strict: bool,
+        [model, stage_words]: [Option<&str>; 2],
+    ) -> Result<bool, AgentError> {
+        let auto_mode = (self.options.permission_mode_of)(task.repo.as_deref()) == "auto";
+        let variable = args_variable(kind);
+        let words = StartWords {
+            kind,
+            ask: !auto_mode,
+            strict,
+            sources: [
+                (
+                    variable.as_str(),
+                    self.extra_args.get(kind).map(String::as_str),
+                ),
+                ("model", model),
+                ("stage args", stage_words),
+            ],
+        };
+        check_words(&self.options.tasks, &task.id, &words)?;
+        Ok(auto_mode)
+    }
+
     /// The command line of a start, with the agent's hook file and trust in place first, and
     /// the prompt to paste once the agent is up, for an agent that takes none on the line.
     fn command_of(
@@ -345,10 +374,20 @@ impl AgentRunner {
         session: Option<&str>,
         own: &OwnAgent,
         gate: &LaunchGate,
-    ) -> (String, Option<String>) {
+    ) -> Result<(String, Option<String>), AgentError> {
         let (trusted, strict) = (gate.trusted(), gate.strict());
         // A custom agent starts as its base, with its own program.
         let kind = agent_kind(agent);
+        let stage_words = own
+            .args
+            .as_deref()
+            .filter(|_| trusted)
+            .map(|args| quoted_words(args, &arg_values(task), self.platform()));
+        let model = self
+            .model_for(task, agent, own, trusted)
+            .map(|model| format!("--model {}", quote_argument(&model, self.platform())));
+        let words = [model.as_deref(), stage_words.as_deref()];
+        let auto_mode = self.checked_mode(task, &kind, strict, words)?;
         let mut workspace_hooks = false;
         if let Some(workspace) = &task.workspace {
             workspace_hooks =
@@ -358,14 +397,6 @@ impl AgentRunner {
                 trust_workspace(&kind, workspace, &self.options.trust_paths);
             }
         }
-        let stage_words = own
-            .args
-            .as_deref()
-            .filter(|_| trusted)
-            .map(|args| quoted_words(args, &arg_values(task), self.platform()));
-        let model = self
-            .model_for(task, agent, own, trusted)
-            .map(|model| format!("--model {}", quote_argument(&model, self.platform())));
         // Strict mode: the agent's ask mode, before the user's own words.
         let ask = strict.then(|| ask_flags(&kind).join(" "));
         let extra: Vec<&str> = [
@@ -399,10 +430,7 @@ impl AgentRunner {
                 platform: self.platform(),
                 claude_settings_path: self.options.claude_settings_path.to_string_lossy().into(),
                 gemini_settings_path: self.gemini_settings_path.to_string_lossy().into(),
-                // Read at each start, so a saved change counts for the next agent.
-                auto: !strict
-                    && trusted
-                    && (self.options.permission_mode_of)(task.repo.as_deref()) == "auto",
+                auto: !strict && trusted && auto_mode,
                 workspace: task.workspace.clone(),
                 trust: trusted,
                 workspace_hooks,
@@ -410,9 +438,9 @@ impl AgentRunner {
             },
         );
         if strict {
-            return (with_ask_env(&kind, &command, self.platform()), pasted);
+            return Ok((with_ask_env(&kind, &command, self.platform()), pasted));
         }
-        (command, pasted)
+        Ok((command, pasted))
     }
 
     /// What is typed into the terminal. The terminal echoes it, so the long command (settings

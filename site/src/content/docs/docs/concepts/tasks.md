@@ -205,7 +205,7 @@ natamux events T-0001
 natamux events T-0001 --json
 ```
 
-Some events only record a fact and change no state, such as `git.committed` and `workspace.created`. `workspace.branch-changed` is one of them: it records that the task now uses another branch, with `{ from, to }`.
+Some events only record a fact and change no state, such as `git.committed` and `workspace.created`. `workspace.branch-changed` is one of them: it records that the task now uses another branch, with `{ from, to }`. `agent.policy-blocked` records an agent start that failed because a word would turn off its approvals, with `{ word, source, reason }`.
 
 You can send an event yourself. This is useful for tools that Natamux does not know.
 

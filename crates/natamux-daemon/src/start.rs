@@ -33,7 +33,7 @@ use crate::stages::runner::StageRunner;
 use crate::tasks::errors::TaskError;
 use crate::tasks::service::{TaskService, is_task_ended};
 use crate::tasks::templates::TemplateService;
-use crate::terminals::input_trace::trace_input_on;
+use crate::terminals::input_trace::trace_input_at_start;
 use crate::terminals::login_path::use_login_path;
 use crate::terminals::open_shells::{OpenShells, OpenShellsOptions, ShellsView};
 use crate::terminals::service::{TerminalOptions, TerminalService};
@@ -259,7 +259,7 @@ fn terminal_service(
                 runner.run.options.agents.agent_ended(task_id, terminal);
             }
         })),
-        trace_input: trace_input_on(env.get("NATAMUX_INPUT_TRACE").map(String::as_str)),
+        trace_input: trace_input_at_start(env.get("NATAMUX_INPUT_TRACE").map(String::as_str)),
         screens_in: Some(data_dir.to_path_buf()),
     })
 }

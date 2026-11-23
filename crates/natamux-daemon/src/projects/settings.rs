@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use natamux_core::json::to_js_string_pretty;
+use natamux_core::security::AUTO_FORBID_REASON;
 use natamux_proto::projects::repo::ProjectSettings;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -86,6 +87,18 @@ fn read_file(file: &Path, found: bool) -> Loaded {
     }
 }
 
+/// Strict mode refuses a save that sets the `auto` permission mode. A file without the key reads
+/// as `auto` by default, but the start ignores it in Strict mode, so only the key itself counts.
+fn refuse_auto(body: &Value) -> Result<(), RepoError> {
+    let mode = body
+        .pointer("/agents/permissionMode")
+        .and_then(Value::as_str);
+    if mode == Some("auto") && !natamux_core::security::auto_allowed() {
+        return Err(RepoError::SettingsInput(AUTO_FORBID_REASON.into()));
+    }
+    Ok(())
+}
+
 fn repo_error(error: TaskError) -> RepoError {
     match error {
         TaskError::RepoNotFound(text) => RepoError::NotFound(text),
@@ -159,6 +172,7 @@ impl Repos {
         version: Option<&str>,
     ) -> Result<(Value, String), RepoError> {
         let parsed = parse_settings(body).map_err(RepoError::SettingsInput)?;
+        refuse_auto(body)?;
         let path = self.settings_file(Some(id)).map_err(repo_error)?;
         if let Some(version) = version
             && version_of(std::fs::read_to_string(&path).ok().as_deref()) != version
@@ -185,3 +199,7 @@ impl Repos {
 #[cfg(test)]
 #[path = "settings_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "settings_strict_tests.rs"]
+mod strict_tests;
