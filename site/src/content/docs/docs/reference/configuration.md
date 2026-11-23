@@ -394,6 +394,33 @@ Rules:
 
 Without `branchName`, the name is the project slug + `/` + the id in lower case + the slug, such as `my-app/abc-12-fix-login`.
 
+## Strict mode (`security.json`)
+
+Strict mode is not part of `.natamux.json`: it is a setting of the app, kept in `security.json` in the daemon's data folder. Turn it on in **Settings > Security**, which saves the file through `PUT /security`. Do not edit the file by hand: the daemon then keeps the stricter of the old and the new settings and shows a warning until you save again.
+
+```json
+{ "strict": true, "ciPush": "approved-commit", "agentApi": { "grants": ["pr.create.own"] } }
+```
+
+| Key | Strict value | Meaning |
+|---|---|---|
+| `strict` | `true` | Turns Strict mode on. Missing or `false`: Personal mode, today's workflow. |
+| `ciPush` | `approved-commit` (default), `approved-snapshot` or `forbid` | What **Check on CI** may push: the last commit only, a tree a person approves, or nothing. |
+| `agentAutoMode` | `forbid` | Agents never start in auto mode. |
+| `terminalInputTrace` | `off` | `NATAMUX_INPUT_TRACE` is ignored. |
+| `repoTrust.scope` | `worktree` | Agent config is approved per worktree and checked right before the agent runs. |
+| `repoTrust.bypassHookTrust` | `false` | Codex hook trust is bypassed only for an approved digest. |
+| `agents.permissionMode` | `ask` | Each agent starts in its ask mode. |
+| `agents.requireAskGuarantee` | `true` | An agent without an ask mode does not start. |
+| `agentApi.mode` | `scoped` | An agent token reaches only its own task. |
+| `agentApi.requireHumanForPush` | `true` | An agent token never gets the push grant. |
+| `agentApi.grants` | list, default empty | Extra actions for agent tokens. See [the HTTP API](/docs/reference/http-api/). |
+
+- A key can only be stricter than its Strict value. A looser value in the file is ignored (`GET /security` lists it in `ignored`), and `PUT /security` refuses it.
+- A project can tighten Strict mode with a `security` object in its `.natamux.json`, with the same keys. It never loosens it.
+- A file that cannot be read turns Strict mode on with its defaults, with a warning.
+- `natamux security` prints the state. See [SECURITY.md](https://github.com/lenhatthanh20/natamux/blob/main/SECURITY.md#strict-mode) for what Strict mode does not stop.
+
 ## Examples
 
 ### Drop the planning stages

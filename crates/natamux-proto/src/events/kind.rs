@@ -15,7 +15,7 @@ struct Envelope {
 }
 
 /// Every `kind` this module knows, to check against the daemon's `DaemonMessage`.
-pub const KNOWN_KINDS: [&str; 14] = [
+pub const KNOWN_KINDS: [&str; 15] = [
     "task.created",
     "task.updated",
     "task.changed",
@@ -29,6 +29,7 @@ pub const KNOWN_KINDS: [&str; 14] = [
     "shells.changed",
     "workspace.preparing",
     "review-comments.changed",
+    "security.changed",
     "resync",
 ];
 
@@ -50,6 +51,8 @@ pub enum Resource {
     Preparing,
     /// The review comments of one task (`GET /tasks/:id/review-comments`).
     ReviewComments,
+    /// The security mode and its keys (`GET /security`).
+    Security,
     /// The socket was behind and skipped messages: read everything again.
     Resync,
 }
@@ -68,6 +71,7 @@ pub enum EventKind {
     ShellsChanged,
     WorkspacePreparing,
     ReviewCommentsChanged,
+    SecurityChanged,
     /// The socket was behind and skipped messages: read everything again.
     Resync,
     /// Any other kind, also ones this build does not know.
@@ -96,6 +100,7 @@ impl EventKind {
             "shells.changed" => EventKind::ShellsChanged,
             "workspace.preparing" => EventKind::WorkspacePreparing,
             "review-comments.changed" => EventKind::ReviewCommentsChanged,
+            "security.changed" => EventKind::SecurityChanged,
             "resync" => EventKind::Resync,
             _ => EventKind::Other,
         }
@@ -114,6 +119,7 @@ impl EventKind {
             EventKind::ShellsChanged => Some(Resource::Shells),
             EventKind::WorkspacePreparing => Some(Resource::Preparing),
             EventKind::ReviewCommentsChanged => Some(Resource::ReviewComments),
+            EventKind::SecurityChanged => Some(Resource::Security),
             EventKind::Resync => Some(Resource::Resync),
             EventKind::Other => None,
         }
@@ -254,6 +260,10 @@ mod tests {
             (
                 r#"{"kind":"review-comments.changed","taskId":"T-1"}"#,
                 Resource::ReviewComments,
+            ),
+            (
+                r#"{"kind":"security.changed","strict":true,"warning":null}"#,
+                Resource::Security,
             ),
             (r#"{"kind":"resync"}"#, Resource::Resync),
         ];

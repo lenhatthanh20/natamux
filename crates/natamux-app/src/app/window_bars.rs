@@ -13,6 +13,8 @@ use crate::agents::limits_rules::{agents_in_use, current, limits_chip, without_l
 use crate::app::dashboard::Dashboard;
 use crate::app::dashboard_data::{Part, Seen};
 use crate::app::links::open_link;
+use crate::app::security_rules::strict_tip;
+use crate::app::settings_rules::SettingsPage;
 use crate::app::shell_rules::{crumb, live_item, running_count, window_title};
 use crate::app::shortcuts::{ToggleAgents, ToggleDetails, ToggleSidebar};
 use crate::app::status_bar::{StatusBar, now_ms};
@@ -112,7 +114,13 @@ impl StatusBarView {
         // The counts, the link, the jobs and the plan limits.
         let mut seen = Seen::default();
         let observe = Dashboard::observe(&dashboard, cx, move |bar, dashboard, cx| {
-            let parts = [Part::Tasks, Part::Link, Part::Jobs, Part::Limits];
+            let parts = [
+                Part::Tasks,
+                Part::Link,
+                Part::Jobs,
+                Part::Limits,
+                Part::Security,
+            ];
             let gens = dashboard.read(cx).data.gens;
             if seen.changed(&gens, &parts) {
                 bar.counts = None;
@@ -233,7 +241,15 @@ impl Render for StatusBarView {
         let state = update::state();
         let words = state.status_item(update::bytes());
         let root = self.root.clone();
+        let (strict, warns) = (strict_tip(&data.security), data.security.warning.is_some());
         StatusBar::new(live, counts.running, counts.needs_you, jobs, width)
+            .strict(
+                strict,
+                warns,
+                on_root(&self.root, |root, window, cx| {
+                    root.show_settings(SettingsPage::Security, window, cx);
+                }),
+            )
             .toggles(sidebar, details, agents)
             .limits(limits)
             .update(words, move |_, window, cx| match &state {

@@ -41,6 +41,8 @@ pub struct CardInput {
     pub usage: Option<String>,
     pub activity: Option<String>,
     pub ci_branch: Option<String>,
+    /// The stage's CI push waits for a person to approve its tree.
+    pub ci_ask: bool,
     pub ran_workflow: bool,
     pub missing_skills: Vec<String>,
     pub skills_agent: String,
@@ -140,6 +142,9 @@ fn body(input: &CardInput, on: &OnCommand, cx: &App) -> Vec<AnyElement> {
     if let Some(branch) = &input.ci_branch {
         parts.push(running_note("Checking on CI", branch, cx).into_any_element());
     }
+    if input.ci_ask {
+        parts.push(ci_ask_row(&input.entry.stage, on, cx).into_any_element());
+    }
     let chips = chips(input, on, cx);
     if !chips.is_empty() {
         parts.push(
@@ -166,6 +171,27 @@ fn body(input: &CardInput, on: &OnCommand, cx: &App) -> Vec<AnyElement> {
 #[path = "stage_chips.rs"]
 mod chips;
 use chips::{chips, evidence, notices, running_note};
+
+/// The CI push waits for a person: the note and the button that opens the approval dialog.
+fn ci_ask_row(stage: &str, on: &OnCommand, cx: &App) -> impl IntoElement {
+    let on = on.clone();
+    let command = PanelCommand::ApproveCi(stage.to_owned());
+    v_flex()
+        .gap_1()
+        .child(running_note(
+            "CI waits for you",
+            "Approve the exact files CI gets",
+            cx,
+        ))
+        .child(
+            quiet_button(
+                SharedString::from(format!("ci-approve-{stage}")),
+                "Approve CI push\u{2026}",
+            )
+            .label_size(LabelSize::Small)
+            .on_click(move |_, window, cx| on(command.clone(), window, cx)),
+        )
+}
 
 #[path = "stage_actions.rs"]
 mod actions;

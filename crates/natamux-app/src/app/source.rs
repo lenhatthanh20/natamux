@@ -289,6 +289,13 @@ impl Source {
         }
     }
 
+    pub fn approve_ci(&self, task_id: &str, stage: &str, tree: &str) -> Answer<Task> {
+        self.ask(
+            |c| c.approve_ci(task_id, stage, tree),
+            |f| f.approve_ci(task_id, stage, tree),
+        )
+    }
+
     pub fn list_stage_files(&self, task_id: &str) -> Answer<Vec<StageFile>> {
         self.ask(
             |c| c.list_stage_files(task_id),

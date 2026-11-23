@@ -11,12 +11,18 @@ use crate::terminals::terminal_font::{BUILT_IN_SIZE, MAX_SIZE, MIN_SIZE, size_ok
 pub const AGENTS_SUMMARY: &str =
     "Built-in agents and your own agent commands · custom agents need Save";
 
+/// The Security page header's summary line.
+pub const SECURITY_SUMMARY: &str =
+    "Strict mode for high-security work \u{b7} changes apply at once";
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SettingsPage {
     General,
     Appearance,
     /// The built-in agents and the custom ones (`custom-agents.json`).
     Agents,
+    /// Strict mode and its keys (`security.json`, `GET /security`).
+    Security,
     /// The settings of the project with this id (`.natamux.json`).
     Project(String),
 }
@@ -91,6 +97,7 @@ pub fn page_title(page: &SettingsPage, repos: &[Repo]) -> String {
         SettingsPage::General => "General".to_owned(),
         SettingsPage::Appearance => "Appearance".to_owned(),
         SettingsPage::Agents => "Agents".to_owned(),
+        SettingsPage::Security => "Security".to_owned(),
         SettingsPage::Project(id) => repos
             .iter()
             .find(|repo| &repo.id == id)
@@ -105,6 +112,7 @@ pub fn page_tile(page: &SettingsPage) -> Option<(&'static str, TileColor)> {
         SettingsPage::General => Some(("sliders-vertical", TileColor::Gray)),
         SettingsPage::Appearance => Some(("palette", TileColor::Blue)),
         SettingsPage::Agents => Some(("bot", TileColor::Green)),
+        SettingsPage::Security => Some(("shield", TileColor::Red)),
         SettingsPage::Project(_) => None,
     }
 }
@@ -119,6 +127,7 @@ pub fn page_summary(page: &SettingsPage) -> &'static str {
             "Theme, UI size, sidebar and terminal font \u{b7} changes apply at once"
         }
         SettingsPage::Agents => AGENTS_SUMMARY,
+        SettingsPage::Security => SECURITY_SUMMARY,
         SettingsPage::Project(_) => "",
     }
 }

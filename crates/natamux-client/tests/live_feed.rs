@@ -35,6 +35,7 @@ fn route_of(event: &DashboardEvent) -> Option<String> {
         DashboardEvent::Usage(_) => "GET /usage",
         DashboardEvent::Limits(_) => "GET /limits",
         DashboardEvent::DiffStats(_) => "GET /diffstats",
+        DashboardEvent::SecurityChanged => "GET /security",
         DashboardEvent::Terminals { task_id, .. } => {
             return Some(format!("GET /tasks/{task_id}/terminals"));
         }

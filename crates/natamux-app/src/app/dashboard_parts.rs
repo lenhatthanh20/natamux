@@ -25,9 +25,11 @@ pub enum Part {
     Selection,
     /// The widths of the sidebar and the details panel.
     Widths,
+    /// `GET /security`: Strict mode and its warning.
+    Security,
 }
 
-const PARTS: usize = 14;
+const PARTS: usize = 15;
 
 /// How often each part changed.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

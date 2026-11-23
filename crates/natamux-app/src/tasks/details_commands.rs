@@ -57,6 +57,8 @@ pub enum PanelCommand {
     FoldEvidence(String),
     FoldLane(String),
     CreateIssue,
+    /// Opens the CI approval dialog of the stage (Strict `approved-snapshot`).
+    ApproveCi(String),
     // The Details tab
     /// Edit task of the "..." menu: the edit form, as `e`.
     Edit,

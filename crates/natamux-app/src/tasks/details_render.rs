@@ -13,6 +13,7 @@ use super::DetailsPanel;
 use super::run::agent_of;
 use crate::agents::agent_choices::agent_label;
 use crate::app::clock::now_ms;
+use crate::app::security_rules::ci_lock;
 use crate::stages::progress_tab::{ProgressInput, current_step, timeline};
 use crate::tasks::details_commands::{OnCommand, PanelCommand};
 use crate::workspaces::wrap_up_rules::is_finished_state;
@@ -81,6 +82,7 @@ impl DetailsPanel {
             )),
             can_answer: beside && task.workspace.is_some(),
             can_act: !is_finished_state(task.state),
+            ci_forbidden: ci_lock(&dashboard.data.security).is_some(),
             events: computed.events,
             task: computed.task,
         })

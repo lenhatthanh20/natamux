@@ -59,6 +59,23 @@ pub async fn set_ci(
     toggle(config, task_id, "ci", stage, on).await
 }
 
+/// A person approves the exact tree of a CI push (Strict `approved-snapshot`).
+pub async fn approve_ci(
+    config: &Config,
+    task_id: &str,
+    stage: &str,
+    tree: &str,
+) -> Result<Task, ClientError> {
+    let path = format!(
+        "/tasks/{}/stages/{}/ci-approve",
+        encode(task_id),
+        encode(stage)
+    );
+    let body = serde_json::json!({ "tree": tree });
+    let answer: TaskAnswer = call_with(config, Method::POST, &path, &body).await?;
+    Ok(answer.task)
+}
+
 /// Marks a stage that is not reached yet to be skipped, or clears the mark.
 pub async fn set_skip(
     config: &Config,

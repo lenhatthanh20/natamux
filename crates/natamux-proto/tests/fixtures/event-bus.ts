@@ -47,6 +47,7 @@ export type DaemonMessage =
   | { kind: 'limits.changed'; limits: AgentLimits[] }
   // The review comments of a task changed: read them again.
   | { kind: 'review-comments.changed'; taskId: string }
+  | { kind: 'security.changed'; strict: boolean; warning: string | null }
   // Sent to one socket only, which missed messages while it was too far behind: load everything.
   | { kind: 'resync' }
 

@@ -141,6 +141,9 @@ pub enum Command {
     },
     RepoTrust(crate::repo_trust::RepoTrustCommand),
     CiApprove(crate::ci_approve::CiApproveCommand),
+    Security {
+        json: bool,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -316,6 +319,9 @@ pub fn parse_command(argv: &[String]) -> Result<Command, UsageError> {
         "workspace" => workspace_command(&line),
         "repo" => crate::repo_trust::parse(line.second, line.rest, line.values, line.json)
             .map(Command::RepoTrust)
+            .map_err(UsageError),
+        "security" => crate::security_command::parse(line.words)
+            .map(|()| Command::Security { json: line.json })
             .map_err(UsageError),
         _ => usage(format!("Unknown command \"{group}\"")),
     }

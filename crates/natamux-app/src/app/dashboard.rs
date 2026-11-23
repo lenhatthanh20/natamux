@@ -208,6 +208,7 @@ impl Dashboard {
             DashboardEvent::Terminals { task_id, terminals } => {
                 TerminalCache::set_shells(task_id, &terminals.shells, cx)
             }
+            DashboardEvent::SecurityChanged => self.read_security(cx),
             _ => {}
         }
         if let Some(notice) = self.data.apply(event) {

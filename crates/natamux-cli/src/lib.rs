@@ -11,6 +11,7 @@ mod hook;
 mod hooks;
 pub mod repo_trust;
 pub mod run;
+pub mod security_command;
 mod statusline;
 
 use std::io::{IsTerminal, Read, Write};

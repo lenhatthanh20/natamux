@@ -48,7 +48,7 @@ Natamux runs coding agents on your machine. An agent can read and change files a
 - Saving the project settings in the app approves what you saved. **Overwrite** after a conflict asks first when the merged text has commands that came only from the changed file.
 - In an untrusted repo, Draft commit message starts no agent and gives the simple draft. `natamux statusline` runs only the `statusLine` command of your user-level settings, never one from the project.
 - Every agent start (new, resume, restore after a restart, reuse of a paused shell, reopen) passes one gate. It takes the digest before Natamux writes hook files, again after, and again after it writes the launch script. A change in between stops the start. When the agent ends and its config changed while it ran, the task's log gets a warning.
-- Strict mode (Settings, coming with a later update) also refuses a worktree that is not approved: no hook file, no trust marker, no launch. The launch script then runs `natamux repo verify-launch` right before the agent, and the agent starts only when the daemon still sees the approved digest. Cursor's and Copilot's trust of the worktree is never written and is taken back when the content changes or the agent ends.
+- Strict mode (Settings > Security) also refuses a worktree that is not approved: no hook file, no trust marker, no launch. The launch script then runs `natamux repo verify-launch` right before the agent, and the agent starts only when the daemon still sees the approved digest. Cursor's and Copilot's trust of the worktree is never written and is taken back when the content changes or the agent ends.
 - Known limits: the digest covers the files above, not user-level agent config (`~/.claude`, `~/.codex`, …). An agent typed by hand in a Natamux terminal passes no gate.
 - This covers Natamux's own commands and the trust it gives agents. It does not limit what an agent does inside its worktree after you approve (see Known limits).
 
@@ -95,6 +95,19 @@ The app has one public key built in. If the secret key leaks or is lost:
 4. Users reinstall from the Releases page and check the download as in the install guide. Delete releases signed after the leak.
 
 Plan to shorten this: ship a second public key in the app, with its secret key kept offline on a different medium than the first. The app will accept a signature from either key. Then a leak of one key is fixed by a release signed with the other, with no manual reinstall. Until that ships, a leak means a manual reinstall for every user.
+
+### Strict mode
+
+Strict mode is for companies with strict security rules. Turn it on in **Settings > Security**. With it off, Natamux works as before.
+
+- The setting lives in `security.json` in the daemon's data folder. Only the daemon writes it, through `PUT /security`, and only with the daemon token: an agent token or a terminal ticket gets 403. `GET /security` shows the state, each key with `{ value, blocked, reason }`, and any warning; task tokens may read it (it holds no secrets). `natamux security [--json]` prints the same.
+- `"strict": true` sets these defaults: `ciPush: approved-commit`, `agentAutoMode: forbid`, `terminalInputTrace: off`, repo trust per worktree with `bypassHookTrust: false`, agent permission mode `ask` with `requireAskGuarantee`, and `agentApi: scoped` with `requireHumanForPush`. A key can only be stricter than its Strict default: a looser value in the file is ignored and listed in `ignored`, and `PUT /security` refuses it. A repo's `.natamux.json` can tighten (a `security` object), never loosen. Environment variables never loosen it.
+- What each key does: agents start in their ask mode and an agent without one does not start; agent config is approved per worktree and checked again right before the agent runs; agent tokens reach only their own task plus the grants you list; CI gets only the last commit (`approved-commit`), only a tree you approved (`approved-snapshot`, with a dialog in the app and `natamux stage ci-approve`), or nothing (`forbid`); typed terminal input is never traced.
+- A missing file means Strict is off. A file that cannot be read turns Strict on with its defaults and shows a warning: once you opted in, a broken file must not turn it off.
+- Tamper check: the daemon keeps a copy of the last file it wrote. When `security.json` changes another way (while the daemon runs, or found at start), the daemon keeps the stricter of the old and the new settings, sends `security.changed` and shows a warning in the app (Settings > Security and the status bar's **Strict** item) until you save the settings again.
+- The daemon reads the file again at most once per second and at each sensitive decision, so a change applies to the next decision. A running agent keeps the mode it started with until its next start.
+- The app shows a **Strict** item in the status bar (its tooltip lists the rules), a note on the Agents page, and turns the **Check on CI** box off with the reason under `ciPush: forbid`.
+- Limits: without isolation, an agent runs as your user. It can read the daemon token and call `PUT /security`, or edit the file (the tamper check then keeps the stricter state, but it cannot stop a determined agent that has the token). Strict mode stops mistakes and repo content, not an agent that attacks Natamux on purpose. A person with `sudo`, or with your password, can turn it off. Isolation, network rules and an admin policy that IT sets are not part of Strict mode.
 
 ## Known limits
 

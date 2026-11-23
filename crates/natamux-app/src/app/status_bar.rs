@@ -37,6 +37,9 @@ pub struct StatusBar {
     /// What the updater does now; None while it has nothing to say.
     update: Option<StatusWords>,
     on_update: OnClick,
+    /// Strict mode's tooltip and whether it warns; None in Personal mode.
+    strict: Option<(String, bool)>,
+    on_strict: OnClick,
     width: f32,
     on_running: OnClick,
     on_needs_you: OnClick,
@@ -66,6 +69,8 @@ impl StatusBar {
             limits: None,
             update: None,
             on_update: Rc::new(|_, _, _| {}),
+            strict: None,
+            on_strict: Rc::new(|_, _, _| {}),
             width,
             on_running: Rc::new(|_, _, _| {}),
             on_needs_you: Rc::new(|_, _, _| {}),
@@ -89,6 +94,18 @@ impl StatusBar {
         self.sidebar = sidebar;
         self.details = details;
         self.agents = agents;
+        self
+    }
+
+    /// The "Strict" lock item: its tooltip (`strict_tip`), whether it warns, and its click.
+    pub fn strict(
+        mut self,
+        tip: Option<String>,
+        warns: bool,
+        f: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.strict = tip.map(|tip| (tip, warns));
+        self.on_strict = Rc::new(f);
         self
     }
 
@@ -333,6 +350,17 @@ impl RenderOnce for StatusBar {
             count_item("status-running", "circle-play", Color::Muted, count, tip)
                 .on_click(move |event, window, cx| (self.on_running)(event, window, cx))
         });
+        let strict = self.strict.map(|(tip, warns)| {
+            let color = if warns { Color::Warning } else { Color::Muted };
+            count_item(
+                "status-strict",
+                "shield",
+                color,
+                item_label("Strict", color),
+                tip,
+            )
+            .on_click(move |event, window, cx| (self.on_strict)(event, window, cx))
+        });
         let update_icon_only = condensed.icon_only.contains(&"update");
         let update = self
             .update
@@ -354,6 +382,7 @@ impl RenderOnce for StatusBar {
                 self.on_toggle_agents,
             ))
             .child(div().flex_1())
+            .children(strict)
             .children(update)
             .children(needs)
             .children(running)

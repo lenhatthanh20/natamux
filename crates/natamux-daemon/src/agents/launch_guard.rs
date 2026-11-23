@@ -9,7 +9,7 @@ use std::path::Path;
 use natamux_agents::launch::{Platform, quote_argument};
 use natamux_agents::launch_ask::ask_guaranteed;
 use natamux_agents::trust::{TrustPaths, untrust_workspace};
-use natamux_core::security::{SecurityMode, mode};
+use natamux_core::security::{SecurityMode, mode, mode_in};
 use natamux_proto::tasks::task::Task;
 
 use crate::agents::errors::AgentError;
@@ -44,7 +44,9 @@ pub fn guard(
     kind: &str,
     paths: &TrustPaths,
 ) -> Result<LaunchGate, AgentError> {
-    let mode = mode();
+    // The worktree's `.natamux.json` may tighten the user's mode, never loosen it.
+    let workspace = task.workspace.as_deref().map(Path::new);
+    let mode = workspace.map_or_else(mode, mode_in);
     let state = check(trusted_of, task);
     if let Some(strict) = mode.strict() {
         if !state.is_trusted() {

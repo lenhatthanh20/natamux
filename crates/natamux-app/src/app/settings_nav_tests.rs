@@ -26,6 +26,7 @@ fn lists_the_app_pages_the_projects_then_add_project() {
             NavItem::Page(SettingsPage::General),
             NavItem::Page(SettingsPage::Appearance),
             NavItem::Page(SettingsPage::Agents),
+            NavItem::Page(SettingsPage::Security),
             NavItem::Shortcuts,
             project("r1"),
             project("r2"),
@@ -39,6 +40,7 @@ fn lists_the_app_pages_the_projects_then_add_project() {
             "General",
             "Appearance",
             "Agents",
+            "Security",
             "Keyboard shortcuts",
             "Add project\u{2026}"
         ]

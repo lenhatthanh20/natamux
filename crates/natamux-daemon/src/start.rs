@@ -479,6 +479,7 @@ fn app_state(
         hooks: built.hooks,
         usage: built.usage,
         token: config.token.clone(),
+        security: crate::security::store::start(&config.data_dir, &bus),
         big_bodies: Arc::new(tokio::sync::Semaphore::new(2)),
         data_dir: config.data_dir.clone(),
         home,

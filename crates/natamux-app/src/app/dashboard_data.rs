@@ -113,6 +113,8 @@ pub struct DashboardData {
     /// The windows the warning toast told already; None until the first limits came.
     warned: Option<BTreeSet<String>>,
     pub diff_stats: BTreeMap<String, DiffStat>,
+    /// `GET /security`, read at connect and on `security.changed`.
+    pub security: natamux_proto::projects::security::SecurityView,
     pub terminals: BTreeMap<String, TerminalList>,
     pub preparing: BTreeMap<String, PreparingStep>,
     /// The event log of each task that shows an attention card, with the `updatedAt` it was
@@ -152,6 +154,7 @@ impl Default for DashboardData {
             limits: Vec::new(),
             warned: None,
             diff_stats: BTreeMap::new(),
+            security: Default::default(),
             terminals: BTreeMap::new(),
             preparing: BTreeMap::new(),
             events: BTreeMap::new(),
@@ -244,7 +247,8 @@ impl DashboardData {
             DashboardEvent::WorkspaceChanged { .. }
             | DashboardEvent::ShellsChanged { .. }
             | DashboardEvent::ReviewCommentsChanged { .. }
-            | DashboardEvent::TaskLogged { .. } => {}
+            | DashboardEvent::TaskLogged { .. }
+            | DashboardEvent::SecurityChanged => {}
         }
         None
     }
