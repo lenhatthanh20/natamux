@@ -44,7 +44,7 @@ fn keeps_the_allow_list_and_drops_credentials() {
 }
 
 #[test]
-fn a_bin_folder_gives_its_parent_unless_that_reaches_home_or_the_data_folder() {
+fn path_grants_only_the_executable_folder_and_checks_the_real_target() {
     let root = TempDir::new("toolchain");
     let home = root.path().join("home");
     let data = home.join(".local/share/natamux");
@@ -62,8 +62,13 @@ fn a_bin_folder_gives_its_parent_unless_that_reaches_home_or_the_data_folder() {
         node.display()
     );
     let dirs = toolchain_dirs(&path, &home, &data);
-    // ~/.local holds the data folder and ~/bin's parent is home: both keep only the bin folder.
-    assert_eq!(dirs, [home.join(".nvm/node"), local_bin, home_bin]);
+    assert_eq!(
+        dirs,
+        [node, local_bin, home_bin].map(|p| std::fs::canonicalize(p).unwrap())
+    );
+    let alias = root.path().join("alias");
+    std::os::unix::fs::symlink(&home, &alias).unwrap();
+    assert!(toolchain_dirs(alias.to_str().unwrap(), &home, &data).is_empty());
     assert!(toolchain_dirs("/", &home, &data).is_empty());
     assert!(toolchain_dirs(&home.display().to_string(), &home, &data).is_empty());
 }

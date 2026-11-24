@@ -89,6 +89,11 @@ fn a_machine_without_landlock_starts_no_shell() {
 fn an_isolated_shell_gets_a_plan_a_mark_a_private_tmp_and_its_own_git_config() {
     let root = TempDir::new("iso-on");
     std::fs::create_dir_all(root.path().join("wt")).unwrap();
+    std::fs::write(
+        root.path().join("wt/.natamux.json"),
+        r#"{"security":{"network":{"egress":"loopback"}}}"#,
+    )
+    .unwrap();
     let (spawn, seen) = recording();
     let wrapped = with_isolation(spawn, Some(Arc::new(isolation_in(root.path(), Ok(4)))));
     (*wrapped)(options(root.path(), "T-1")).unwrap();
@@ -103,6 +108,7 @@ fn an_isolated_shell_gets_a_plan_a_mark_a_private_tmp_and_its_own_git_config() {
     assert!(!options.env.contains_key("SSH_AUTH_SOCK"));
     assert_eq!(options.env["NATAMUX_TOKEN"], "T-1.secret");
     let mark = format!("{SANDBOX_MARK}={}", options.env[SANDBOX_MARK]);
+    assert_eq!(plan.tcp_connect, Some(Vec::new()));
     assert_eq!(plan.sweep_mark.as_deref(), Some(mark.as_str()));
     let config = std::fs::read_to_string(&options.env["GIT_CONFIG_GLOBAL"]).unwrap();
     assert!(config.contains("helper =\n"), "{config}");
