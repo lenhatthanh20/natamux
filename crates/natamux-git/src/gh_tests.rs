@@ -312,3 +312,13 @@ fn fails_with_a_github_error_on_a_pull_request_list_that_is_not_json() {
     let (gh, _) = stub(says("not json"));
     assert!(find_pull_request(Path::new("/w"), "b", &gh).is_err());
 }
+
+#[test]
+fn the_gh_egress_check_does_not_import_the_gh_call() {
+    // T-0375 R8-7: `gh.rs` turns the refusal text into a `GitHubError`, so there is no cycle.
+    let source = include_str!("gh_egress.rs");
+    assert!(
+        !source.contains("use crate::gh"),
+        "gh_egress.rs imports gh.rs"
+    );
+}

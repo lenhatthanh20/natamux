@@ -33,38 +33,50 @@ pub fn is_due(task: &Task, now_ms: i64, days: u32) -> bool {
         .is_some_and(|changed| now_ms.saturating_sub(changed) > i64::from(days) * DAY_MS)
 }
 
-/// The folder git runs in and the tip whose commits the delete would drop: the worktree's HEAD,
-/// or the branch in the project when the worktree is gone. None: nothing to lose.
-fn tip_of(state: &AppState, task: &Task) -> Option<(PathBuf, String)> {
-    if let Some(workspace) = task.workspace.as_deref().map(Path::new)
-        && workspace.is_dir()
-    {
-        return Some((workspace.to_path_buf(), "HEAD".to_string()));
+/// The folder git runs in and the tips whose commits the delete would drop: the worktree's HEAD
+/// and the task branch (the agent may have left it), or the branch in the project when the
+/// worktree is gone. None: nothing to lose.
+fn tips_of(state: &AppState, task: &Task) -> Option<(PathBuf, Vec<String>)> {
+    let worktree = task
+        .workspace
+        .as_deref()
+        .map(Path::new)
+        .filter(|workspace| workspace.is_dir());
+    let cwd = match worktree {
+        Some(workspace) => workspace.to_path_buf(),
+        // A removed project keeps no branch the delete could drop.
+        None => PathBuf::from(state.repos.path_of(task.repo.as_deref()).ok()?),
+    };
+    let mut tips = Vec::new();
+    if worktree.is_some() {
+        tips.push("HEAD".to_string());
     }
-    let branch = task.branch.as_deref()?;
-    // A removed project keeps no branch the delete could drop.
-    let repo = PathBuf::from(state.repos.path_of(task.repo.as_deref()).ok()?);
-    let name = format!("refs/heads/{branch}");
-    let exists = git(
-        &repo,
-        &["rev-parse", "--verify", "--quiet", &name],
-        None,
-        &[],
-    )
-    .is_ok();
-    exists.then_some((repo, name))
+    if let Some(branch) = task.branch.as_deref() {
+        let name = format!("refs/heads/{branch}");
+        let exists = git(
+            &cwd,
+            &["rev-parse", "--verify", "--quiet", &name],
+            None,
+            &[],
+        )
+        .is_ok();
+        if exists {
+            tips.push(name);
+        }
+    }
+    (!tips.is_empty()).then_some((cwd, tips))
 }
 
 /// True when the delete would drop commits no other branch, remote branch or tag holds. A git
 /// error proves nothing, so it counts as true.
 pub fn has_unique_commits(state: &AppState, task: &Task) -> bool {
-    let Some((cwd, tip)) = tip_of(state, task) else {
+    let Some((cwd, tips)) = tips_of(state, task) else {
         return false;
     };
     // `--exclude` before `--branches` takes the name without `refs/heads/`. The branch the agent
     // switched to is in `--branches` too, and the delete would drop it, so it is excluded as well.
     let mut names: Vec<String> = task.branch.iter().cloned().collect();
-    if tip == "HEAD"
+    if tips.iter().any(|tip| tip == "HEAD")
         && let Ok(now) = git(&cwd, &["symbolic-ref", "--short", "-q", "HEAD"], None, &[])
     {
         names.push(now.trim().to_string());
@@ -73,9 +85,14 @@ pub fn has_unique_commits(state: &AppState, task: &Task) -> bool {
         .iter()
         .map(|name| format!("--exclude={name}"))
         .collect();
-    let mut args = vec!["rev-list", "--count", tip.as_str(), "--not"];
+    let mut args = vec!["rev-list", "--count"];
+    args.extend(tips.iter().map(String::as_str));
+    args.push("--not");
     args.extend(excludes.iter().map(String::as_str));
-    args.extend(["--branches", "--remotes", "--tags"]);
+    // The same delete removes Natamux's own CI copies, so they do not count as pushed. For
+    // `--remotes` the pattern is matched without `refs/remotes/`.
+    args.push("--branches");
+    args.extend(["--exclude=*/natamux-ci/*", "--remotes", "--tags"]);
     !git(&cwd, &args, None, &[]).is_ok_and(|count| count.trim() == "0")
 }
 

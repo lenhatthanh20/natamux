@@ -41,6 +41,17 @@ impl Tickets {
     /// Compared in constant time, so the time of a wrong guess tells nothing. A ticket for
     /// another task is spent too: it works once, whatever it was tried on.
     pub fn redeem(&mut self, ticket: &str, task_id: &str, now: u64) -> bool {
+        self.redeem_issuer(ticket, task_id, now).is_some()
+    }
+
+    /// `redeem`, giving who asked for the ticket: the task of an agent token, or None for a
+    /// person. None outside: not redeemed.
+    pub fn redeem_issuer(
+        &mut self,
+        ticket: &str,
+        task_id: &str,
+        now: u64,
+    ) -> Option<Option<String>> {
         self.drop_expired(now);
         let found = self
             .open
@@ -48,8 +59,8 @@ impl Tickets {
             .find(|stored| bool::from(stored.as_bytes().ct_eq(ticket.as_bytes())))
             .cloned();
         match found.and_then(|stored| self.open.remove(&stored)) {
-            Some(open) => open.task_id == task_id,
-            None => false,
+            Some(open) if open.task_id == task_id => Some(open.issuer),
+            _ => None,
         }
     }
 

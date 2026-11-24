@@ -505,7 +505,8 @@ jobs:
             start-task-branch-menu start-task-filled start-task-filled-end start-task-no-worktree
             start-task-one-agent start-task-error sidebar-blurred remove-workspace-anyway
             update-downloading update-ready update-failed settings-update-ready
-            repo-trust-dialog whats-new diff-find editor-find editor-go-to-line editor-outline
+            repo-trust-dialog review-config-toast repo-trust-task ci-approval-commits
+            whats-new diff-find editor-find editor-go-to-line editor-outline
             diff-blame editor-blame board-more board-scrolled
             terminal-look terminal-cursors terminal-cursors-underline terminal-cursors-bar
             terminal-selection terminal-alt-screen terminal-scrolled terminal-context-menu
@@ -550,7 +551,8 @@ jobs:
             start-task-branch-menu start-task-filled start-task-filled-end start-task-no-worktree
             start-task-one-agent start-task-error sidebar-blurred remove-workspace-anyway
             update-downloading update-ready update-failed settings-update-ready
-            repo-trust-dialog whats-new diff-find editor-find editor-go-to-line editor-outline
+            repo-trust-dialog review-config-toast repo-trust-task ci-approval-commits
+            whats-new diff-find editor-find editor-go-to-line editor-outline
             diff-blame editor-blame board-more board-scrolled
             terminal-look terminal-cursors terminal-cursors-underline terminal-cursors-bar
             terminal-selection terminal-alt-screen terminal-scrolled terminal-context-menu

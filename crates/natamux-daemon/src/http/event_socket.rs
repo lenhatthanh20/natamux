@@ -10,25 +10,30 @@ use async_tungstenite::WebSocketStream;
 use async_tungstenite::tokio::TokioAdapter;
 use async_tungstenite::tungstenite::Message;
 use async_tungstenite::tungstenite::handshake::derive_accept_key;
-use async_tungstenite::tungstenite::protocol::Role;
+use async_tungstenite::tungstenite::protocol::frame::CloseFrame;
+use async_tungstenite::tungstenite::protocol::{Role, frame::coding::CloseCode};
 use futures::StreamExt;
 use http_body_util::Full;
 use hyper::body::{Bytes, Incoming};
 use hyper::header::{CONNECTION, HeaderValue, SEC_WEBSOCKET_ACCEPT, SEC_WEBSOCKET_KEY, UPGRADE};
 use hyper::{Request, Response, StatusCode};
 use hyper_util::rt::TokioIo;
+use natamux_proto::terminals::messages::CLOSE_UNAUTHORIZED;
 use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
+use tokio::sync::oneshot;
 
 use super::agent_rules::Caller;
 use super::edge_rules;
 use super::errors::{Answer, not_found};
 use super::server::AppState;
-use crate::shared::event_bus::ClientScope;
+use crate::shared::event_bus::{ClientScope, EventBus};
 use crate::shared::scheduler::{Scheduler, TimerId};
 
 pub const EVENTS_HIGH_WATER: usize = 1024 * 1024;
 pub const DRAIN_CHECK_MS: u64 = 250;
 const RESYNC: &str = r#"{"kind":"resync"}"#;
+/// How long a revoked socket gets to take its close frame.
+const CLOSE_WAIT: std::time::Duration = std::time::Duration::from_secs(1);
 
 /// The part of a WebSocket that /events uses.
 pub trait EventSocket: Send + Sync {
@@ -168,9 +173,60 @@ pub fn upgrade(request: Request<Incoming>, state: Arc<AppState>, who: &Caller) -
     answer
 }
 
+/// Ends a socket that an agent token opened once that token is revoked (`EventBus::end_agent`).
+/// Dropped, it leaves the bus.
+pub(super) struct AgentEnd {
+    bus: Arc<EventBus>,
+    hook: Option<u64>,
+    ended: Option<oneshot::Receiver<()>>,
+}
+
+impl AgentEnd {
+    /// `agent`: the task whose token opened the socket; None: a person's socket.
+    pub(super) fn new(bus: &Arc<EventBus>, agent: Option<&str>) -> AgentEnd {
+        let mut end = AgentEnd {
+            bus: Arc::clone(bus),
+            hook: None,
+            ended: None,
+        };
+        if let Some(agent) = agent {
+            let (revoked, ended) = oneshot::channel();
+            end.hook = Some(bus.on_agent_end(agent, move || {
+                let _ = revoked.send(());
+            }));
+            end.ended = Some(ended);
+        }
+        end
+    }
+
+    /// Returns once the token is revoked; never for a person's socket.
+    pub(super) async fn revoked(&mut self) {
+        match self.ended.as_mut() {
+            Some(ended) => {
+                let _ = ended.await;
+            }
+            None => std::future::pending().await,
+        }
+    }
+}
+
+impl Drop for AgentEnd {
+    fn drop(&mut self) {
+        if let Some(hook) = self.hook {
+            self.bus.unsubscribe(hook);
+        }
+    }
+}
+
 type Io = TokioAdapter<TokioIo<hyper::upgrade::Upgraded>>;
 
 async fn run(socket: WebSocketStream<Io>, state: Arc<AppState>, scope: ClientScope) {
+    // Before the subscription, so a revoke in between still ends the socket.
+    let agent = match &scope {
+        ClientScope::Task(own) => Some(own.clone()),
+        ClientScope::All => None,
+    };
+    let mut end = AgentEnd::new(&state.bus, agent.as_deref());
     let (mut sink, mut stream) = socket.split();
     let (out, mut outbox): (_, UnboundedReceiver<String>) = unbounded_channel();
     let queued = Arc::new(AtomicUsize::new(0));
@@ -191,26 +247,54 @@ async fn run(socket: WebSocketStream<Io>, state: Arc<AppState>, scope: ClientSco
         state.pull_requests.wake();
     }
     let writing = Arc::clone(&queued);
-    let writer = tokio::spawn(async move {
-        while let Some(text) = outbox.recv().await {
-            let len = text.len();
-            let sent = sink.send(Message::Text(text.into())).await;
-            writing.fetch_sub(len, Ordering::SeqCst);
-            if sent.is_err() {
-                break;
+    let (close, mut closing) = oneshot::channel::<()>();
+    let mut writer = tokio::spawn(async move {
+        loop {
+            tokio::select! {
+                text = outbox.recv() => {
+                    let Some(text) = text else { break };
+                    let len = text.len();
+                    let sent = sink.send(Message::Text(text.into())).await;
+                    writing.fetch_sub(len, Ordering::SeqCst);
+                    if sent.is_err() {
+                        break;
+                    }
+                }
+                _ = &mut closing => {
+                    // A close frame: a dropped connection alone does not reach every client.
+                    let frame = CloseFrame {
+                        code: CloseCode::from(CLOSE_UNAUTHORIZED),
+                        reason: "unauthorized".into(),
+                    };
+                    let _ = sink.send(Message::Close(Some(frame))).await;
+                    break;
+                }
             }
         }
     });
-    // The dashboard sends nothing that matters; the socket lives until it closes.
-    while let Some(message) = stream.next().await {
-        if matches!(message, Err(_) | Ok(Message::Close(_))) {
-            break;
+    // The dashboard sends nothing that matters; the socket lives until it closes, or until the
+    // agent token that opened it is revoked.
+    let revoked = loop {
+        tokio::select! {
+            message = stream.next() => {
+                if matches!(message, None | Some(Err(_) | Ok(Message::Close(_)))) {
+                    break false;
+                }
+            }
+            () = end.revoked() => break true,
         }
-    }
+    };
     open.store(false, Ordering::SeqCst);
     state.bus.unsubscribe(id);
     sender.stop();
-    writer.abort();
+    // A peer that stops reading keeps the writer in `send`: it must not outlive the wait.
+    if revoked && close.send(()).is_ok() {
+        if tokio::time::timeout(CLOSE_WAIT, &mut writer).await.is_err() {
+            writer.abort();
+        }
+    } else {
+        writer.abort();
+    }
 }
 
 #[cfg(test)]

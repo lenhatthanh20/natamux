@@ -167,11 +167,18 @@ fn strict_checks_the_words_even_when_the_project_says_auto() {
 // The only test of this binary that sets the custom agents (they are the process's).
 #[test]
 fn an_agent_on_base_other_runs_in_ask_with_a_notice_and_never_in_strict() {
-    natamux_agents::custom::set_custom_agents(vec![CustomAgent {
-        id: "mytool".into(),
-        base: "other".into(),
-        command: "mytool".into(),
-    }]);
+    natamux_agents::custom::set_custom_agents(vec![
+        CustomAgent {
+            id: "mytool".into(),
+            base: "other".into(),
+            command: "mytool".into(),
+        },
+        CustomAgent {
+            id: "myclaude".into(),
+            base: "claude-code".into(),
+            command: "claude --dangerously-skip-permissions".into(),
+        },
+    ]);
     let env = Env::new();
     let task = env.task();
     let runner = runner_in(&env, "ask", &[]);
@@ -197,6 +204,16 @@ fn an_agent_on_base_other_runs_in_ask_with_a_notice_and_never_in_strict() {
     assert_eq!(env.pty_count(), 1, "Strict started nothing");
     let blocked = events_of(&env.tasks, &task.id, POLICY_BLOCKED_EVENT);
     assert_eq!(blocked.len(), 1);
+
+    // T-0375 R5-2: the words of a custom agent's command are checked too.
+    let env = Env::new();
+    let task = env.task();
+    let runner = runner_in(&env, "ask", &[]);
+    let result = runner.start(&task.id, "myclaude", None, None, None, &own);
+    assert!(is_blocked(result));
+    assert_eq!(env.pty_count(), 0);
+    let blocked = events_of(&env.tasks, &task.id, POLICY_BLOCKED_EVENT);
+    assert_eq!(payload(&blocked[0], "source"), json!("agent command"));
 }
 
 #[test]
@@ -212,4 +229,82 @@ fn a_blocked_start_writes_one_audit_line_without_the_word_or_reason() {
     assert_eq!(lines.len(), 1);
     assert_eq!(lines[0], ["agent.blocked", task.id.as_str(), "policy"]);
     assert!(!format!("{lines:?}").contains("yolo"));
+}
+
+// T-0375 R5-2: NATAMUX_<AGENT>_COMMAND is a source of words too.
+#[test]
+fn ask_mode_checks_the_words_of_the_agent_command() {
+    let env = Env::new();
+    let task = env.task();
+    let command = "claude --dangerously-skip-permissions";
+    let runner = AgentRunner::new(AgentRunnerOptions {
+        permission_mode_of: Arc::new(|_| "ask".to_string()),
+        programs: HashMap::from([("claude-code".to_string(), command.to_string())]),
+        ..env.options()
+    });
+    let own = OwnAgent::default();
+    let result = runner.start(&task.id, "claude-code", None, None, None, &own);
+    assert!(is_blocked(result));
+    assert_eq!(env.pty_count(), 0);
+    let blocked = events_of(&env.tasks, &task.id, POLICY_BLOCKED_EVENT);
+    assert_eq!(
+        payload(&blocked[0], "word"),
+        json!("--dangerously-skip-permissions")
+    );
+    assert_eq!(payload(&blocked[0], "source"), json!("agent command"));
+}
+
+// T-0375 R5-3: an untrusted worktree gets no auto flags, so its words are checked.
+#[test]
+fn auto_mode_in_an_untrusted_worktree_checks_the_words() {
+    let env = Env::new();
+    let task = env.task();
+    let runner = AgentRunner::new(AgentRunnerOptions {
+        extra_args: HashMap::from([("codex".to_string(), "--yolo".to_string())]),
+        trusted_of: natamux_daemon::projects::repo_trust_worktree::trust_always(false),
+        ..env.options()
+    });
+    let own = OwnAgent::default();
+    let result = runner.start(&task.id, "codex", None, None, None, &own);
+    assert!(is_blocked(result));
+    assert_eq!(env.pty_count(), 0);
+}
+
+// T-0375 R5-4: the safe codex sandbox is no forbidden word.
+#[test]
+fn ask_mode_starts_codex_with_the_workspace_write_sandbox() {
+    let env = Env::new();
+    let task = env.task();
+    let runner = runner_in(&env, "ask", &[("codex", "--sandbox workspace-write")]);
+    let own = OwnAgent::default();
+    runner
+        .start(&task.id, "codex", Some("Go"), None, None, &own)
+        .unwrap();
+    assert_eq!(env.pty_count(), 1);
+    assert!(events_of(&env.tasks, &task.id, POLICY_BLOCKED_EVENT).is_empty());
+}
+
+// T-0375 R5-1: Strict refuses a Claude Code settings file or tool allow list.
+#[test]
+fn strict_refuses_claude_settings_and_allowed_tools() {
+    let own = OwnAgent::default();
+    for words in [
+        "--settings x",
+        "--allowedTools Bash",
+        "--allowed-tools Bash",
+    ] {
+        let env = Env::new();
+        let task = env.task();
+        let runner = runner_in(&env, "ask", &[("claude-code", words)]);
+        let _strict = force(SecurityMode::Strict(StrictSettings::default()));
+        let result = runner.start(&task.id, "claude-code", None, None, None, &own);
+        assert!(is_blocked(result), "{words}");
+        assert_eq!(env.pty_count(), 0, "{words}");
+    }
+    let env = Env::new();
+    let task = env.task();
+    let runner = runner_in(&env, "ask", &[("claude-code", "--allowedTools Read")]);
+    runner
+        .start(&task.id, "claude-code", Some("Go"), None, None, &own)
+        .unwrap();
 }

@@ -49,9 +49,12 @@ pub fn guard(
     let workspace = task.workspace.as_deref().map(Path::new);
     let mode = workspace.map_or_else(mode, mode_in);
     let state = check(trusted_of, task);
+    // A trust written for an earlier config must not outlive it, in Personal mode too.
+    if !state.is_trusted() {
+        drop_trust(task, paths);
+    }
     if let Some(strict) = mode.strict() {
         if !state.is_trusted() {
-            drop_trust(task, paths);
             record("agent.blocked", &task.id, "untrusted");
             return Err(AgentError::Untrusted(state.reason()));
         }
@@ -75,24 +78,26 @@ impl LaunchGate {
         self.mode.is_strict()
     }
 
-    /// D2 and D3: an approved start goes on only while the digest is still the approved one.
-    /// A start without trust gets nothing from the approval, so it has nothing to lose.
+    /// D2 and D3: an approved start goes on only while the worktree is still approved. A new
+    /// digest that is itself approved (Natamux's own hook rewrite) is the one the start goes on
+    /// with. A start without trust gets nothing from the approval, so it has nothing to lose.
     pub fn recheck(
         &self,
         trusted_of: &TrustedOf,
         task: &Task,
         paths: &TrustPaths,
-    ) -> Result<(), AgentError> {
+    ) -> Result<LaunchGate, AgentError> {
         if !self.trusted() {
-            return Ok(());
+            return Ok(self.clone());
         }
         let now = check(trusted_of, task);
-        if now.is_trusted() && now.digest() == self.state.digest() {
-            return Ok(());
+        if now.is_trusted() {
+            return Ok(LaunchGate {
+                state: now,
+                mode: self.mode.clone(),
+            });
         }
-        if self.strict() {
-            drop_trust(task, paths);
-        }
+        drop_trust(task, paths);
         record("agent.blocked", &task.id, "config-changed");
         Err(AgentError::Untrusted(format!(
             "The agent config changed while the agent started. {}",
@@ -111,8 +116,22 @@ impl LaunchGate {
     }
 }
 
+/// The app's bin folder first on PATH, in the platform's shell, so its `natamux` runs.
+pub fn path_prefix(bin_dir: Option<&str>, platform: Platform) -> String {
+    let Some(bin) = bin_dir else {
+        return String::new();
+    };
+    match platform {
+        Platform::Posix => format!("PATH={}:\"$PATH\" ", quote_argument(bin, platform)),
+        Platform::Windows => format!(
+            "$env:PATH = {} + $env:PATH; ",
+            quote_argument(&format!("{bin};"), platform)
+        ),
+    }
+}
+
 /// The command with the pre-exec check in front: the agent runs only when the daemon says the
-/// worktree still has the approved digest. `path` is the PATH prefix of the POSIX script.
+/// worktree still has the approved digest. `path` is the `path_prefix` of the check.
 pub fn with_verify(
     command: &str,
     check: Option<(&str, &str)>,
@@ -129,6 +148,10 @@ pub fn with_verify(
     );
     match platform {
         Platform::Posix => format!("{path}{verify} && {command}"),
-        Platform::Windows => format!("{verify}; if ($LASTEXITCODE -eq 0) {{ {command} }}"),
+        // `$LASTEXITCODE` keeps an old value when `natamux` is not found: reset it, and test `$?`.
+        Platform::Windows => format!(
+            "$global:LASTEXITCODE = 1; {path}{verify}; \
+             if ($? -and $LASTEXITCODE -eq 0) {{ {command} }}"
+        ),
     }
 }

@@ -78,8 +78,40 @@ impl Prepared {
     }
 }
 
+/// `plan` with only one terminal in reach: `tty` (a shell's own pty) takes the place of
+/// `/dev/pts`, and a read grant on `/dev` gives way to its devices and folders except `pts`.
+/// Otherwise the agent could read the keys typed into, or write to, any terminal of the user.
+#[cfg(target_os = "linux")]
+pub fn own_tty(plan: &IsolationPlan, tty: Option<&std::path::Path>) -> io::Result<IsolationPlan> {
+    use std::os::unix::fs::FileTypeExt;
+    use std::path::Path;
+    let (dev, pts) = (Path::new("/dev"), Path::new("/dev/pts"));
+    let mut plan = plan.clone();
+    let before = plan.read_write.len();
+    plan.read_write.retain(|path| path != pts);
+    if plan.read_write.len() < before {
+        plan.read_write.extend(tty.map(Path::to_path_buf));
+    }
+    if plan.read_only.iter().any(|path| path == dev) {
+        plan.read_only.retain(|path| path != dev);
+        for entry in std::fs::read_dir(dev)? {
+            let entry = entry?;
+            let kind = entry.file_type()?;
+            if entry.file_name() != "pts" && (kind.is_dir() || kind.is_char_device()) {
+                plan.read_only.push(entry.path());
+            }
+        }
+    }
+    Ok(plan)
+}
+
 /// Runs `command` under the plan. An error means the command must not run.
 pub fn isolate_command(command: &mut Command, plan: &IsolationPlan) -> io::Result<()> {
+    // A command has no terminal of its own.
+    #[cfg(target_os = "linux")]
+    let own = own_tty(plan, None)?;
+    #[cfg(target_os = "linux")]
+    let plan = &own;
     let prepared = prepare(plan)?;
     #[cfg(unix)]
     {

@@ -2,6 +2,7 @@
 //! folder or a task's worktree), and the digest over them with the project's commands.
 
 use std::collections::{BTreeSet, HashSet};
+use std::fs::Metadata;
 use std::path::{Component, Path, PathBuf};
 
 use natamux_agents::hook_origin::is_natamux_file;
@@ -79,23 +80,72 @@ pub fn setup_files(folder: &Path) -> Files {
     read_files(folder, &[SETUP_SCRIPT, SETUP_SCRIPT_WINDOWS])
 }
 
-/// Whether `rel` is a file or a folder, None when it is not there. A link anywhere on the way
-/// fails: it can point outside the worktree.
-fn kind_of(folder: &Path, rel: &str) -> Result<Option<bool>, String> {
-    let mut path = folder.to_path_buf();
-    let parts: Vec<&str> = rel.split('/').collect();
-    for (index, part) in parts.iter().enumerate() {
-        path.push(part);
-        let meta = match std::fs::symlink_metadata(&path) {
-            Ok(meta) => meta,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-            Err(error) => return Err(format!("{rel} cannot be read: {error}")),
-        };
-        if meta.file_type().is_symlink() {
-            return Err(format!("{rel} is a link"));
+/// What the walk found: the config files, the links inside the worktree with their target text,
+/// and the real paths already followed, so a loop of links is gone through once.
+#[derive(Default)]
+struct Found {
+    paths: Vec<String>,
+    links: Vec<(String, String)>,
+    followed: HashSet<PathBuf>,
+}
+
+impl Found {
+    /// Notes a link whose real path stays inside the worktree; one that leaves it (or leads
+    /// nowhere) fails. Gives whether its target is new, so a folder is gone into once.
+    fn link(&mut self, folder: &Path, rel: &str) -> Result<bool, String> {
+        let path = folder.join(rel);
+        let target = std::fs::read_link(&path).map_err(|error| unreadable(rel, &error))?;
+        let root = folder
+            .canonicalize()
+            .map_err(|error| unreadable(rel, &error))?;
+        let real = path
+            .canonicalize()
+            .map_err(|_| format!("{rel} is a link that leads nowhere"))?;
+        if !real.starts_with(&root) {
+            return Err(format!("{rel} is a link out of the worktree"));
         }
-        let last = index + 1 == parts.len();
-        if last {
+        if !self.links.iter().any(|(link, _)| link == rel) {
+            let target = target.to_string_lossy().into_owned();
+            self.links.push((rel.to_string(), target));
+        }
+        Ok(self.followed.insert(real))
+    }
+}
+
+fn unreadable(rel: &str, error: &std::io::Error) -> String {
+    format!("{rel} cannot be read: {error}")
+}
+
+/// The metadata of `rel`, through a link that stays inside the worktree, and whether the walk
+/// goes into it (a link target is gone into once).
+fn meta_of(folder: &Path, rel: &str, found: &mut Found) -> Result<(Metadata, bool), String> {
+    let path = folder.join(rel);
+    let meta = std::fs::symlink_metadata(&path).map_err(|error| unreadable(rel, &error))?;
+    if !meta.file_type().is_symlink() {
+        return Ok((meta, true));
+    }
+    let new = found.link(folder, rel)?;
+    let meta = std::fs::metadata(&path).map_err(|error| unreadable(rel, &error))?;
+    Ok((meta, new))
+}
+
+/// Whether `rel` is a file or a folder, None when it is not there. A link on the way counts only
+/// when it stays inside the worktree.
+fn kind_of(folder: &Path, rel: &str, found: &mut Found) -> Result<Option<bool>, String> {
+    let parts: Vec<&str> = rel.split('/').collect();
+    let mut at = String::new();
+    for (index, part) in parts.iter().enumerate() {
+        if index > 0 {
+            at.push('/');
+        }
+        at.push_str(part);
+        if let Err(error) = std::fs::symlink_metadata(folder.join(&at))
+            && error.kind() == std::io::ErrorKind::NotFound
+        {
+            return Ok(None);
+        }
+        let (meta, _) = meta_of(folder, &at, found)?;
+        if index + 1 == parts.len() {
             return Ok(Some(meta.is_dir()));
         }
         if !meta.is_dir() {
@@ -105,8 +155,9 @@ fn kind_of(folder: &Path, rel: &str) -> Result<Option<bool>, String> {
     Ok(None)
 }
 
-/// The files under `dir`, sorted, links refused.
-fn walk(folder: &Path, dir: &str, depth: usize, found: &mut Vec<String>) -> Result<(), String> {
+/// The files under `dir`, sorted. A link inside the worktree is followed once; `node_modules`
+/// holds packages, not config.
+fn walk(folder: &Path, dir: &str, depth: usize, found: &mut Found) -> Result<(), String> {
     if depth > MAX_DEPTH {
         return Err(format!("{dir} is nested too deep"));
     }
@@ -120,22 +171,18 @@ fn walk(folder: &Path, dir: &str, depth: usize, found: &mut Vec<String>) -> Resu
     for name in names {
         let rel = format!("{dir}/{name}");
         let flat = dir == GITHUB_HOOKS;
-        if flat && !name.ends_with(".json") {
+        if (flat && !name.ends_with(".json")) || name == "node_modules" {
             continue;
         }
-        let meta = std::fs::symlink_metadata(folder.join(&rel))
-            .map_err(|error| format!("{rel} cannot be read: {error}"))?;
-        if meta.file_type().is_symlink() {
-            return Err(format!("{rel} is a link"));
-        }
+        let (meta, new) = meta_of(folder, &rel, found)?;
         if meta.is_dir() {
-            if !flat {
+            if !flat && new {
                 walk(folder, &rel, depth + 1, found)?;
             }
         } else {
-            found.push(rel);
+            found.paths.push(rel);
         }
-        if found.len() > MAX_FILES {
+        if found.paths.len() > MAX_FILES {
             return Err(format!("More than {MAX_FILES} agent config files"));
         }
     }
@@ -165,40 +212,87 @@ fn read_capped(path: &Path, rel: &str, total: &mut u64) -> Result<Vec<u8>, Strin
     Ok(bytes)
 }
 
-/// The paths of the agent config files that are there, links refused.
-fn config_paths(folder: &Path) -> Result<Vec<String>, String> {
-    let mut paths = Vec::new();
+/// The agent config files that are there, and the links on the way to them.
+fn config_paths(folder: &Path) -> Result<Found, String> {
+    let mut found = Found::default();
     // A worktree that is not there (yet, or any more) holds no config.
     if !folder.is_dir() {
-        return Ok(paths);
+        return Ok(found);
     }
     for rel in CONFIG_FILES {
-        if kind_of(folder, rel)? == Some(false) {
-            paths.push(rel.to_string());
+        if kind_of(folder, rel, &mut found)? == Some(false) {
+            found.paths.push(rel.to_string());
         }
     }
     for dir in CONFIG_DIRS {
-        if kind_of(folder, dir)? == Some(true) {
-            walk(folder, dir, 0, &mut paths)?;
+        if kind_of(folder, dir, &mut found)? == Some(true) {
+            walk(folder, dir, 0, &mut found)?;
         }
     }
-    if paths.len() > MAX_FILES {
+    if found.paths.len() > MAX_FILES {
         return Err(format!("More than {MAX_FILES} agent config files"));
     }
-    Ok(paths)
+    Ok(found)
+}
+
+/// Whether some folder on the way to `rel` is a link: git lists no such path (it fails on one).
+fn beyond_link(rel: &str, links: &[(String, String)]) -> bool {
+    links
+        .iter()
+        .any(|(link, _)| rel.starts_with(&format!("{link}/")))
+}
+
+/// The path git knows `rel` by: beyond a link, its real path in the worktree (the walk checked it
+/// stays inside). None when that cannot be told; such a file always counts.
+fn git_path(folder: &Path, rel: &str, links: &[(String, String)]) -> Option<String> {
+    if !beyond_link(rel, links) {
+        return Some(rel.to_string());
+    }
+    let root = folder.canonicalize().ok()?;
+    let real = folder.join(rel).canonicalize().ok()?;
+    let parts = real
+        .strip_prefix(&root)
+        .ok()?
+        .components()
+        .map(|part| match part {
+            Component::Normal(name) => name.to_str(),
+            _ => None,
+        })
+        .collect::<Option<Vec<&str>>>()?;
+    Some(parts.join("/"))
+}
+
+/// Whether `folder` is in a git work tree, also one whose `.git` is broken.
+fn in_git(folder: &Path) -> bool {
+    folder
+        .ancestors()
+        .any(|dir| std::fs::symlink_metadata(dir.join(".git")).is_ok())
 }
 
 /// The agent config of a folder, or why it cannot be checked (then nothing is approved). A file
 /// git tracks came from the repo and always counts. An untracked one is Natamux's own only when
 /// it is exactly what Natamux writes and kept out of git.
 pub fn config_sources(folder: &Path, strict: bool) -> Result<Files, String> {
-    let paths = config_paths(folder)?;
-    // Not a git folder: nothing is tracked, so nothing is the repo's by git.
-    let tracked: HashSet<String> = natamux_git::tracked_paths(folder, &paths).unwrap_or_default();
+    let Found { paths, links, .. } = config_paths(folder)?;
+    let paths: Vec<(String, Option<String>)> = paths
+        .into_iter()
+        .map(|rel| {
+            let git = git_path(folder, &rel, &links);
+            (rel, git)
+        })
+        .collect();
+    let plain: Vec<String> = paths.iter().filter_map(|(_, git)| git.clone()).collect();
+    // Not a git folder: nothing is tracked, so nothing is the repo's by git. A git error in one
+    // is no answer, so nothing there can be approved.
+    let tracked = match natamux_git::tracked_paths(folder, &plain) {
+        Ok(tracked) => tracked,
+        Err(_) if !in_git(folder) => HashSet::new(),
+        Err(error) => return Err(format!("git cannot list the tracked files: {error}")),
+    };
     let mut total = 0;
     let mut files = Vec::new();
-    for rel in paths {
-        let untracked = !tracked.contains(&rel);
+    for (rel, git) in paths {
+        let untracked = git.is_some_and(|git| !tracked.contains(&git));
         if untracked && rel == CLAUDE_LOCAL && !strict {
             continue;
         }
@@ -207,6 +301,10 @@ pub fn config_sources(folder: &Path, strict: bool) -> Result<Files, String> {
             continue;
         }
         files.push((rel, bytes));
+    }
+    // The target of a link counts too: the same bytes can come from another file.
+    for (rel, target) in links {
+        files.push((format!("{rel} (link)"), target.into_bytes()));
     }
     for (rel, path) in referenced_files(folder, &files) {
         if files.len() >= MAX_FILES {

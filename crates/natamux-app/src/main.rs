@@ -62,6 +62,7 @@ mod app {
     pub mod shots_start_task;
     pub mod shots_terminal;
     pub mod shots_text;
+    pub mod shots_trust;
     pub mod shown_cache;
     pub mod sign_in;
     pub mod sign_in_rules;

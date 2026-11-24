@@ -9,11 +9,11 @@ use std::path::{Path, PathBuf};
 
 use natamux_core::formats::is_task_id_shape;
 use natamux_core::workspaces::private_dir::{private_dir, write_private};
+use natamux_proto::tasks::data_files::{id_prefix, task_of_script};
 use natamux_store::task_files::{task_file_path, tasks_dir};
 use natamux_store::task_index::TaskIndex;
 
 const MARKER_SUFFIX: &str = ".deleting";
-const SCRIPT_PREFIXES: [&str; 2] = ["agent-launch-", "stage-command-"];
 
 /// `tasks/<id>.deleting`: a delete of the task started and has not finished.
 pub fn deleting_marker(data_dir: &Path, task_id: &str) -> PathBuf {
@@ -133,35 +133,11 @@ fn names_in(folder: &Path) -> io::Result<Vec<String>> {
     Ok(names)
 }
 
-/// The leading `T-0001` of a name, so `T-1` is never read as part of `T-10`.
-fn id_prefix(name: &str) -> Option<(&str, &str)> {
-    let letters = name.bytes().take_while(u8::is_ascii_uppercase).count();
-    let after = name.get(letters..)?.strip_prefix('-')?;
-    let digits = after.bytes().take_while(u8::is_ascii_digit).count();
-    if letters == 0 || digits == 0 {
-        return None;
-    }
-    let end = letters + 1 + digits;
-    Some((name.get(..end)?, name.get(end..)?))
-}
-
 /// `T-0001`, `T-0001.md`, `T-0001.screens`, `T-0001.md.tmp`, ...: the task of an entry of the
 /// tasks folder.
 fn task_of_task_entry(name: &str) -> Option<&str> {
     let (id, rest) = id_prefix(name)?;
     (rest.is_empty() || rest.starts_with('.')).then_some(id)
-}
-
-/// `agent-launch-T-0001.sh`, `agent-launch-T-0001-2.sh`, `stage-command-T-0001.sh`.
-fn task_of_script(name: &str) -> Option<&str> {
-    let rest = SCRIPT_PREFIXES
-        .iter()
-        .find_map(|prefix| name.strip_prefix(prefix))?;
-    let (id, after) = id_prefix(rest)?;
-    let tail = after.strip_prefix('-').map_or(after, |terminal| {
-        terminal.trim_start_matches(|char: char| char.is_ascii_alphanumeric())
-    });
-    (tail == ".sh").then_some(id)
 }
 
 fn remove_path(path: &Path) -> io::Result<()> {

@@ -25,7 +25,7 @@ pub struct StartWords<'a> {
     /// `ask` permission mode, or Strict mode.
     pub ask: bool,
     pub strict: bool,
-    pub sources: [(&'a str, Option<&'a str>); 3],
+    pub sources: [(&'a str, Option<&'a str>); 4],
 }
 
 /// `NATAMUX_<AGENT>_ARGS` of a built-in kind, as `config.rs` reads it.
@@ -70,7 +70,7 @@ pub fn check_words(
         return Ok(());
     }
     for (source, text) in words.sources {
-        if let Some(hit) = text.and_then(|text| forbidden_word(words.kind, text)) {
+        if let Some(hit) = text.and_then(|text| forbidden_word(words.kind, text, words.strict)) {
             return Err(block(tasks, task_id, &hit.word, source, &hit.reason));
         }
     }

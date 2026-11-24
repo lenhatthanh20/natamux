@@ -546,6 +546,7 @@ impl FakeDaemon {
 
     pub fn start_agent(&self, task_id: &str, input: StartAgentInput) -> Answer<Task> {
         let mut data = self.data();
+        data.start_refused(task_id)?;
         let task = data.task_mut(task_id)?;
         task.agent = Some(input.agent);
         task.state = TaskState::Running;

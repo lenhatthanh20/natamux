@@ -13,6 +13,7 @@ use natamux_proto::workspaces::review_comments::{
 };
 use serde_json::{Map, Value, json};
 
+use crate::http::agent_rules::audit_denied_later;
 use crate::http::errors::{
     Answer, forbidden, internal_error, json_answer, stage_error, zod_answer,
 };
@@ -22,6 +23,13 @@ use crate::stages::errors::StageResult;
 use crate::workspaces::review_comments as service;
 
 const REFUSED: &str = "use review comments";
+
+/// The 403 for an agent token, with its audit line. The router lets an agent reach these
+/// handlers only on its own task or a direct subtask, so `id` names one of those.
+async fn refused(state: &AppState, id: &str) -> Answer {
+    audit_denied_later(state, id).await;
+    forbidden(REFUSED)
+}
 
 /// Runs the work on a blocking thread (files, git, the terminal). `None` answers with no body.
 async fn run(
@@ -135,7 +143,7 @@ fn patch_body(value: Option<&Value>) -> Result<Patch, ZodError> {
 /// Every comment of the task where its code is now; `?path=` keeps one file's.
 pub async fn list(state: Arc<AppState>, id: String, query: String, by_agent: bool) -> Answer {
     if by_agent {
-        return forbidden(REFUSED);
+        return refused(&state, &id).await;
     }
     let id = match task_id_param(&id) {
         Ok(id) => id,
@@ -154,7 +162,7 @@ pub async fn list(state: Arc<AppState>, id: String, query: String, by_agent: boo
 
 pub async fn add(state: Arc<AppState>, id: String, body: Option<Value>, by_agent: bool) -> Answer {
     if by_agent {
-        return forbidden(REFUSED);
+        return refused(&state, &id).await;
     }
     let id = match task_id_param(&id) {
         Ok(id) => id,
@@ -180,7 +188,7 @@ pub async fn update(
     by_agent: bool,
 ) -> Answer {
     if by_agent {
-        return forbidden(REFUSED);
+        return refused(&state, &id).await;
     }
     let id = match task_id_param(&id) {
         Ok(id) => id,
@@ -200,7 +208,7 @@ pub async fn update(
 
 pub async fn delete(state: Arc<AppState>, id: String, cid: String, by_agent: bool) -> Answer {
     if by_agent {
-        return forbidden(REFUSED);
+        return refused(&state, &id).await;
     }
     let id = match task_id_param(&id) {
         Ok(id) => id,
@@ -217,7 +225,7 @@ pub async fn delete(state: Arc<AppState>, id: String, cid: String, by_agent: boo
 /// Every draft to the agent in one prompt.
 pub async fn send(state: Arc<AppState>, id: String, by_agent: bool) -> Answer {
     if by_agent {
-        return forbidden(REFUSED);
+        return refused(&state, &id).await;
     }
     let id = match task_id_param(&id) {
         Ok(id) => id,

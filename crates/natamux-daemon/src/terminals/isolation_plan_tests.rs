@@ -44,7 +44,7 @@ fn keeps_the_allow_list_and_drops_credentials() {
 }
 
 #[test]
-fn a_bin_folder_gives_its_parent_unless_that_reaches_home_or_the_data_folder() {
+fn a_bin_folder_in_home_keeps_only_itself_and_never_reaches_the_data_folder() {
     let root = TempDir::new("toolchain");
     let home = root.path().join("home");
     let data = home.join(".local/share/natamux");
@@ -62,10 +62,36 @@ fn a_bin_folder_gives_its_parent_unless_that_reaches_home_or_the_data_folder() {
         node.display()
     );
     let dirs = toolchain_dirs(&path, &home, &data);
-    // ~/.local holds the data folder and ~/bin's parent is home: both keep only the bin folder.
-    assert_eq!(dirs, [home.join(".nvm/node"), local_bin, home_bin]);
+    // Inside home a bin folder never gives its parent.
+    assert_eq!(dirs, [node, local_bin, home_bin]);
     assert!(toolchain_dirs("/", &home, &data).is_empty());
     assert!(toolchain_dirs(&home.display().to_string(), &home, &data).is_empty());
+}
+
+#[test]
+fn a_bin_folder_in_home_gives_its_lib_siblings_and_outside_home_its_parent() {
+    // T-0375 (R7-6): `~/.cargo` holds `credentials.toml`.
+    let root = TempDir::new("toolchain-home");
+    let home = root.path().join("home");
+    let data = root.path().join("data");
+    let cargo = home.join(".cargo");
+    let tool = root.path().join("opt/tool");
+    for dir in [
+        &cargo.join("bin"),
+        &cargo.join("lib"),
+        &tool.join("bin"),
+        &data,
+    ] {
+        std::fs::create_dir_all(dir).unwrap();
+    }
+    let path = format!(
+        "{}:{}",
+        cargo.join("bin").display(),
+        tool.join("bin").display()
+    );
+    let dirs = toolchain_dirs(&path, &home, &data);
+    assert_eq!(dirs, [cargo.join("bin"), cargo.join("lib"), tool]);
+    assert!(!dirs.contains(&cargo));
 }
 
 fn plan_in(root: &Path, worktree: &Path, settings: &IsolationSettings) -> IsolationPlan {
@@ -106,7 +132,7 @@ fn grants_the_worktree_tmp_and_claude_but_not_home_or_the_data_folder() {
     let data = root.path().join("data");
     assert!(plan.read_write.contains(&worktree));
     assert!(plan.read_write.contains(&data.join("sandbox/T-1/tmp")));
-    assert!(plan.read_write.contains(&home.join(".claude")));
+    assert!(plan.read_only.contains(&home.join(".claude")));
     assert!(plan.read_only.contains(&data.join("sandbox/T-1")));
     assert!(plan.read_only.contains(&extra));
     assert!(!plan.read_only.contains(&PathBuf::from("/gone/ro")));
@@ -119,6 +145,44 @@ fn grants_the_worktree_tmp_and_claude_but_not_home_or_the_data_folder() {
         );
     }
     assert_eq!(plan.sweep_mark.as_deref(), Some("NATAMUX_SANDBOX=x"));
+}
+
+#[test]
+fn only_what_claude_code_writes_while_it_works_is_writable_in_its_folder() {
+    // T-0375 (R7-2): hooks, MCP servers or commands planted there would run outside the sandbox.
+    let root = TempDir::new("plan-claude");
+    let worktree = root.path().join("wt");
+    let home = root.path().join("home");
+    let claude = home.join(".claude");
+    let outside = root.path().join("outside");
+    for dir in [
+        &worktree,
+        &claude.join("projects"),
+        &claude.join("commands"),
+        &outside,
+    ] {
+        std::fs::create_dir_all(dir).unwrap();
+    }
+    for file in [claude.join("settings.json"), home.join(".claude.json")] {
+        std::fs::write(file, "{}").unwrap();
+    }
+    std::os::unix::fs::symlink(&outside, claude.join("todos")).unwrap();
+    let plan = plan_in(root.path(), &worktree, &IsolationSettings::default());
+    assert!(plan.read_write.contains(&claude.join("projects")));
+    assert!(plan.read_only.contains(&claude));
+    assert!(plan.read_only.contains(&home.join(".claude.json")));
+    for kept in [
+        claude.join("settings.json"),
+        claude.join("commands"),
+        home.join(".claude.json"),
+        claude.join("todos"),
+        outside,
+    ] {
+        assert!(
+            !plan.read_write.iter().any(|path| kept.starts_with(path)),
+            "{kept:?} is writable"
+        );
+    }
 }
 
 #[test]
@@ -212,6 +276,66 @@ fn a_fake_shared_folder_in_tmp_gets_no_grant() {
         assert!(!real.starts_with(&secret), "{path:?}");
         assert!(!path.starts_with(&fake), "{path:?}");
     }
+}
+
+/// A repo at `fake` that passes `linked_git_dirs`, with the worktree's `.git` pointed at it.
+fn fake_repo(fake: &Path, worktree: &Path) {
+    let git_dir = fake.join("worktrees/wt");
+    for dir in [&git_dir, &fake.join("objects"), &fake.join("refs")] {
+        std::fs::create_dir_all(dir).unwrap();
+    }
+    std::fs::write(fake.join("HEAD"), "ref: refs/heads/t-1\n").unwrap();
+    std::fs::write(fake.join("config"), "[http]\n\tsslVerify = false\n").unwrap();
+    std::fs::write(git_dir.join("commondir"), "../..\n").unwrap();
+    let dot_git = worktree.join(".git");
+    std::fs::write(git_dir.join("gitdir"), dot_git.to_string_lossy().as_bytes()).unwrap();
+    std::fs::write(&dot_git, format!("gitdir: {}\n", git_dir.display())).unwrap();
+}
+
+#[test]
+fn a_fake_repo_in_the_git_write_grants_gets_no_grant_and_keeps_the_real_pin() {
+    // T-0375 review 1: the agent writes the shared objects and branch refs, so it can build a
+    // repo there that passes every check of the `.git` file.
+    let (root, repo) = natamux_git::test_support::test_repo();
+    let worktree = root.path().join("wt");
+    let target = worktree.to_string_lossy().into_owned();
+    natamux_git::test_support::run_git(&repo, &["worktree", "add", "-b", "t-1", &target]);
+    let settings = IsolationSettings::default();
+    plan_in(root.path(), &worktree, &settings);
+    let real = natamux_git::exec::linked_git_dirs(&worktree);
+    assert!(real.is_some());
+    let common = std::fs::canonicalize(repo.join(".git")).unwrap();
+    for fake in [common.join("objects/x"), common.join("refs/heads/x")] {
+        fake_repo(&fake, &worktree);
+        assert!(
+            natamux_git::exec::linked_git_dirs(&worktree).is_some(),
+            "{fake:?}"
+        );
+        let plan = plan_in(root.path(), &worktree, &settings);
+        for path in plan.read_only.iter().chain(&plan.read_write) {
+            assert!(!path.starts_with(&fake), "{path:?}");
+        }
+        let (_, pinned) = natamux_core::security::pinned_git_dirs(&worktree).unwrap();
+        assert_eq!(pinned, real);
+    }
+}
+
+#[test]
+fn a_fake_repo_there_at_the_daemon_start_is_refused() {
+    // T-0375 review 1: no pair was pinned before, so only the check itself can refuse it.
+    let (root, repo) = natamux_git::test_support::test_repo();
+    let worktree = root.path().join("wt");
+    let target = worktree.to_string_lossy().into_owned();
+    natamux_git::test_support::run_git(&repo, &["worktree", "add", "-b", "t-1", &target]);
+    let common = std::fs::canonicalize(repo.join(".git")).unwrap();
+    let fake = common.join("objects/x");
+    fake_repo(&fake, &worktree);
+    let plan = plan_in(root.path(), &worktree, &IsolationSettings::default());
+    for path in plan.read_only.iter().chain(&plan.read_write) {
+        assert!(!path.starts_with(&common), "{path:?}");
+    }
+    let (_, pinned) = natamux_core::security::pinned_git_dirs(&worktree).unwrap();
+    assert_eq!(pinned, None);
 }
 
 #[cfg(unix)]

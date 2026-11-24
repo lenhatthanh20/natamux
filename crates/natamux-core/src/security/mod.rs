@@ -3,7 +3,7 @@
 //! installed it, else Personal.
 
 use std::cell::RefCell;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, PoisonError};
 
 mod agent_api;
 mod agent_mode;
@@ -22,7 +22,10 @@ pub use agent_mode::{AUTO_FORBID_REASON, INPUT_TRACE_BLOCKED, auto_allowed, inpu
 pub use ci_push::{CI_FORBID_REASON, CiMode, CiPush, ci_mode};
 pub use data::{DEFAULT_LOG_MAX_BYTES, DataSettings, data_in, data_of};
 pub use decide::{Decision, KeyState, key_states, mode_in, tighten, tighten_with_repo};
-pub use git_harden::{harden_git, harden_git_in, install_git_hardening};
+pub use git_harden::{
+    git_pins, harden_git, harden_git_at, harden_git_in, hardening_config, install_git_hardening,
+    pin_git_dirs, pinned_git_dirs, unpin_git_dirs,
+};
 pub use isolation::{IsolationSettings, isolation_of, isolation_value, load_isolation};
 pub use network::{
     Egress, ForcedNetwork, GH_ACTIONS, GIT_ACTIONS, GhRule, GitRule, NetworkSettings, UPDATE_HOSTS,
@@ -83,17 +86,15 @@ static INSTALLED: Mutex<Option<Arc<Source>>> = Mutex::new(None);
 
 /// Makes `source` the settings `mode()` reads in this process.
 pub fn install(source: Arc<Source>) {
-    if let Ok(mut installed) = INSTALLED.lock() {
-        *installed = Some(source);
-    }
+    *INSTALLED.lock().unwrap_or_else(PoisonError::into_inner) = Some(source);
 }
 
 /// The settings `install` set, if any.
 pub fn installed() -> Option<Arc<Source>> {
     INSTALLED
         .lock()
-        .ok()
-        .and_then(|installed| installed.clone())
+        .unwrap_or_else(PoisonError::into_inner)
+        .clone()
 }
 
 /// The mode for this check. Read again on each decision, so a change applies to the next one.

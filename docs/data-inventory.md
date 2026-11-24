@@ -16,7 +16,7 @@ Every place Natamux keeps data on your machine, how private it is, and how it go
 | `tasks/<task>.attachments/`, `.shells.json`, `.usage.json`, archive | Attachments, open shells, token use, finished stage files | High | 0600 | daemon | as the task | yes | yes |
 | `tasks/<task>.deleting` | Marker of a delete in progress (empty) | None | 0600 | daemon | Until the delete ends | yes | yes |
 | `index.sqlite`, `-wal`, `-shm` | Search index of the tasks: titles, notes, states | High | 0600 | daemon | Rows go with the task (`secure_delete` on, WAL emptied) | rows | yes |
-| `logs/audit.log` | One JSON line per blocked action or security change: `ts`, `event`, `id`, `result`, `settingsVersion` only | Low: task ids and hosts | 0600 | daemon | Cut to `data.logMaxBytes` | no (ids only) | yes |
+| `logs/audit.log`, `logs/audit.log.1` | One JSON line per blocked action or security change: `ts`, `event`, `id`, `result`, `settingsVersion` only | Low: task ids and hosts | 0600 | daemon | Past `data.logMaxBytes` the file moves to `audit.log.1` (the older one is replaced) and a new file starts: up to twice the cap on disk | no (ids only) | yes |
 | `agent-launch-<task>*.sh`, `stage-command-<task>.sh` | Scripts that start an agent or a check: prompt, model, settings | High | 0600 | daemon | as the task | yes | yes |
 | `sandbox/<task>/` | Isolation only: launch scripts, git config with your name and email, `tmp` | Medium | 0700 | daemon | as the task | yes | yes |
 | `security.json`, `security-written.json` | Security settings and the daemon's copy of its last save | Low | 0600 | daemon (`PUT /security`) | Until you change it | no | no (settings) |
@@ -30,7 +30,7 @@ Every place Natamux keeps data on your machine, how private it is, and how it go
 | --- | --- | --- | --- | --- | --- | --- |
 | `daemon-token` | Token of the app's daemon | High: full API access | 0600 | app | Until removed | yes |
 | `daemon-port` | Port of the running daemon | None | 0600 | app | Until removed | yes |
-| `logs/app.log`, `logs/daemon.log`, `logs/update.log` | Link changes, daemon output, update steps; URLs and known tokens masked | Medium: paths, task ids, error text | 0600 | app, daemon | Cut to `data.logMaxBytes` at each app start | yes |
+| `logs/app.log`, `logs/daemon.log`, `logs/update.log` | Link changes, daemon output, update steps. Lines Natamux writes (git errors, HTTP errors, the pull request watcher, app and update lines) have URLs and known tokens masked; the raw output of the daemon and of programs it starts in `daemon.log` is not masked | Medium: paths, task ids, error text | 0600 | app, daemon | Cut to `data.logMaxBytes` at each app start | yes |
 | `settings.json`, `view.json` | Update and offline settings, theme and layout | None | 0600 | app | Until you change it | no |
 | `updates/` | Downloaded update files | None | 0700 | app | Until the next update | no |
 
@@ -52,21 +52,21 @@ A remote URL with a token never reaches the data folder: git errors and log line
 
 | Key | Default | What it does |
 | --- | --- | --- |
-| `retentionDays` | `0` (off) | At daemon start and every 24 h, Done and Cancelled tasks not changed for more than N days are deleted through the normal delete. A task with uncommitted changes, or with commits no other branch, remote branch or tag holds, is kept and logged `refused`. Only settings saved through `PUT /security` delete anything: a hand-edited file never starts a delete. |
-| `logMaxBytes` | `1048576` | Size cap of the audit, app, daemon and update logs (at least 4096). |
-| `auditLog` | on in Strict mode, else off | Writes `logs/audit.log`. In Strict mode it cannot be turned off. |
+| `retentionDays` | `0` (off) | At daemon start and every 24 h, Done and Cancelled tasks not changed for more than N days are deleted through the normal delete. A task with uncommitted changes, or with commits no other branch, remote branch or tag holds, is kept and logged `refused`. The check covers the worktree's `HEAD` and the task's branch, and Natamux's own `origin/natamux-ci/*` refs do not count as a remote branch. Only settings saved through `PUT /security` delete anything: a hand-edited file never starts a delete. |
+| `logMaxBytes` | `1048576` | Size cap of the audit, app, daemon and update logs (at least 4096). The audit log keeps one older file of the same size. |
+| `auditLog` | on in Strict mode, else off | Writes `logs/audit.log`, one line for every blocked agent action, also one a route refuses after the route check. In Strict mode it cannot be turned off. |
 
 Audit events: `security.changed`, `security.outside-change`, `ci.blocked`, `agent.blocked`, `egress.denied`, `agent-api.denied`, `task.delete`, `task.purge` (a delete finished at start), `retention.run`, `support-bundle.create`. `settingsVersion` is the first 16 hex digits of the SHA-256 of `security.json`. An id or result that is not a plain word (letters, digits, `._:-/@`, up to 80 characters) is written as `-`, so a title or a reason never reaches the log.
 
 ## Support bundle
 
-`natamux support-bundle [--out <file>]` (or `GET /support-bundle`, desktop token only; an agent token gets 403) saves a file with mode 0600 holding: the daemon version, OS and CPU type, uptime, the security state and its keys, isolation and egress, the data settings, the number of tasks in each state, and the last 200 lines of `logs/daemon.log` with URLs and known tokens masked and input-trace lines left out. It holds no task text, events or environment. Read it before you send it: other free text in log lines (paths, error messages) stays.
+`natamux support-bundle [--out <file>]` (or `GET /support-bundle`, desktop token only; an agent token gets 403) saves a file with mode 0600 holding: the daemon version, OS and CPU type, uptime, the security state and its keys, isolation and egress, the data settings, the number of tasks in each state, and the last 200 lines of `logs/daemon.log` with URLs and known tokens masked and input-trace lines left out. The log lines are there only when the folder above the data folder holds the app's `daemon-token` file: a daemon you start by hand gives none. It holds no task text, events or environment. Read it before you send it: other free text in log lines (paths, error messages) stays.
 
 ## Removing Natamux
 
 1. Push or save the work in your worktrees.
 2. Quit the app.
-3. Run `natamux purge-data --yes`. It refuses while a worktree in `data/worktrees/` has uncommitted or untracked files (and lists them), while the daemon runs (on the app's saved port, or on `NATAMUX_PORT`, else 4317), and in a task's terminal. It removes the task data, the index, the logs, the scripts and the sandbox folders, and the token and port files. It keeps the worktrees and the settings. Running it again changes nothing.
+3. Run `natamux purge-data --yes`. It refuses while a worktree in `data/worktrees/` has uncommitted or untracked files (and lists them), while the daemon runs (on the app's saved port, or on `NATAMUX_PORT`, else 4317), in a task's terminal, and for a data folder that is not an absolute path or holds no `index.sqlite`. It removes the task data, the index, the logs (both audit files too), the scripts named `agent-launch-<task>[-N].sh` or `stage-command-<task>.sh` and the sandbox folders, and the token and port files. It keeps the worktrees and the settings. Running it again changes nothing.
 4. Remove what is left:
    - **macOS**: move `Natamux.app` to the Trash, then remove `~/Library/Application Support/Natamux` (this also removes the worktrees and settings).
    - **Linux**: remove the AppImage or the unpacked folder, then `~/.config/Natamux`.

@@ -20,6 +20,10 @@ fn secret_query_values_are_masked_and_the_others_stay() {
         "secret",
         "sig",
         "Token",
+        "api_key",
+        "client_secret",
+        "private_token",
+        "X-Amz-Signature",
     ] {
         let url = redact_url(&format!("https://h.test/p?{key}=FAKE-PASS-123&page=2"));
         assert!(!url.contains("FAKE-PASS-123"), "{key}: {url}");
@@ -82,4 +86,51 @@ fn plain_text_is_unchanged() {
     ] {
         assert_eq!(redact_text(text), text);
     }
+}
+
+#[test]
+fn every_url_of_a_word_is_redacted() {
+    let text = redact_text("remotes: https://a:FAKE-ONE@x.test,https://c:FAKE-TWO@y.test/r");
+    assert!(!text.contains("FAKE-ONE"), "{text}");
+    assert!(!text.contains("FAKE-TWO"), "{text}");
+    assert!(text.contains("y.test/r"), "{text}");
+}
+
+#[test]
+fn secret_values_in_the_fragment_are_masked() {
+    let text = redact_text("redirect https://h.test/cb#access_token=FAKE-PASS-123&state=ok");
+    assert!(!text.contains("FAKE-PASS-123"), "{text}");
+    assert!(text.contains("#access_token=***&state=ok"), "{text}");
+    let plain = "https://h.test/docs#section=2";
+    assert_eq!(redact_text(plain), plain);
+}
+
+#[test]
+fn a_password_with_a_slash_is_dropped_whole() {
+    assert_eq!(
+        redact_text("https://u:pa/FAKE@h.test/r"),
+        "https://h.test/r"
+    );
+    assert_eq!(
+        redact_text("https://u:pa#FAKE@h.test/r"),
+        "https://h.test/r"
+    );
+}
+
+#[test]
+fn an_at_sign_outside_the_user_info_stays() {
+    for text in [
+        "https://h.test/p@x",
+        "https://h.test:8080/users/@me",
+        "git@github.com:acme/app.git",
+        "see https://h.test/a@b and git@host:path",
+    ] {
+        assert_eq!(redact_text(text), text);
+    }
+}
+
+#[test]
+fn new_secret_query_keys_are_masked_in_free_text() {
+    let text = redact_text("GET https://h.test/v1?api_key=FAKE-PASS-123 failed");
+    assert_eq!(text, "GET https://h.test/v1?api_key=*** failed");
 }

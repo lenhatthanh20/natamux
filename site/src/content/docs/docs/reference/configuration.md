@@ -396,7 +396,7 @@ Without `branchName`, the name is the project slug + `/` + the id in lower case 
 
 ## Strict mode (`security.json`)
 
-Strict mode is not part of `.natamux.json`: it is a setting of the app, kept in `security.json` in the daemon's data folder. Turn it on in **Settings > Security**, which saves the file through `PUT /security`. Do not edit the file by hand: the daemon then keeps the stricter of the old and the new settings and shows a warning until you save again.
+Strict mode is not part of `.natamux.json`: it is a setting of the app, kept in `security.json` in the daemon's data folder. Turn it on in **Settings > Security**, which saves the file through `PUT /security`. Do not edit the file by hand: the daemon then keeps the stricter of the old and the new settings and shows a warning until you save again. A file that does not parse also sets egress to `loopback` and turns the updater off.
 
 ```json
 { "strict": true, "ciPush": "approved-commit", "agentApi": { "grants": ["pr.create.own"] } }
@@ -415,7 +415,7 @@ Strict mode is not part of `.natamux.json`: it is a setting of the app, kept in 
 | `agentApi.mode` | `scoped` | An agent token reaches only its own task. |
 | `agentApi.requireHumanForPush` | `true` | An agent token never gets the push grant. |
 | `agentApi.grants` | list, default empty | Extra actions for agent tokens. See [the HTTP API](/docs/reference/http-api/). |
-| `data.auditLog` | `true` | Blocked actions and security changes are written to `logs/audit.log`. |
+| `data.auditLog` | `true` | Blocked actions and security changes are written to `logs/audit.log` (the older part in `logs/audit.log.1`). |
 
 - A key can only be stricter than its Strict value. A looser value in the file is ignored (`GET /security` lists it in `ignored`), and `PUT /security` refuses it.
 - A project can tighten Strict mode with a `security` object in its `.natamux.json`, with the same keys. It never loosens it.
@@ -430,7 +430,7 @@ Isolation is its own setting, not set by Strict mode. Edit `security.json` and r
 |---|---|---|
 | `isolation.mode` | `off` (default) or `required` | `required`: every task terminal, stage check command and the commit-message agent runs under Landlock, or does not run. Linux with Landlock and Claude Code only. |
 | `isolation.extraReadOnly` | list of absolute paths | More folders an isolated shell may read. |
-| `isolation.extraReadWrite` | list of absolute paths | More folders an isolated shell may write. |
+| `isolation.extraReadWrite` | list of absolute paths | More folders an isolated shell may write, for example a part of `~/.claude` that Claude Code needs and Natamux does not grant. |
 | `isolation.envAllow` | list of names | More variables an isolated shell keeps. |
 
 See [SECURITY.md](https://github.com/lenhatthanh20/natamux/blob/main/SECURITY.md#isolation-linux-claude-code) for what is granted and the limits.
@@ -441,8 +441,8 @@ Not set by Strict mode, except the audit log. Save it with `PUT /security` (a bo
 
 | Key | Values | Meaning |
 |---|---|---|
-| `data.retentionDays` | number, default `0` (off) | At daemon start and every 24 hours, Done and Cancelled tasks not changed for more than this many days are deleted through the normal delete. A task with uncommitted changes, or with commits only its branch holds, is kept. |
-| `data.logMaxBytes` | number, default `1048576` | Size cap of the audit, app, daemon and update logs (at least 4096). |
+| `data.retentionDays` | number, default `0` (off) | At daemon start and every 24 hours, Done and Cancelled tasks not changed for more than this many days are deleted through the normal delete. A task with uncommitted changes, or with commits only its branch holds, is kept; a `natamux-ci/*` copy on the remote does not count as pushed. |
+| `data.logMaxBytes` | number, default `1048576` | Size cap of the audit, app, daemon and update logs (at least 4096). A full audit log moves to `audit.log.1` and a new file starts. |
 | `data.auditLog` | `true` or `false`; default `true` in Strict mode, else `false` | One JSON line per blocked action or security change in `logs/audit.log` of the data folder: `ts`, `event`, `id`, `result`, `settingsVersion` only. |
 
 See the [data inventory](https://github.com/lenhatthanh20/natamux/blob/main/docs/data-inventory.md) for every file Natamux keeps.

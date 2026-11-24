@@ -24,6 +24,7 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 
 use super::edge_rules;
 use super::errors::{Answer, not_found};
+use super::event_socket::AgentEnd;
 use super::routes::terminals::task_id_issues;
 use super::server::AppState;
 use crate::terminals::limits::CLIENT_HIGH_WATER;
@@ -145,8 +146,15 @@ async fn run(socket: Socket, state: Arc<AppState>, id: String, query: String) {
     let (out, outbox) = unbounded_channel::<Out>();
     let backlog = Arc::new(Backlog::default());
     let writer = tokio::spawn(write_frames(sink, outbox, Arc::clone(&backlog)));
-    if let Some((detach, client, terminal)) = open(&state, &id, &query, &out, &backlog).await {
-        read_messages(&mut stream, &state, &id, &terminal, &client, &out, &backlog).await;
+    if let Some((detach, client, terminal, mut end)) =
+        open(&state, &id, &query, &out, &backlog).await
+    {
+        tokio::select! {
+            () = read_messages(&mut stream, &state, &id, &terminal, &client, &out, &backlog) => {}
+            () = end.revoked() => {
+                let _ = out.send(Out::Close(Some((CLOSE_UNAUTHORIZED, "unauthorized"))));
+            }
+        }
         tokio::task::spawn_blocking(move || detach.detach());
     }
     drop(out);
@@ -187,24 +195,29 @@ async fn write_frames(
     let _ = SinkExt::flush(&mut sink).await;
 }
 
-/// The ticket, then the attach. None when the socket was refused; the close is queued then.
+/// The ticket, then the attach. None when the socket was refused; the close is queued then. A
+/// socket opened with an agent token's ticket ends when that token is revoked.
 async fn open(
     state: &Arc<AppState>,
     id: &str,
     query: &str,
     out: &UnboundedSender<Out>,
     backlog: &Arc<Backlog>,
-) -> Option<(Detach, ClientRef, String)> {
+) -> Option<(Detach, ClientRef, String, AgentEnd)> {
     let query = TerminalQuery::parse(query);
     // The ticket is only spent once the query is right, as in Node.
-    let redeemed = task_id_issues(id).is_empty()
-        && query
-            .as_ref()
-            .is_some_and(|query| state.terminals.redeem_ticket(&query.ticket, id));
-    let Some(query) = query.filter(|_| redeemed) else {
+    let issuer = match &query {
+        Some(query) if task_id_issues(id).is_empty() => {
+            state.terminals.redeem_ticket_issuer(&query.ticket, id)
+        }
+        _ => None,
+    };
+    let (Some(query), Some(issuer)) = (query, issuer) else {
         let _ = out.send(Out::Close(Some((CLOSE_UNAUTHORIZED, "unauthorized"))));
         return None;
     };
+    // At once, so a revoke during the attach still ends the socket.
+    let end = AgentEnd::new(&state.bus, issuer.as_deref());
     let client: ClientRef = Arc::new(SocketClient {
         out: out.clone(),
         backlog: Arc::clone(backlog),
@@ -234,7 +247,7 @@ async fn open(
     })
     .await;
     match attached {
-        Ok(Ok(detach)) => Some((detach, client, terminal)),
+        Ok(Ok(detach)) => Some((detach, client, terminal, end)),
         Ok(Err(TerminalError::ShellGone { .. })) => {
             let _ = out.send(Out::Close(Some((CLOSE_GONE, "gone"))));
             None

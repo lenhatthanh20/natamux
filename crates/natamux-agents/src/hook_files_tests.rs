@@ -459,3 +459,28 @@ fn writes_a_droid_file_and_a_plugin_of_an_older_natamux_again() {
         opencode_plugin()
     );
 }
+
+#[test]
+fn an_isolated_worktree_excludes_only_in_its_checked_git_folder() {
+    // T-0375 R7-7: the agent can point `.git` at a folder of its own choosing.
+    let root = TempDir::new("pinned");
+    let (worktree, real, fake) = (
+        root.path().join("wt"),
+        root.path().join("real"),
+        root.path().join("fake"),
+    );
+    write(&worktree, ".git", &format!("gitdir: {}\n", fake.display()));
+    write(&fake, "commondir", ".");
+    let checked = (real.join("worktrees/wt"), real.clone());
+    natamux_core::security::pin_git_dirs(&worktree, Some(checked));
+    exclude_from_git(&worktree, "/a");
+    assert_eq!(read(&real, "info/exclude"), "/a\n");
+    assert!(!fake.join("info").exists());
+
+    // A worktree whose git folders could not be checked gets no line anywhere.
+    let other = root.path().join("other");
+    write(&other, ".git", &format!("gitdir: {}\n", fake.display()));
+    natamux_core::security::pin_git_dirs(&other, None);
+    exclude_from_git(&other, "/b");
+    assert!(!fake.join("info").exists());
+}

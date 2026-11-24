@@ -8,29 +8,21 @@ use http_body_util::BodyExt;
 use hyper::{Method, StatusCode};
 use natamux_core::tasks::inputs::{list_query, task_id_param};
 use natamux_proto::projects::repo::Repo;
-use natamux_proto::tasks::task::{Task, TaskState};
+use natamux_proto::tasks::task::TaskState;
 use serde_json::{Value, json};
 
 use super::projects::repo_query;
 use super::tasks::answer;
 use super::{agents, tasks, workspaces};
 use crate::http::agent_actions::AgentAction;
-use crate::http::agent_rules::denial_line;
+use crate::http::agent_rules::{audit_denied_later, denial_line};
 use crate::http::errors::{
     Answer, error_answer, internal_error, json_answer, task_error, zod_answer,
 };
 use crate::http::server::{AppState, query_value};
 use crate::projects::repos::DEFAULT_REPO;
+use crate::shared::event_bus::task_view;
 use crate::tasks::errors::TaskResult;
-
-/// What the agent of the parent sees of a direct subtask.
-pub fn task_view(task: &Task) -> Value {
-    json!({
-        "id": task.id, "title": task.title, "state": task.state, "stage": task.stage,
-        "parentId": task.parent_id, "pr": task.pr, "prStatus": task.pr_status,
-        "stageSince": task.stage_since, "branch": task.branch,
-    })
-}
 
 /// The answer of a read the agent token of `own` makes, cut to what it may see; None: the
 /// normal route answers.
@@ -131,8 +123,8 @@ async fn other_repo(
     parts: &[&str],
     own: &str,
 ) -> Option<Answer> {
-    let (state, own_id) = (Arc::clone(state), own.to_string());
-    let mine = tokio::task::spawn_blocking(move || own_repo(&state, &own_id).map(|repo| repo.id));
+    let (shared, own_id) = (Arc::clone(state), own.to_string());
+    let mine = tokio::task::spawn_blocking(move || own_repo(&shared, &own_id).map(|repo| repo.id));
     let mine = match mine.await {
         Ok(Ok(mine)) => mine,
         Ok(Err(error)) => return Some(task_error(&error)),
@@ -145,6 +137,7 @@ async fn other_repo(
         "{}",
         denial_line(Some(AgentAction::RepoReadOwn), method, parts, own)
     );
+    audit_denied_later(state, own).await;
     Some(error_answer(
         StatusCode::FORBIDDEN,
         "forbidden",
@@ -175,6 +168,8 @@ async fn own_rows(answer: Answer, key: &str, own: &str) -> Answer {
 
 #[cfg(test)]
 mod tests {
+    use natamux_proto::tasks::task::Task;
+
     use super::*;
 
     fn rows_of(body: Value, key: &str) -> Value {

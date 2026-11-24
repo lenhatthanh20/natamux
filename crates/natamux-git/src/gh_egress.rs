@@ -8,7 +8,6 @@ use natamux_core::egress::{Remote, Target, enforce, parse_remote};
 use natamux_core::security::{Egress, network_for};
 
 use crate::egress::{RemoteOp, resolve_remote};
-use crate::gh::GitHubError;
 
 const FIELDS: [&str; 4] = ["-f", "-F", "--field", "--raw-field"];
 
@@ -23,6 +22,13 @@ fn flag_value<'a>(args: &'a [String], names: &[&str]) -> Vec<&'a str> {
         } else if let Some((name, value)) = arg.split_once('=')
             && names.contains(&name)
         {
+            values.push(value);
+        } else if let Some(value) = names
+            .iter()
+            .filter(|name| name.len() == 2)
+            .find_map(|name| arg.strip_prefix(name))
+        {
+            // A short flag with its value attached, such as `-XPOST`.
             values.push(value);
         }
     }
@@ -68,6 +74,9 @@ pub fn classify(args: &[String]) -> Option<&'static str> {
     }
 }
 
+// Flags whose value is free text: a URL there names no host.
+const TEXT_FLAGS: [&str; 7] = ["-t", "--title", "-b", "--body", "-q", "--jq", "--template"];
+
 /// The host a call names itself: `--hostname`, a `HOST/OWNER/REPO` repo, or a URL argument.
 fn named_host(args: &[String]) -> Option<String> {
     if let Some(host) = flag_value(args, &["--hostname"]).last() {
@@ -79,23 +88,32 @@ fn named_host(args: &[String]) -> Option<String> {
     {
         return repo.split('/').next().map(str::to_ascii_lowercase);
     }
-    args.iter()
-        .find(|arg| arg.starts_with("https://"))
-        .and_then(|url| match parse_remote(url) {
-            Remote::Network { host, .. } => Some(host),
-            _ => None,
-        })
+    let mut rest = args.iter();
+    while let Some(arg) = rest.next() {
+        if TEXT_FLAGS.contains(&arg.as_str()) {
+            rest.next();
+            continue;
+        }
+        let url = match arg.strip_prefix("http://") {
+            Some(tail) => format!("https://{tail}"),
+            None if arg.starts_with("https://") => arg.clone(),
+            None => continue,
+        };
+        return Some(match parse_remote(&url) {
+            Remote::Network { host, .. } => host,
+            // An empty host is refused by the egress check, so the call does not fall back to
+            // origin's host.
+            _ => String::new(),
+        });
+    }
+    None
 }
 
-fn refused(reason: String) -> GitHubError {
-    GitHubError::new(&reason)
-}
-
-/// The variables that pin gh to the checked host and repo, or the refusal. Empty with egress
-/// `open`: the old call runs.
-pub fn gh_target(cwd: &Path, args: &[String]) -> Result<Vec<(String, String)>, GitHubError> {
+/// The variables that pin gh to the checked host and repo, or why the call is refused. Empty
+/// with egress `open`: the old call runs.
+pub fn gh_target(cwd: &Path, args: &[String]) -> Result<Vec<(String, String)>, String> {
     if natamux_core::offline::offline() {
-        return Err(GitHubError::new("offline mode: GitHub is not reached"));
+        return Err("offline mode: GitHub is not reached".into());
     }
     let settings = network_for(cwd);
     match settings.egress {
@@ -103,7 +121,7 @@ pub fn gh_target(cwd: &Path, args: &[String]) -> Result<Vec<(String, String)>, G
         Egress::Loopback => {
             let reason = "egress policy: loopback only, so GitHub is not reached";
             eprintln!("{reason}");
-            return Err(refused(reason.into()));
+            return Err(reason.into());
         }
         Egress::Allowlist => {}
     }
@@ -111,12 +129,12 @@ pub fn gh_target(cwd: &Path, args: &[String]) -> Result<Vec<(String, String)>, G
         let name = args.first().map_or("", String::as_str);
         let reason = format!("egress policy: gh {name} is not a call Natamux allows");
         eprintln!("{reason}");
-        return Err(refused(reason));
+        return Err(reason);
     };
     // A host the call names is checked before git reads origin: a refusal starts nothing.
     let named = named_host(args);
     if let Some(host) = &named {
-        enforce(&settings, &Target::Gh { host, action }).map_err(refused)?;
+        enforce(&settings, &Target::Gh { host, action })?;
     }
     let origin = match resolve_remote(cwd, RemoteOp::Fetch, "origin").map(|url| parse_remote(&url))
     {
@@ -131,7 +149,7 @@ pub fn gh_target(cwd: &Path, args: &[String]) -> Result<Vec<(String, String)>, G
             let host = origin
                 .as_ref()
                 .map_or("github.com", |(host, _, _)| host.as_str());
-            enforce(&settings, &Target::Gh { host, action }).map_err(refused)?;
+            enforce(&settings, &Target::Gh { host, action })?;
             host.to_string()
         }
     };

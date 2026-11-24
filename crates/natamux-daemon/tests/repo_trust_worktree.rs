@@ -212,3 +212,108 @@ fn an_untracked_claude_local_file_counts_in_strict_mode_only() {
     };
     assert_eq!(files, [".claude/settings.local.json"]);
 }
+
+// T-0375 R1-3: a link that stays inside the worktree is hashed with its target; one that leaves
+// it is not.
+#[cfg(unix)]
+#[test]
+fn a_link_inside_the_worktree_is_hashed_with_its_target() {
+    use std::os::unix::fs::symlink;
+
+    let f = fixture();
+    write(&f.repo, "docs/a.md", "do a\n");
+    write(&f.repo, "docs/same.md", "do a\n");
+    write(&f.repo, "shared/b/SKILL.md", "do b\n");
+    let skills = f.repo.join(".claude/skills");
+    std::fs::create_dir_all(&skills).unwrap();
+    symlink("../../docs/a.md", skills.join("a.md")).unwrap();
+    symlink("../../shared/b", skills.join("b")).unwrap();
+    // A loop of links is gone through once.
+    symlink("..", skills.join("up")).unwrap();
+    let before = f.digest(&f.repo);
+
+    write(&f.repo, "docs/a.md", "do more\n");
+    assert_ne!(f.digest(&f.repo), before, "the file a link names");
+    let before = f.digest(&f.repo);
+    write(&f.repo, "shared/b/SKILL.md", "do more b\n");
+    assert_ne!(f.digest(&f.repo), before, "a file in a linked folder");
+    let before = f.digest(&f.repo);
+    std::fs::remove_file(skills.join("a.md")).unwrap();
+    write(&f.repo, "docs/same.md", "do more\n");
+    symlink("../../docs/same.md", skills.join("a.md")).unwrap();
+    assert_ne!(
+        f.digest(&f.repo),
+        before,
+        "the same bytes from another file"
+    );
+
+    let outside = f.root.path().join("outside");
+    write(&outside, "c.md", "run anything\n");
+    symlink(&outside, skills.join("c")).unwrap();
+    assert!(matches!(f.state(&f.repo), TrustState::Unverifiable { .. }));
+}
+
+// T-0375 review 1 finding 6: a file reached through a link is tracked when its real path is, so
+// a committed Claude local file behind a committed link counts in Personal mode.
+#[cfg(unix)]
+#[test]
+fn a_committed_claude_local_file_behind_a_link_counts_in_personal_mode() {
+    use std::os::unix::fs::symlink;
+
+    let f = fixture();
+    write(&f.repo, "cfg/claude/settings.local.json", HOOK_A);
+    symlink("cfg/claude", f.repo.join(".claude")).unwrap();
+    commit(&f.repo, "linked claude config");
+    f.approve_project();
+    assert!(f.state(&f.repo).is_trusted());
+    let before = f.digest(&f.repo);
+
+    write(&f.repo, "cfg/claude/settings.local.json", HOOK_B);
+    assert_ne!(f.digest(&f.repo), before);
+    assert!(!f.state(&f.repo).is_trusted());
+}
+
+// T-0375 R1-3: packages are no agent config, however many there are.
+#[test]
+fn a_node_modules_folder_in_a_config_folder_is_left_out() {
+    let f = fixture();
+    write(&f.repo, ".opencode/plugins/x.js", "x\n");
+    let before = f.digest(&f.repo);
+    for index in 0..=500 {
+        let rel = format!(".opencode/node_modules/p/{index}.js");
+        write(&f.repo, &rel, "y\n");
+    }
+    assert_eq!(f.digest(&f.repo), before);
+}
+
+// T-0375 R1-6: the worktree's own `.natamux.json` makes its digest a Strict one.
+#[test]
+fn a_worktree_made_strict_by_its_file_counts_an_untracked_claude_local_file() {
+    let f = fixture();
+    f.approve_project();
+    write(
+        &f.repo,
+        ".claude/settings.local.json",
+        r#"{"permissions":{"allow":["Bash(*)"]}}"#,
+    );
+    assert!(f.state(&f.repo).is_trusted());
+
+    write(&f.repo, ".natamux.json", r#"{"security":{"strict":true}}"#);
+    let TrustState::Changed { files, .. } = f.state(&f.repo) else {
+        panic!("{:?}", f.state(&f.repo));
+    };
+    assert_eq!(files, [".claude/settings.local.json"]);
+}
+
+// T-0375 R1-7: a git error is no answer about what is tracked.
+#[test]
+fn a_broken_git_file_makes_the_worktree_unverifiable() {
+    let f = fixture();
+    write(&f.repo, ".mcp.json", "{}\n");
+    commit(&f.repo, "config");
+    let task = f.worktree("task", "main");
+    assert!(f.state(&task).digest().is_some());
+    let broken = format!("gitdir: {}\n", f.root.path().join("nowhere").display());
+    std::fs::write(task.join(".git"), broken).unwrap();
+    assert!(matches!(f.state(&task), TrustState::Unverifiable { .. }));
+}

@@ -52,7 +52,7 @@ fn is_open(cx: &mut VisualTestContext) -> bool {
 }
 
 fn trusted() -> bool {
-    let view = fake_daemon::shared().repo_trust(PROJECT);
+    let view = fake_daemon::shared().repo_trust(PROJECT, None);
     view.expect("the project").trusted
 }
 

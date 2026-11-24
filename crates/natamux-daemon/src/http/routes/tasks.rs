@@ -20,7 +20,7 @@ use natamux_proto::tasks::task::TaskState;
 use natamux_store::attachments::{list_attachments, read_attachment};
 use serde_json::{Value, json};
 
-use crate::http::agent_rules::Caller;
+use crate::http::agent_rules::{Caller, audit_denied_later};
 use crate::http::errors::{
     Answer, error_answer, forbidden, internal_error, json_answer, task_error, workspace_error,
     zod_answer,
@@ -75,6 +75,7 @@ pub async fn create_task(state: Arc<AppState>, body: Option<Value>, who: &Caller
         .and_then(Value::as_str);
     if let Caller::Agent(own) = who {
         if parent != Some(own.as_str()) {
+            audit_denied_later(&state, own).await;
             return forbidden("make a task that is not a subtask of this one");
         }
         if let Some(refused) = agent_fields::refused(&state, own, body.as_ref(), None).await {
@@ -170,6 +171,8 @@ pub async fn post_event(
     if by_agent {
         let kind = input.get("type").and_then(Value::as_str).unwrap_or("");
         if GATE_EVENT_TYPES.contains(&kind) || DAEMON_ONLY_EVENT_TYPES.contains(&kind) {
+            // The agent token reaches its own task only (`agent_rules`), so `id` is its task.
+            audit_denied_later(&state, &id).await;
             return forbidden(&format!("send {kind}"));
         }
         input.insert("source".into(), json!("agent"));

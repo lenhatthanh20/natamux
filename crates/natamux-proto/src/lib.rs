@@ -37,6 +37,7 @@ pub mod stages {
 }
 pub mod tasks {
     pub mod attachments;
+    pub mod data_files;
     pub mod job;
     pub mod ports;
     pub mod task;

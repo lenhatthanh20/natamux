@@ -32,10 +32,12 @@ fn data_folder(name: &str) -> (PathBuf, PathBuf) {
     for file in [
         "tasks/T-1.md",
         "logs/audit.log",
+        "logs/audit.log.1",
         "index.sqlite",
         "index.sqlite-wal",
         "agent-launch-T-1.sh",
         "stage-command-T-1.sh",
+        "agent-launch-notes.txt",
         "repos.json",
         "security.json",
     ] {
@@ -103,7 +105,7 @@ fn purge_data_removes_task_data_keeps_worktrees_and_settings_and_runs_twice() {
     ] {
         assert!(!data.join(gone).exists(), "{gone}");
     }
-    for kept in ["repos.json", "security.json"] {
+    for kept in ["repos.json", "security.json", "agent-launch-notes.txt"] {
         assert!(data.join(kept).exists(), "{kept}");
     }
     assert!(worktree.join(".git").exists(), "the worktree stays");
@@ -159,5 +161,22 @@ fn purge_data_refuses_while_a_daemon_answers_on_the_port() {
     ]);
     let result = run_plain(&["purge-data", "--yes"], env);
     assert_eq!(result.code, EXIT_OK, "{}", result.stderr);
+    fs::remove_dir_all(&data).unwrap();
+}
+
+#[test]
+fn purge_data_refuses_a_relative_folder_or_one_without_an_index() {
+    let env = Env::from([("NATAMUX_DATA_DIR", "data"), ("NATAMUX_PORT", "0")]);
+    let result = run_plain(&["purge-data", "--yes"], env);
+    assert_eq!(result.code, EXIT_USAGE, "{}", result.stderr);
+    assert!(result.stderr.contains("absolute"), "{}", result.stderr);
+
+    let data = temp("purge-no-index");
+    fs::create_dir_all(data.join("tasks")).unwrap();
+    fs::write(data.join("tasks/notes.txt"), "not Natamux's").unwrap();
+    let result = run_plain(&["purge-data", "--yes"], env_of(&data));
+    assert_eq!(result.code, EXIT_FAILED, "{}", result.stderr);
+    assert!(result.stderr.contains("index.sqlite"), "{}", result.stderr);
+    assert!(data.join("tasks/notes.txt").exists());
     fs::remove_dir_all(&data).unwrap();
 }

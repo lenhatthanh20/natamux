@@ -1,14 +1,17 @@
 //! Repo trust: the dialog that shows every command a project runs on this machine, word for word
 //! with where it comes from, and its setup scripts. Approve sends the hash it showed; a 409 means
 //! the commands changed, so it reads and shows the new ones. Not now, Esc and the close button
-//! leave the project untrusted; the daemon then runs none of its commands.
+//! leave the project untrusted; the daemon then runs none of its commands. Opened for a task, it
+//! reads and approves the agent config of that task's worktree.
 
 use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui::{DismissEvent, EventEmitter, FocusHandle, Focusable};
 use natamux_client::ClientError;
-use natamux_proto::projects::repo_trust::{RepoCommand, RepoTrustView, SetupScript, TRUST_NOTE};
+use natamux_proto::projects::repo_trust::{
+    CONFIG_CHANGED_REASON, RepoCommand, RepoTrustView, SetupScript, TRUST_NOTE,
+};
 use ui::prelude::*;
 
 use crate::app::source::{Source, reason};
@@ -43,8 +46,52 @@ pub fn review<V: 'static>(
     window: &mut Window,
     cx: &mut Context<V>,
 ) {
-    let answer = source.repo_trust(repo_id);
-    let (source, repo_id, name) = (source.clone(), repo_id.to_owned(), name.to_owned());
+    review_in(source, repo_id, None, name, then, window, cx);
+}
+
+/// The dialog for the worktree of `task_id`, whose start the daemon refused because its agent
+/// config changed since the approval.
+pub fn review_task<V: 'static>(
+    source: &Arc<Source>,
+    repo_id: &str,
+    task_id: &str,
+    name: &str,
+    window: &mut Window,
+    cx: &mut Context<V>,
+) {
+    review_in(source, repo_id, Some(task_id), name, None, window, cx);
+}
+
+/// The daemon refused a start because the worktree's agent config changed since its approval:
+/// the review of that worktree is the way on.
+pub fn config_refused(error: &ClientError) -> bool {
+    error.is_conflict() && reason(error).contains(CONFIG_CHANGED_REASON)
+}
+
+/// The project of the dialog, and the task whose worktree it reads (None: the project folder).
+struct Asked {
+    source: Arc<Source>,
+    repo_id: String,
+    task: Option<String>,
+    name: String,
+}
+
+fn review_in<V: 'static>(
+    source: &Arc<Source>,
+    repo_id: &str,
+    task: Option<&str>,
+    name: &str,
+    then: Option<Then>,
+    window: &mut Window,
+    cx: &mut Context<V>,
+) {
+    let answer = source.repo_trust(repo_id, task);
+    let asked = Asked {
+        source: source.clone(),
+        repo_id: repo_id.to_owned(),
+        task: task.map(str::to_owned),
+        name: name.to_owned(),
+    };
     cx.spawn_in(window, async move |this, cx| {
         let view = answer.await.ok().filter(needs_review);
         if this.upgrade().is_none() {
@@ -53,7 +100,7 @@ pub fn review<V: 'static>(
         // Not inside an update of `this`: `then` may update it (Start a task does), and a second
         // update of an entity that is being updated panics.
         cx.update(|window, cx| match view {
-            Some(view) => open(source, repo_id, name, view, then, window, cx),
+            Some(view) => open(asked, view, then, window, cx),
             None => go_on(then, window, cx),
         })
         .ok();
@@ -67,19 +114,12 @@ fn go_on(then: Option<Then>, window: &mut Window, cx: &mut App) {
     }
 }
 
-fn open(
-    source: Arc<Source>,
-    repo_id: String,
-    name: String,
-    view: RepoTrustView,
-    then: Option<Then>,
-    window: &mut Window,
-    cx: &mut App,
-) {
+fn open(asked: Asked, view: RepoTrustView, then: Option<Then>, window: &mut Window, cx: &mut App) {
     let dialog = cx.new(|cx| RepoTrustDialog {
-        source,
-        repo_id,
-        name,
+        source: asked.source,
+        repo_id: asked.repo_id,
+        task: asked.task,
+        name: asked.name,
         view,
         then,
         busy: false,
@@ -97,6 +137,8 @@ fn open(
 pub struct RepoTrustDialog {
     source: Arc<Source>,
     repo_id: String,
+    /// The task whose worktree is approved; None: the project folder.
+    task: Option<String>,
     name: String,
     view: RepoTrustView,
     then: Option<Then>,
@@ -114,12 +156,17 @@ impl RepoTrustDialog {
         }
         self.busy = true;
         self.error = None;
-        let answer = self.source.approve_repo(&self.repo_id, &self.view.hash);
+        let task = self.task.clone();
+        let answer = self
+            .source
+            .approve_repo(&self.repo_id, &self.view.hash, task.as_deref());
         let (source, repo_id) = (self.source.clone(), self.repo_id.clone());
         cx.spawn_in(window, async move |this, cx| {
             let result = answer.await;
             let fresh = match &result {
-                Err(error) if error.is_conflict() => Some(source.repo_trust(&repo_id).await),
+                Err(error) if error.is_conflict() => {
+                    Some(source.repo_trust(&repo_id, task.as_deref()).await)
+                }
                 _ => None,
             };
             this.update_in(cx, |this, window, cx| {

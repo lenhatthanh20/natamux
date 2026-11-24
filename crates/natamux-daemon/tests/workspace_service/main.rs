@@ -21,6 +21,7 @@ mod named_branch;
 mod on_created;
 mod publish;
 mod remove;
+mod remove_ci;
 mod remove_refusals;
 mod remove_stage_files;
 mod remove_trust;

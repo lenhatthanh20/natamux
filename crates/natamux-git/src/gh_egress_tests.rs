@@ -116,3 +116,42 @@ fn open_egress_adds_nothing_and_loopback_refuses() {
     assert!(run_gh(&repo, &args(&["pr", "list"])).is_err());
     assert_eq!(thread_spawn_count(), before);
 }
+
+#[test]
+fn an_attached_write_method_is_not_a_read() {
+    for method in ["-XPOST", "-XDELETE", "-Xpost"] {
+        assert_eq!(classify(&args(&["api", method, "x"])), None, "{method}");
+    }
+    assert_eq!(classify(&args(&["api", "-XGET", "x"])), Some("read"));
+}
+
+#[test]
+fn only_a_url_argument_names_the_host() {
+    let body = args(&[
+        "pr",
+        "create",
+        "--body",
+        "https://example.com/x",
+        "-t",
+        "http://e.com",
+    ]);
+    assert_eq!(named_host(&body), None);
+    let view = args(&["pr", "view", "http://h/o/r/pull/1"]);
+    assert_eq!(named_host(&view), Some("h".to_string()));
+}
+
+#[test]
+fn a_host_with_other_characters_is_refused() {
+    let (_root, repo) = test_repo();
+    let _net = force_network(network_of(
+        &json!({ "network": {
+            "egress": "allowlist",
+            "gh": [{ "host": "*.corp.com", "actions": ["read"] }],
+        }}),
+        false,
+    ));
+    let call = args(&["pr", "view", "1", "--repo", "evil.com?x.corp.com/o/r"]);
+    assert!(gh_target(&repo, &call).is_err());
+    let call = args(&["pr", "view", "1", "--repo", "ghe.corp.com/o/r"]);
+    assert!(gh_target(&repo, &call).is_ok());
+}

@@ -7,7 +7,7 @@ use std::path::Path;
 
 use serde_json::Value;
 
-use super::source::{FILE_NAME, WRITTEN_NAME};
+use super::source::{FILE_NAME, read, written_in};
 
 /// Where Natamux's own calls may go, from open to closed.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
@@ -128,10 +128,15 @@ fn actions_of(entry: &Value, known: &[&str]) -> Option<Vec<String>> {
     (!actions.is_empty() && all_known).then_some(actions)
 }
 
+/// A GitLab owner can be a subgroup path (`group/sub`); a repository name has no `/`.
 fn text_or_any(entry: &Value, key: &str) -> Option<String> {
+    let path_ok = |text: &str| match key {
+        "owner" => text.split('/').all(|part| !part.is_empty()),
+        _ => !text.contains('/'),
+    };
     match entry.get(key) {
         None => Some("*".into()),
-        Some(Value::String(text)) if !text.is_empty() && !text.contains('/') => Some(text.clone()),
+        Some(Value::String(text)) if !text.is_empty() && path_ok(text) => Some(text.clone()),
         Some(_) => None,
     }
 }
@@ -254,20 +259,31 @@ pub fn tighten_network(a: &NetworkSettings, b: &NetworkSettings) -> NetworkSetti
     }
 }
 
-fn file_network(path: &Path, strict: bool) -> Option<NetworkSettings> {
-    let text = std::fs::read_to_string(path).ok()?;
-    // A broken file counts as Strict with its defaults, as the mode does.
-    Some(match serde_json::from_str::<Value>(&text) {
+/// `None`: no file. A file that cannot be read or is not UTF-8 counts as broken, as for the mode.
+fn file_network(bytes: Option<&[u8]>, strict: bool) -> Option<NetworkSettings> {
+    let bytes = bytes?;
+    // A broken file counts as Strict with its defaults, as the mode does, and fails closed as an
+    // unknown egress value does. A missing file stays open: that is the caller's `None`.
+    Some(match serde_json::from_slice::<Value>(bytes) {
         Ok(value) => network_of(&value, strict),
-        Err(_) => NetworkSettings::defaults(true),
+        Err(_) => NetworkSettings {
+            egress: Egress::Loopback,
+            updater: false,
+            ..NetworkSettings::defaults(true)
+        },
     })
 }
 
 /// The settings of a data folder. While `security.json` differs from the copy the daemon wrote
 /// (an outside change), the stricter of the two counts, as for the mode.
 pub fn network_in(data_dir: &Path, strict: bool) -> NetworkSettings {
-    let now = file_network(&data_dir.join(FILE_NAME), strict);
-    let written = file_network(&data_dir.join(WRITTEN_NAME), strict);
+    network_with(data_dir, strict, written_in(data_dir).as_deref())
+}
+
+/// `network_in` with the copy the daemon wrote given.
+fn network_with(data_dir: &Path, strict: bool, written: Option<&[u8]>) -> NetworkSettings {
+    let now = file_network(read(&data_dir.join(FILE_NAME)).as_deref(), strict);
+    let written = file_network(written, strict);
     match (now, written) {
         (None, _) => NetworkSettings::defaults(strict),
         (Some(now), None) => now,

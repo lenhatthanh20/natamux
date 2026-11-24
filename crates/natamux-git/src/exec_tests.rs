@@ -157,3 +157,51 @@ fn linked_git_dirs_refuses_a_git_folder_of_another_worktree() {
     .unwrap();
     assert_eq!(linked_git_dirs(&worktree), None);
 }
+
+#[test]
+fn a_closed_network_stops_lazy_fetches_and_lfs_downloads_and_open_adds_nothing() {
+    // T-0375 R8-3: both reach a remote from commands the backstop does not know.
+    use natamux_core::security::{Egress, NetworkSettings, force_network};
+    let (_root, repo) = test_repo();
+    let closed = [
+        ("GIT_NO_LAZY_FETCH".to_string(), "1".to_string()),
+        ("GIT_LFS_SKIP_SMUDGE".to_string(), "1".to_string()),
+    ];
+    let given = [("A".to_string(), "b".to_string())];
+    for egress in [Egress::Loopback, Egress::Allowlist] {
+        let _forced = force_network(NetworkSettings {
+            egress,
+            ..NetworkSettings::defaults(false)
+        });
+        let env = call_env(&repo, &given);
+        assert!(closed.iter().all(|each| env.contains(each)), "{egress:?}");
+        assert!(env.contains(&given[0]));
+    }
+    let _forced = force_network(NetworkSettings::defaults(false));
+    // Open and online, and isolation off: the call gets the caller's variables only.
+    assert_eq!(call_env(&repo, &given), given);
+    assert!(tool_git_env(&repo).is_empty());
+}
+
+#[test]
+fn a_blob_read_fetches_nothing_while_the_network_is_closed() {
+    // T-0375 review 3: a diff reads base blobs, which a `blob:none` clone lacks.
+    use natamux_core::security::{Egress, NetworkSettings, force_network};
+    let (_root, repo) = test_repo();
+    let value_of = |key: &str| {
+        let command = blob_command(&repo);
+        let found = command.get_envs().find(|(name, _)| *name == key);
+        found.and_then(|(_, value)| value.map(|value| value.to_string_lossy().into_owned()))
+    };
+    {
+        let _forced = force_network(NetworkSettings {
+            egress: Egress::Loopback,
+            ..NetworkSettings::defaults(false)
+        });
+        for key in ["GIT_NO_LAZY_FETCH", "GIT_LFS_SKIP_SMUDGE"] {
+            assert_eq!(value_of(key).as_deref(), Some("1"), "{key}");
+        }
+    }
+    let _forced = force_network(NetworkSettings::defaults(false));
+    assert_eq!(value_of("GIT_NO_LAZY_FETCH"), None);
+}

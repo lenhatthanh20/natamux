@@ -18,7 +18,7 @@ use natamux_pty::sandbox_plan::{isolate_command, landlock_abi};
 use natamux_pty::{Env, SpawnOptions};
 
 use super::isolation_network::tcp_ports;
-use super::isolation_plan::{PlanInput, isolated_env, plan_of};
+use super::isolation_plan::{CLAUDE_WRITE_DIRS, PlanInput, isolated_env, plan_of};
 use super::login_path::use_login_path;
 use super::session_lifecycle::{SpawnPty, random_id};
 
@@ -26,6 +26,10 @@ use super::session_lifecycle::{SpawnPty, random_id};
 pub const SANDBOX_DIR: &str = "sandbox";
 /// Marks every process an isolated shell starts, for the sweep after a kill.
 pub const SANDBOX_MARK: &str = "NATAMUX_SANDBOX";
+/// Why a task in a main checkout does not start while isolation is on.
+pub const MAIN_CHECKOUT_REASON: &str = "Isolation cannot protect a task in a main checkout: the \
+     agent could change the git config and hooks that Natamux's own git reads. Start the task \
+     in a worktree.";
 
 pub struct Isolation {
     pub settings: IsolationSettings,
@@ -49,6 +53,14 @@ fn global_git(key: &str) -> Option<String> {
 
 fn unsupported(reason: &str) -> io::Error {
     io::Error::new(io::ErrorKind::Unsupported, reason.to_string())
+}
+
+/// A worktree with its own `.git` folder: its git folder is inside the agent's write grant.
+fn refuse_main_checkout(worktree: &Path) -> io::Result<()> {
+    if worktree.join(".git").is_dir() {
+        return Err(unsupported(MAIN_CHECKOUT_REASON));
+    }
+    Ok(())
 }
 
 /// A value inside double quotes in a git config file.
@@ -103,6 +115,7 @@ impl Isolation {
         let task_dir = self.task_dir(task_id);
         let tmp = task_dir.join("tmp");
         private_dir(&tmp)?;
+        self.make_claude_dirs();
         let mut config = String::from("[credential]\n\thelper =\n");
         if let Some((name, email)) = &self.git_user {
             config.push_str(&format!(
@@ -113,6 +126,21 @@ impl Isolation {
         }
         write_private(&task_dir.join("gitconfig"), config.as_bytes())?;
         Ok((task_dir, tmp))
+    }
+
+    /// Makes the missing folders Claude Code writes in `~/.claude`, as a grant needs an existing
+    /// path. Nothing without `~/.claude`, and an entry that is there (a link too) stays as it is.
+    fn make_claude_dirs(&self) {
+        let claude = self.home.join(".claude");
+        if !claude.is_dir() {
+            return;
+        }
+        for name in CLAUDE_WRITE_DIRS {
+            let dir = claude.join(name);
+            if dir.symlink_metadata().is_err() {
+                let _ = private_dir(&dir);
+            }
+        }
     }
 
     fn env_for(&self, env: &Env, task_dir: &Path, tmp: &Path) -> Env {
@@ -143,6 +171,7 @@ impl Isolation {
     /// A task shell: the task comes from `NATAMUX_TASK_ID`, the worktree is its folder.
     pub fn isolate_shell(&self, options: &mut SpawnOptions) -> io::Result<()> {
         self.ready()?;
+        refuse_main_checkout(&options.cwd)?;
         let task_id = options
             .env
             .get("NATAMUX_TASK_ID")
@@ -165,14 +194,21 @@ impl Isolation {
 
     /// A command the daemon runs in a worktree (a stage check, the commit-draft agent). Natamux
     /// names a worktree after its task. It has no task token: the daemon's own is dropped.
-    pub fn isolate_command(&self, command: &mut Command, worktree: &Path) -> io::Result<()> {
+    /// `base`: the env a caller built after `env_clear` (the daemon's when None).
+    pub fn isolate_command(
+        &self,
+        command: &mut Command,
+        worktree: &Path,
+        base: Option<&Env>,
+    ) -> io::Result<()> {
         self.ready()?;
+        refuse_main_checkout(worktree)?;
         let task_id = worktree
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_default();
         let dirs = self.prepare_task(&task_id)?;
-        let mut env = self.env_for(&env_of(command), &dirs.0, &dirs.1);
+        let mut env = self.env_for(&env_of(command, base), &dirs.0, &dirs.1);
         env.remove("NATAMUX_TOKEN");
         let mut plan = plan_of(PlanInput {
             path: env.get("PATH").map(String::as_str),
@@ -183,15 +219,26 @@ impl Isolation {
         isolate_command(command, &plan)
     }
 
+    /// Pins the checked git folders of a task worktree for the daemon's own git, as a shell
+    /// start does. For the worktrees there at the daemon's start: their agent may have rewritten
+    /// `.git` before it.
+    pub fn pin_worktree(&self, task_id: &str, worktree: &Path) {
+        let task_dir = self.task_dir(task_id);
+        let dirs = (task_dir.clone(), task_dir.join("tmp"));
+        let _ = plan_of(self.input(worktree, &dirs));
+    }
+
     /// `isolation` of `GET /security` while the daemon runs with isolation required.
     pub fn view(&self) -> IsolationView {
         view_of(true, &self.support)
     }
 }
 
-/// The environment a command would start with: the daemon's, changed by what was set on it.
-fn env_of(command: &Command) -> Env {
-    let mut env: Env = std::env::vars().collect();
+/// The environment a command would start with: `base` or the daemon's, changed by what was set
+/// on it. `get_envs` does not show an `env_clear`, so a caller that cleared gives its own base:
+/// the daemon's would bring back what the caller left out.
+fn env_of(command: &Command, base: Option<&Env>) -> Env {
+    let mut env: Env = base.cloned().unwrap_or_else(|| std::env::vars().collect());
     for (name, value) in command.get_envs() {
         let name = name.to_string_lossy().into_owned();
         match value {

@@ -9,7 +9,7 @@ use natamux_core::security;
 use super::{github, workspaces};
 use crate::http::agent_actions::AgentAction;
 use crate::http::agent_grants::AgentGrants;
-use crate::http::agent_rules::{Caller, denial_line};
+use crate::http::agent_rules::{Caller, audit_denied_later, denial_line};
 use crate::http::errors::{Answer, error_answer};
 use crate::http::server::AppState;
 
@@ -26,6 +26,9 @@ pub async fn route(
         _ => return None,
     };
     if let Some(refused) = check(who, method, parts, action) {
+        if let Caller::Agent(own) = who {
+            audit_denied_later(&state, own).await;
+        }
         return Some(refused);
     }
     let id = id.to_string();
@@ -37,7 +40,7 @@ pub async fn route(
 }
 
 /// The 403 when the agent token may not do `action` on the task of `parts`: another task, or
-/// a Strict grant it does not have. A person always may.
+/// a Strict grant it does not have. A person always may. `route` writes the audit line.
 pub fn check(who: &Caller, method: &Method, parts: &[&str], action: AgentAction) -> Option<Answer> {
     let Caller::Agent(own) = who else {
         return None;

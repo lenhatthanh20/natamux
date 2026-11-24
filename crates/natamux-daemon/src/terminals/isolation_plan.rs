@@ -1,9 +1,10 @@
-//! What an isolated task shell may reach, and the variables it keeps. Pure apart from looking
-//! at which paths exist, so tests can check every grant.
+//! What an isolated task shell may reach, and the variables it keeps. Apart from looking at
+//! which paths exist, it only makes the shared git folders it grants and pins the checked git
+//! folders for the daemon's own git (`pin_git_dirs`).
 
 use std::path::{Path, PathBuf};
 
-use natamux_core::security::IsolationSettings;
+use natamux_core::security::{IsolationSettings, pin_git_dirs};
 use natamux_pty::{Env, IsolationPlan};
 
 /// The system folders every shell reads. Missing ones (`/lib32`) are left out.
@@ -45,6 +46,17 @@ const KEEP_PREFIXES: [&str; 3] = ["LC_", "CLAUDE_", "ANTHROPIC_"];
 
 /// The Claude Code settings with the hooks that report to the daemon (`start.rs`).
 pub const CLAUDE_SETTINGS_FILE: &str = "claude-code-settings.json";
+/// What Claude Code writes in `~/.claude` while it works. The daemon makes the missing folders
+/// before a start, as a grant needs an existing path; it never makes the files.
+pub const CLAUDE_WRITE_DIRS: [&str; 6] = [
+    "projects",
+    "todos",
+    "shell-snapshots",
+    "statsig",
+    "session-env",
+    "file-history",
+];
+const CLAUDE_WRITE_FILES: [&str; 2] = [".credentials.json", "history.jsonl"];
 
 /// The variables of `env` that an isolated shell keeps: the allow-list and `allow`.
 pub fn isolated_env(env: &Env, allow: &[String]) -> Env {
@@ -88,7 +100,9 @@ fn too_wide(dir: &Path, home: &Path, data_dir: &Path) -> bool {
 }
 
 /// The folders of a PATH, read only. A `.../bin` folder gives its parent, so a toolchain finds
-/// its own `lib` (an npm global install, `~/.cargo`), unless that parent is too wide.
+/// its own `lib` (`/opt/tool`, an npm global install), unless that parent is too wide. Inside
+/// home the parent may hold credentials (`~/.cargo/credentials.toml`): there only the folder and
+/// its `lib` and `libexec` siblings.
 pub fn toolchain_dirs(path: &str, home: &Path, data_dir: &Path) -> Vec<PathBuf> {
     let mut dirs: Vec<PathBuf> = Vec::new();
     for entry in std::env::split_paths(path) {
@@ -97,18 +111,37 @@ pub fn toolchain_dirs(path: &str, home: &Path, data_dir: &Path) -> Vec<PathBuf> 
         }
         let parent = entry
             .parent()
-            .filter(|_| entry.file_name().is_some_and(|name| name == "bin"))
-            .map(Path::to_path_buf);
-        let chosen = parent
-            .filter(|parent| !too_wide(parent, home, data_dir))
-            .or_else(|| (!too_wide(&entry, home, data_dir)).then(|| entry.clone()));
-        if let Some(dir) = chosen
-            && !dirs.contains(&dir)
-        {
-            dirs.push(dir);
+            .filter(|_| entry.file_name().is_some_and(|name| name == "bin"));
+        let granted = match parent {
+            Some(parent) if parent.starts_with(home) => {
+                let mut granted = vec![entry.clone()];
+                granted.extend(existing(["lib", "libexec"].map(|name| parent.join(name))));
+                granted
+            }
+            Some(parent) if !too_wide(parent, home, data_dir) => vec![parent.to_path_buf()],
+            _ => vec![entry.clone()],
+        };
+        for dir in granted {
+            if !too_wide(&dir, home, data_dir) && !dirs.contains(&dir) {
+                dirs.push(dir);
+            }
         }
     }
     dirs
+}
+
+/// The folders of a git folder that a linked worktree's agent writes (see `git_grants`).
+const GIT_WRITTEN: [&str; 4] = ["objects", "refs", "logs", "worktrees"];
+
+/// Whether `common` lies in a folder that the agent of a worktree of another git folder may
+/// write. The `.git` file is the agent's, so the grants of the real repo are not known here:
+/// any git folder above `common` counts.
+fn inside_git_writes(common: &Path) -> bool {
+    common.ancestors().skip(1).any(|dir| {
+        dir.file_name()
+            .is_some_and(|name| GIT_WRITTEN.iter().any(|each| name == *each))
+            && dir.parent().is_some_and(|git| git.join("HEAD").exists())
+    })
 }
 
 /// A linked worktree writes its own git folder, the shared objects and branch refs; the rest of
@@ -128,7 +161,9 @@ fn git_grants(
         .map(|(git_dir, common)| (git_dir, real(&common)))
         .filter(|(_, common)| !too_wide(common, &real(home), &real(data_dir)))
         .filter(|(_, common)| !writable.iter().any(|dir| common.starts_with(real(dir))))
+        .filter(|(_, common)| !inside_git_writes(common))
     else {
+        pin_git_dirs(worktree, None);
         return (Vec::new(), Vec::new());
     };
     let shared = ["objects", "refs/heads", "logs/refs/heads"].map(|dir| common.join(dir));
@@ -137,8 +172,14 @@ fn git_grants(
         let _ = std::fs::create_dir_all(dir);
         // A link inside the shared folder would carry the write grant somewhere else.
         if real(dir) != *dir {
+            pin_git_dirs(worktree, None);
             return (Vec::new(), Vec::new());
         }
+    }
+    // The daemon's own git in this worktree uses the checked pair, never the `.git` file. A pair
+    // that differs from the one pinned first gets nothing.
+    if !pin_git_dirs(worktree, Some((git_dir.clone(), common.clone()))) {
+        return (Vec::new(), Vec::new());
     }
     let mut write = vec![git_dir];
     write.extend(shared);
@@ -165,8 +206,22 @@ pub fn plan_of(input: PlanInput<'_>) -> IsolationPlan {
     read_only.extend(existing(settings.extra_read_only.iter().cloned()));
     let mut read_write = existing(DEVICES.map(PathBuf::from));
     read_write.extend([worktree.to_path_buf(), tmp.to_path_buf()]);
-    // Claude Code keeps its sign-in here: the one credential left in reach of the agent.
-    read_write.extend(existing([home.join(".claude"), home.join(".claude.json")]));
+    // Claude Code keeps its sign-in in `~/.claude`: the one credential left in reach of the
+    // agent. Only what Claude Code writes while it works is writable, so the agent cannot plant
+    // hooks, MCP servers or commands for the user's next Claude Code outside the sandbox. The
+    // list is not tried with a real Claude Code.
+    let claude = home.join(".claude");
+    read_only.extend(existing([claude.clone(), home.join(".claude.json")]));
+    let writes = CLAUDE_WRITE_DIRS
+        .iter()
+        .chain(&CLAUDE_WRITE_FILES)
+        .map(|name| claude.join(name));
+    // A link would carry the write grant out of `~/.claude`.
+    read_write.extend(
+        existing(writes)
+            .into_iter()
+            .filter(|path| !path.is_symlink()),
+    );
     read_write.extend(existing(settings.extra_read_write.iter().cloned()));
     let (git_read, git_write) = git_grants(worktree, &read_write, home, data_dir);
     read_only.extend(git_read);

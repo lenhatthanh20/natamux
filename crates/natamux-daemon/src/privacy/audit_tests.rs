@@ -96,6 +96,55 @@ fn the_log_stays_under_its_cap() {
 }
 
 #[test]
+fn a_full_log_moves_to_the_old_file_with_its_first_line() {
+    let dir = folder("rotate");
+    saved(&dir, r#"{"strict":true,"data":{"logMaxBytes":4096}}"#);
+    for n in 0..60 {
+        write(
+            &dir,
+            "egress.denied",
+            &format!("host-{n}.example"),
+            "denied",
+        );
+    }
+    let old = fs::read_to_string(old_audit_path(&dir)).unwrap();
+    let first: Value = serde_json::from_str(old.lines().next().unwrap()).unwrap();
+    assert_eq!(first["id"], "host-0.example");
+    assert_eq!(lines(&dir).last().unwrap()["id"], "host-59.example");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = fs::metadata(audit_path(&dir)).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o600);
+    }
+    fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn writers_on_many_threads_lose_no_line() {
+    let dir = folder("threads");
+    saved(&dir, r#"{"strict":true,"data":{"logMaxBytes":65536}}"#);
+    let writers: Vec<_> = (0..8)
+        .map(|thread| {
+            let dir = dir.clone();
+            std::thread::spawn(move || {
+                for n in 0..100 {
+                    write(&dir, "egress.denied", &format!("t{thread}-{n}"), "denied");
+                }
+            })
+        })
+        .collect();
+    for writer in writers {
+        writer.join().unwrap();
+    }
+    // 800 lines of about 120 bytes pass the cap once: both files hold them all.
+    let old = fs::read_to_string(old_audit_path(&dir)).unwrap_or_default();
+    let new = fs::read_to_string(audit_path(&dir)).unwrap();
+    assert_eq!(old.lines().count() + new.lines().count(), 800);
+    fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
 fn the_installed_sink_writes_what_other_crates_record() {
     let dir = folder("sink");
     saved(&dir, r#"{"strict":true}"#);

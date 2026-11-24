@@ -1,12 +1,23 @@
 //! Removes secrets from text before it reaches a log or an error answer: the user name and
-//! password of a URL, secret query values, and tokens with a known prefix.
+//! password of a URL, secret query and fragment values, and tokens with a known prefix.
 
 use url::Url;
 
 /// What a secret is replaced with. Query encoding keeps `*` as it is.
 pub const MASK: &str = "***";
 
-const SECRET_KEYS: [&str; 6] = ["token", "access_token", "key", "password", "secret", "sig"];
+const SECRET_KEYS: [&str; 10] = [
+    "token",
+    "access_token",
+    "key",
+    "password",
+    "secret",
+    "sig",
+    "api_key",
+    "client_secret",
+    "private_token",
+    "x-amz-signature",
+];
 
 // The longest prefix first, so `github_pat_` is not read as a shorter one.
 const TOKEN_PREFIXES: [&str; 4] = ["github_pat_", "ghp_", "gho_", "sk-"];
@@ -14,7 +25,8 @@ const TOKEN_PREFIXES: [&str; 4] = ["github_pat_", "ghp_", "gho_", "sk-"];
 // Fewer characters after a prefix is a normal word, such as `sk-learn`.
 const MIN_TOKEN_CHARS: usize = 8;
 
-/// `text` with the user info of the URL dropped and secret query values masked. Text that holds
+/// `text` with the user info of the URL dropped and secret query and fragment values masked
+/// (an OAuth redirect carries `#access_token=`). Text that holds
 /// no secret comes back unchanged, so a URL is not rewritten for nothing.
 pub fn redact_url(text: &str) -> String {
     let Ok(mut url) = Url::parse(text) else {
@@ -40,6 +52,10 @@ pub fn redact_url(text: &str) -> String {
             })
             .collect();
         url.query_pairs_mut().clear().extend_pairs(pairs);
+        changed = true;
+    }
+    if let Some(fragment) = url.fragment().and_then(masked_pairs) {
+        url.set_fragment(Some(&fragment));
         changed = true;
     }
     if changed {
@@ -77,10 +93,41 @@ fn is_secret_key(key: &str) -> bool {
         .any(|secret| key.eq_ignore_ascii_case(secret))
 }
 
+/// `key=value&...` with the values of secret keys masked; None when there is none.
+fn masked_pairs(text: &str) -> Option<String> {
+    let mut hit = false;
+    let parts: Vec<String> = text
+        .split('&')
+        .map(|part| match part.split_once('=') {
+            Some((key, _)) if is_secret_key(key) => {
+                hit = true;
+                format!("{key}={MASK}")
+            }
+            _ => part.to_string(),
+        })
+        .collect();
+    hit.then(|| parts.join("&"))
+}
+
+/// Each URL of the word, up to the next one, goes through `redact_url`: a word can hold a list
+/// such as `https://a:b@x,https://c:d@y`.
 fn redact_word(word: &str) -> String {
-    let Some(at) = word.find("://") else {
-        return redact_tokens(word);
-    };
+    let starts: Vec<usize> = word
+        .match_indices("://")
+        .map(|(at, _)| scheme_start(word, at))
+        .collect();
+    let first = starts.first().copied().unwrap_or(word.len());
+    let mut out = redact_tokens(word.get(..first).unwrap_or_default());
+    for (index, start) in starts.iter().enumerate() {
+        let end = starts.get(index + 1).copied().unwrap_or(word.len());
+        let url = word.get(*start..end).unwrap_or_default();
+        out.push_str(&redact_tokens(&redact_url(url)));
+    }
+    out
+}
+
+/// Where the scheme before the `://` at `at` begins.
+fn scheme_start(word: &str, at: usize) -> usize {
     let scheme = word
         .get(..at)
         .unwrap_or_default()
@@ -88,16 +135,12 @@ fn redact_word(word: &str) -> String {
         .rev()
         .take_while(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'+' | b'.' | b'-'))
         .count();
-    let start = at - scheme;
-    let (before, url) = word.split_at(start);
-    format!(
-        "{}{}",
-        redact_tokens(before),
-        redact_tokens(&redact_url(url))
-    )
+    at - scheme
 }
 
-// A URL the parser refuses can still carry `user:password@` before its host.
+// A URL the parser refuses can still carry `user:password@` before its host. A password with an
+// unencoded `/ ? #` ends the authority early, so after `user:` the user info runs to the last `@`.
+// A URL with no user info parses, so it does not come here and keeps an `@` of its path.
 fn strip_user_info(text: &str) -> String {
     let Some(at) = text.find("://") else {
         return text.to_string();
@@ -106,7 +149,12 @@ fn strip_user_info(text: &str) -> String {
     let rest = text.get(host_start..).unwrap_or_default();
     let authority_end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
     let authority = rest.get(..authority_end).unwrap_or_default();
-    match authority.rfind('@') {
+    let user_end = if authority.contains('@') || !authority.contains(':') {
+        authority.rfind('@')
+    } else {
+        rest.rfind('@')
+    };
+    match user_end {
         Some(user_end) => format!(
             "{}{}",
             text.get(..host_start).unwrap_or_default(),

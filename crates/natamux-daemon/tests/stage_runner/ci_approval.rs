@@ -328,3 +328,87 @@ fn the_end_of_a_task_removes_its_pins_and_deletes_the_ci_branch_only_when_allowe
         assert_eq!(pins, "", "forbid: {forbid}");
     }
 }
+
+fn cancel(f: &Fixture, id: &str) {
+    f.apply(id, json!({ "source": "human", "type": "task.cancelled" }));
+    f.settle();
+}
+
+/// The dialog must show what committed work the push adds, workflow files above all.
+#[test]
+fn the_approval_lists_the_paths_of_new_commits_and_flags_a_workflow_change() {
+    let f = fixture();
+    let _strict = force(strict(CiPush::ApprovedSnapshot));
+    let task = dirty_task(&f);
+    let worktree = worktree(&task);
+    std::fs::create_dir_all(worktree.join(".github/workflows")).unwrap();
+    std::fs::write(worktree.join(".github/workflows/ci.yml"), "on: push\n").unwrap();
+    run_git(&worktree, &["add", ".github"]);
+    run_git(&worktree, &["commit", "-q", "-m", "workflow"]);
+    report(&f, &task.id);
+    f.settle();
+
+    let needed = payload(&f, &task.id, "stage.ci-approval-needed");
+    let files = needed["commitFiles"].as_array().unwrap();
+    assert!(
+        files.contains(&json!(".github/workflows/ci.yml")),
+        "{needed:?}"
+    );
+    assert_eq!(needed["workflowsChanged"], true);
+    assert!(needed["newCommits"].as_u64().unwrap() >= 1);
+    assert!(needed["commitFilesCount"].as_u64().unwrap() >= files.len() as u64);
+}
+
+#[test]
+fn an_approval_after_the_task_ended_is_refused_and_pushes_nothing() {
+    let f = fixture();
+    let _strict = force(strict(CiPush::ApprovedSnapshot));
+    let task = dirty_task(&f);
+    report(&f, &task.id);
+    f.settle();
+    let needed = payload(&f, &task.id, "stage.ci-approval-needed");
+    let tree = needed["tree"].as_str().unwrap().to_string();
+    cancel(&f, &task.id);
+
+    let error = f.runner.run.approve_ci(&task.id, "implement", &tree);
+
+    assert!(error.unwrap_err().to_string().contains("has ended"));
+    f.settle();
+    assert_eq!(calls(&f), 0);
+    assert!(f.last_of(&task.id, "stage.ci-approved").is_none());
+}
+
+#[test]
+fn the_end_of_a_task_deletes_the_ci_branch_of_every_round() {
+    let f = fixture();
+    let task = f.implementing("implement");
+    for ci_branch in ["natamux-ci/a", "natamux-ci/b"] {
+        let target = format!("HEAD:refs/heads/{ci_branch}");
+        run_git(&worktree(&task), &["push", "-q", "origin", &target]);
+        let approved = json!({ "stage": "implement", "branch": ci_branch });
+        f.tasks
+            .record_event(&task.id, "stage.ci-approved", approved, "system")
+            .unwrap();
+    }
+
+    cancel(&f, &task.id);
+
+    let left = run_git(&origin_of(&f), &["for-each-ref", "--format=%(refname)"]);
+    assert!(!left.contains("natamux-ci/"), "{left}");
+}
+
+#[test]
+fn a_task_whose_ci_was_turned_off_after_a_round_leaves_no_pins() {
+    let f = fixture();
+    let task = dirty_task(&f);
+    report(&f, &task.id);
+    wait_for(|| calls(&f) == 1);
+    f.ci.finish(passed());
+    f.settle();
+    f.set_ci(&task.id, "implement", false);
+
+    cancel(&f, &task.id);
+
+    let pins = format!("refs/natamux/ci/{}/", task.id);
+    assert_eq!(run_git(&f.repo, &["for-each-ref", &pins]), "");
+}

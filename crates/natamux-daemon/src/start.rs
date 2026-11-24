@@ -46,7 +46,7 @@ use crate::workspaces::service::WorkspaceService;
 #[path = "start_services.rs"]
 mod services;
 
-use services::{github_services, task_store, trusted_of, workspace_service};
+use services::{github_services, pin_worktrees, task_store, trusted_of, workspace_service};
 
 pub struct Daemon {
     pub state: Arc<AppState>,
@@ -335,6 +335,7 @@ pub async fn start(
     let cells = Cells::default();
     let bin_dir = config.agents.bin_dir.clone();
     let isolation = start_isolation(&config.data_dir, bin_dir.clone(), &home_of(env));
+    pin_worktrees(&store, isolation.as_deref());
     let spawn = with_child_env(with_isolation(spawn, isolation.clone()));
     let spawn = with_hook_files(spawn, bin_dir);
     let terminals = terminal_service(

@@ -20,7 +20,7 @@ use nix::unistd::{Pid, setsid, tcgetpgrp};
 use crate::process_table::{ProcessTable, TableReader};
 use crate::process_tree::TreeKill;
 use crate::pty::{Pty, PtyEvents, Signal, SpawnOptions};
-use crate::sandbox_plan::prepare;
+use crate::sandbox_plan::{IsolationPlan, prepare};
 use crate::sandbox_sweep::{holders, sweep};
 use crate::shell_command::shell_command;
 
@@ -35,12 +35,6 @@ pub fn spawn(options: SpawnOptions) -> io::Result<Box<dyn Pty>> {
     let (file, mut args) = shell_command(&options.env, false, &|path| {
         std::path::Path::new(path).exists()
     });
-    // Before the fork, so a plan that cannot apply in full means no shell at all.
-    let prepared = options.isolation.as_ref().map(prepare).transpose()?;
-    if prepared.is_some() {
-        // A login profile lives in the home folder, which an isolated shell cannot read.
-        args = vec!["-i".to_string()];
-    }
     let sweep_mark = options
         .isolation
         .as_ref()
@@ -52,6 +46,15 @@ pub fn spawn(options: SpawnOptions) -> io::Result<Box<dyn Pty>> {
     // hold the terminals of the shells started before it, of any task.
     for fd in [&master, &slave] {
         fcntl(fd, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC)).map_err(io::Error::from)?;
+    }
+    // Before the fork, so a plan that cannot apply in full means no shell at all.
+    let prepared = match &options.isolation {
+        Some(plan) => Some(prepare(&own_tty_plan(plan, &slave)?)?),
+        None => None,
+    };
+    if prepared.is_some() {
+        // A login profile lives in the home folder, which an isolated shell cannot read.
+        args = vec!["-i".to_string()];
     }
     // Typed text is UTF-8, so an erase removes a whole character.
     if let Ok(mut settings) = termios::tcgetattr(&master) {
@@ -96,6 +99,19 @@ pub fn spawn(options: SpawnOptions) -> io::Result<Box<dyn Pty>> {
         tree: TreeKill::default(),
         sweep_mark,
     }))
+}
+
+/// The plan with this shell's own pty in place of every pty of the user.
+#[cfg(target_os = "linux")]
+fn own_tty_plan(plan: &IsolationPlan, slave: &OwnedFd) -> io::Result<IsolationPlan> {
+    let tty = std::fs::read_link(format!("/proc/self/fd/{}", slave.as_raw_fd()))?;
+    crate::sandbox_plan::own_tty(plan, Some(tty.as_path()))
+}
+
+// No Landlock here: `prepare` refuses every plan.
+#[cfg(not(target_os = "linux"))]
+fn own_tty_plan(plan: &IsolationPlan, _slave: &OwnedFd) -> io::Result<IsolationPlan> {
+    Ok(plan.clone())
 }
 
 fn winsize(cols: u16, rows: u16) -> Winsize {

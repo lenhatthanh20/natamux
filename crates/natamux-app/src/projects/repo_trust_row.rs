@@ -60,7 +60,8 @@ impl RepoTrustRow {
         let Some(source) = self.dashboard.read(cx).source().cloned() else {
             return;
         };
-        let answer = source.repo_trust(&self.repo_id);
+        // The project folder's own trust: no task.
+        let answer = source.repo_trust(&self.repo_id, None);
         self._read = Some(cx.spawn(async move |this, cx| {
             let untrusted = answer.await.is_ok_and(|view| needs_review(&view));
             this.update(cx, |this, cx| {

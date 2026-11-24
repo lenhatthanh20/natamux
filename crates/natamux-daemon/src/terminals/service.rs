@@ -112,15 +112,24 @@ impl TerminalService {
             .ok_or(TerminalError::Limit(MAX_OPEN_TICKETS))
     }
 
-    /// The agent token of the task stops working, and so do the tickets it asked for.
+    /// The agent token of the task stops working, and so do the tickets it asked for and the
+    /// sockets it opened.
     pub fn revoke_agent(&self, task_id: &str) {
         self.inner.agent_tokens.revoke(task_id);
         lock(&self.inner.tickets).drop_issued_by(task_id);
+        if let Some(bus) = &self.inner.options.bus {
+            bus.end_agent(task_id);
+        }
     }
 
     pub fn redeem_ticket(&self, ticket: &str, task_id: &str) -> bool {
+        self.redeem_ticket_issuer(ticket, task_id).is_some()
+    }
+
+    /// `redeem_ticket`, giving the task whose agent token asked for it (None: a person).
+    pub fn redeem_ticket_issuer(&self, ticket: &str, task_id: &str) -> Option<Option<String>> {
         let now = self.inner.now();
-        lock(&self.inner.tickets).redeem(ticket, task_id, now)
+        lock(&self.inner.tickets).redeem_issuer(ticket, task_id, now)
     }
 
     /// The timers of the shells, for work that waits on a shell.

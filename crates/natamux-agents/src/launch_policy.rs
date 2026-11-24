@@ -22,16 +22,19 @@ enum Unsafe {
     WhenAny(&'static [&'static str]),
     /// Unless it has one of these values (no value counts as unsafe).
     Unless(&'static [&'static str]),
+    /// When its value holds this text.
+    Holding(&'static str),
 }
 
 /// The flags beyond `AUTO_FLAGS` that let each agent act without asking.
 fn extras(agent: &str) -> &'static [(&'static str, Unsafe)] {
-    use Unsafe::{Always, Unless, When, WhenAny};
+    use Unsafe::{Always, Holding, Unless, When, WhenAny};
     match agent {
         "claude-code" => &[
             ("--dangerously-skip-permissions", Always),
             ("--allow-dangerously-skip-permissions", Always),
             ("--permission-mode", Unless(&["default", "plan"])),
+            ("--settings", Holding("bypassPermissions")),
         ],
         "codex" => &[
             ("--dangerously-bypass-approvals-and-sandbox", Always),
@@ -46,6 +49,7 @@ fn extras(agent: &str) -> &'static [(&'static str, Unsafe)] {
             ("--yolo", Always),
             ("-y", Always),
             ("--approval-mode", WhenAny(&["yolo", "auto_edit"])),
+            ("--approvalMode", WhenAny(&["yolo", "auto_edit"])),
         ],
         "copilot" => &[("--yolo", Always)],
         "cursor" => &[("--force", Always), ("-f", Always), ("--yolo", Always)],
@@ -53,6 +57,19 @@ fn extras(agent: &str) -> &'static [(&'static str, Unsafe)] {
         "kimi" => &[("--afk", Always)],
         "cline" => &[("--yolo", Always)],
         "kiro" => &[("--trust-tools", Always)],
+        _ => &[],
+    }
+}
+
+/// Flags that Strict mode refuses on top: a settings file or a tool allow list can pre-approve
+/// actions, and Natamux cannot read what a file holds.
+fn strict_extras(agent: &str) -> &'static [(&'static str, Unsafe)] {
+    match agent {
+        "claude-code" => &[
+            ("--settings", Unsafe::Always),
+            ("--allowedTools", Unsafe::Always),
+            ("--allowed-tools", Unsafe::Always),
+        ],
         _ => &[],
     }
 }
@@ -74,6 +91,8 @@ fn auto_rules(agent: &str) -> Vec<(&'static str, Unsafe)> {
             }
         }
     }
+    // Codex's `workspace-write` is the safe sandbox Strict mode itself passes.
+    rules.retain(|rule| !matches!(rule, ("--sandbox", Unsafe::When("workspace-write"))));
     rules
 }
 
@@ -122,14 +141,19 @@ fn unsafe_with(rule: Unsafe, value: Option<&str>) -> bool {
         Unsafe::When(bad) => value == Some(bad),
         Unsafe::WhenAny(bad) => value.is_some_and(|value| bad.contains(&value)),
         Unsafe::Unless(good) => value.is_none_or(|value| !good.contains(&value)),
+        Unsafe::Holding(bad) => value.is_some_and(|value| value.contains(bad)),
     }
 }
 
 /// The first word in `words` that turns off approvals for `agent` (a built-in kind), as
-/// written: `--flag=value`, or `--flag value` when the value is the next word.
-pub fn forbidden_word(agent: &str, words: &str) -> Option<Forbidden> {
+/// written: `--flag=value`, or `--flag value` when the value is the next word. `strict` adds the
+/// flags only Strict mode refuses.
+pub fn forbidden_word(agent: &str, words: &str, strict: bool) -> Option<Forbidden> {
     let mut rules = auto_rules(agent);
     rules.extend_from_slice(extras(agent));
+    if strict {
+        rules.extend_from_slice(strict_extras(agent));
+    }
     let words = split_words(words);
     for (index, word) in words.iter().enumerate() {
         let next = words.get(index + 1);
@@ -176,9 +200,14 @@ fn config_hit(agent: &str, word: &str, next: Option<&String>) -> Option<String> 
     };
     let (key, value) = setting.split_once('=')?;
     let value = value.trim().trim_matches(|c| c == '"' || c == '\'');
+    // A profile key (`profiles.p.approval_policy`) counts like the top-level one.
+    let key = key.trim();
     CODEX_OVERRIDES
         .iter()
-        .any(|(bad_key, bad)| key.trim() == *bad_key && value == *bad)
+        .any(|(bad_key, bad)| {
+            let same = key == *bad_key || key.ends_with(&format!(".{bad_key}"));
+            same && value == *bad
+        })
         .then_some(written)
 }
 
@@ -209,7 +238,7 @@ fn hit_of(
         .find(|rule| unsafe_with(*rule, value))?;
     // A value taken from the next word is part of what the user wrote.
     match (inline, next, rule) {
-        (None, Some(next), Unsafe::When(_) | Unsafe::WhenAny(_) | Unsafe::Unless(_)) => {
+        (None, Some(next), rule) if !matches!(rule, Unsafe::Always) => {
             Some(format!("{word} {next}"))
         }
         _ => Some(word.to_string()),

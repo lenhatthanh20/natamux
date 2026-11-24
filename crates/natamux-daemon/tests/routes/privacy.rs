@@ -94,6 +94,8 @@ async fn the_bundle_holds_no_task_text_secret_or_typed_input_and_agents_get_403(
     .join("\n");
     std::fs::create_dir_all(d.root.join("logs")).unwrap();
     std::fs::write(d.root.join("logs/daemon.log"), log).unwrap();
+    // The app's folder: the bundle reads the log only beside its token file.
+    std::fs::write(d.root.join("daemon-token"), "app").unwrap();
 
     let (status, body) = d.call(Method::GET, "/support-bundle", Some(TOKEN)).await;
     assert_eq!(status, 200, "{body}");
@@ -191,6 +193,48 @@ async fn retention_keeps_a_task_whose_agent_switched_to_a_branch_with_unpushed_c
     assert_eq!(report.refused, std::slice::from_ref(&id));
     assert_eq!(d.get(&format!("/tasks/{id}")).await.0, 200);
     assert!(ws.exists());
+}
+
+/// Runs retention once on a done task and checks that it was kept.
+async fn assert_kept(d: &TestDaemon, id: &str, ws: &Path) {
+    set_done(d, id).await;
+    let report = retain(d, 30, now_ms() + 31 * DAY_MS).await;
+    assert!(report.deleted.is_empty(), "{report:?}");
+    assert_eq!(report.refused, [id.to_string()]);
+    assert!(ws.exists());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn retention_keeps_a_task_whose_only_copy_is_a_natamux_ci_ref() {
+    let d = git_daemon("privacy-retention-ci-ref").await;
+    let (id, ws) = task_with_workspace(&d, "CI copy").await;
+    run_git(&ws, &["commit", "--allow-empty", "-m", "unpushed"]);
+    let branch = run_git(&ws, &["symbolic-ref", "--short", "HEAD"]);
+    let ci_ref = format!("refs/remotes/origin/natamux-ci/{}", branch.trim());
+    run_git(&ws, &["update-ref", &ci_ref, "HEAD"]);
+    assert_kept(&d, &id, &ws).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn retention_keeps_a_task_branch_with_unpushed_commits_behind_a_detached_head() {
+    let d = git_daemon("privacy-retention-detached").await;
+    let (id, ws) = task_with_workspace(&d, "Detached").await;
+    run_git(&ws, &["commit", "--allow-empty", "-m", "one"]);
+    run_git(&ws, &["commit", "--allow-empty", "-m", "two"]);
+    run_git(&ws, &["checkout", "--detach", "main"]);
+    assert_kept(&d, &id, &ws).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn retention_keeps_a_task_branch_with_unpushed_commits_when_head_is_on_main() {
+    let d = git_daemon("privacy-retention-on-main").await;
+    let (id, ws) = task_with_workspace(&d, "On main").await;
+    run_git(&ws, &["commit", "--allow-empty", "-m", "one"]);
+    run_git(&ws, &["commit", "--allow-empty", "-m", "two"]);
+    // The tag stands for a pushed main, so HEAD alone has nothing to lose.
+    run_git(&ws, &["tag", "pushed", "main"]);
+    run_git(&ws, &["checkout", "--ignore-other-worktrees", "main"]);
+    assert_kept(&d, &id, &ws).await;
 }
 
 /// Every file under `folder` but the worktrees, with its path inside `folder`.

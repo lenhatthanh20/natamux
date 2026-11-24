@@ -50,6 +50,7 @@ fn push_rewrites(cwd: &Path, url: &str) -> bool {
 /// The one URL a call to `remote` (a name or a URL) reaches. More than one push URL is refused:
 /// git would push to each.
 pub fn resolve_remote(cwd: &Path, op: RemoteOp, remote: &str) -> Result<String, GitError> {
+    not_an_option(remote)?;
     let urls = match get_url(cwd, op, remote) {
         Ok(urls) => urls,
         Err(_) => rewrite(cwd, remote)?,
@@ -60,6 +61,7 @@ pub fn resolve_remote(cwd: &Path, op: RemoteOp, remote: &str) -> Result<String, 
             urls.len()
         )));
     };
+    not_an_option(url)?;
     // Git applies the rules again to the URL it is given: it must stay the same.
     let again = rewrite(cwd, url)?;
     let pushed_again = op == RemoteOp::Push && push_rewrites(cwd, url);
@@ -69,6 +71,17 @@ pub fn resolve_remote(cwd: &Path, op: RemoteOp, remote: &str) -> Result<String, 
         ));
     }
     Ok(url.clone())
+}
+
+/// Git reads an argument that starts with `-` as an option, and `--upload-pack=<cmd>` runs a
+/// command.
+fn not_an_option(remote: &str) -> Result<(), GitError> {
+    if remote.starts_with('-') {
+        return Err(GitError(
+            "egress policy: a remote that starts with `-` is refused".to_string(),
+        ));
+    }
+    Ok(())
 }
 
 // Global options that take their value as the next argument (`offline.rs` has the same).
@@ -114,6 +127,23 @@ pub fn classify_op(args: &[&str]) -> Option<&'static str> {
     }
 }
 
+/// `args` with no hook and no submodule: a submodule's URL is never checked.
+fn pinned_args(args: &[&str]) -> Vec<String> {
+    let hooks = if cfg!(windows) { "NUL" } else { "/dev/null" };
+    let hooks = format!("core.hooksPath={hooks}");
+    let mut all = vec!["-c", hooks.as_str()];
+    all.extend([
+        "-c",
+        "submodule.recurse=false",
+        "-c",
+        "fetch.recurseSubmodules=false",
+        "-c",
+        "push.recurseSubmodules=no",
+    ]);
+    all.extend(args);
+    all.into_iter().map(str::to_string).collect()
+}
+
 /// Runs a call to the resolved `url`: refused unless `args` name exactly that URL and the action
 /// is allowed. Git runs no hook, takes only https, ssh and file, and asks no credential helper
 /// but the GitHub CLI.
@@ -123,6 +153,7 @@ pub fn run_pinned(
     args: &[&str],
     timeout: Option<Duration>,
 ) -> Result<String, GitError> {
+    not_an_option(url)?;
     let Some(action) = classify_op(args) else {
         return Err(GitError("egress policy: not a remote call".into()));
     };
@@ -132,10 +163,8 @@ pub fn run_pinned(
         )));
     }
     enforce(&network_for(cwd), &Target::Git { url, action }).map_err(GitError)?;
-    let hooks = if cfg!(windows) { "NUL" } else { "/dev/null" };
-    let hooks = format!("core.hooksPath={hooks}");
-    let mut all = vec!["-c", hooks.as_str()];
-    all.extend(args);
+    let all = pinned_args(args);
+    let all: Vec<&str> = all.iter().map(String::as_str).collect();
     let mut entries = vec![("credential.helper", "")];
     entries.extend(GITHUB_CREDENTIALS);
     let mut env = with_git_config(std::env::var("GIT_CONFIG_COUNT").ok().as_deref(), &entries);
@@ -194,5 +223,21 @@ mod tests {
         assert_eq!(classify_op(&["-c", "a=b", "push", "u", "b"]), Some("push"));
         assert_eq!(classify_op(&["status"]), None);
         assert_eq!(classify_op(&["remote", "update"]), None);
+    }
+
+    #[test]
+    fn a_pinned_call_never_recurses_into_submodules() {
+        let all = pinned_args(&["fetch", "u", "main"]);
+        for setting in [
+            "submodule.recurse=false",
+            "fetch.recurseSubmodules=false",
+            "push.recurseSubmodules=no",
+        ] {
+            let at = all.iter().position(|arg| arg == setting).unwrap();
+            assert_eq!(all[at - 1], "-c");
+        }
+        assert_eq!(all[all.len() - 3..], ["fetch", "u", "main"]);
+        let all: Vec<&str> = all.iter().map(String::as_str).collect();
+        assert_eq!(classify_op(&all), Some("fetch"));
     }
 }

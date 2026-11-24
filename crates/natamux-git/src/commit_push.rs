@@ -311,11 +311,18 @@ pub fn read_commit_diff(worktree: &Path, max_chars: usize) -> Result<String, Com
     ))
 }
 
-/// Puts a commit on a branch of origin, in place of what is there.
-pub fn push_ref(worktree: &Path, sha: &str, ref_name: &str) -> Result<(), GitError> {
+/// Puts a commit on a branch of origin, in place of what is there. `url` is the one push URL of
+/// origin the caller checked: a push to the name `origin` would go to every `pushurl`. No
+/// remote-tracking ref is updated; nothing reads the one of a CI branch.
+pub fn push_ref(worktree: &Path, sha: &str, ref_name: &str, url: &str) -> Result<(), GitError> {
+    // Git would read `--receive-pack=<cmd>` as an option, which runs a command.
+    if url.starts_with('-') {
+        return Err(GitError(format!("{url:?} is not a push URL")));
+    }
     let target = format!("{sha}:refs/heads/{ref_name}");
-    remote(worktree, RemoteOp::Push, &|to, _| {
-        owned(&["push", "--force", "--quiet", to, &target])
+    // Under the allowlist `run_pinned` refuses the call unless `url` is the URL it resolved.
+    remote(worktree, RemoteOp::Push, &|_, _| {
+        owned(&["push", "--force", "--quiet", url, &target])
     })
 }
 

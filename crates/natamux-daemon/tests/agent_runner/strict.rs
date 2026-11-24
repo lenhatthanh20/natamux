@@ -1,10 +1,12 @@
 //! T-0373 Part 1 (F2): the launch gate in Strict mode. A worktree that is not approved as it is
 //! now starts no agent on any path, and an approved start asks before each action.
 
+use natamux_agents::hook_files::exclude_from_git;
 use natamux_agents::launch::LAST_SESSION;
 use natamux_agents::trust::{TrustPaths, trust_workspace};
 use natamux_core::security::{Forced, SecurityMode, StrictSettings, force};
 use natamux_daemon::projects::repo_trust_worktree::{TrustState, TrustedOf, trust_always};
+use natamux_git::test_support::{run_git, test_repo};
 
 use super::*;
 
@@ -161,21 +163,51 @@ fn the_windows_line_runs_the_agent_only_after_the_check_passed() {
         )
         .unwrap();
     let typed = ptys.lock().unwrap()[0].written().join("");
-    let check = "natamux repo verify-launch --task 'T-0001' --digest 'always'; \
-                 if ($LASTEXITCODE -eq 0) { claude ";
+    // T-0375 R1-4: `$LASTEXITCODE` keeps its old value when `natamux` is not found.
+    let check = "; $global:LASTEXITCODE = 1; \
+                 natamux repo verify-launch --task 'T-0001' --digest 'always'; \
+                 if ($? -and $LASTEXITCODE -eq 0) { claude ";
     assert!(typed.contains(check), "{typed}");
 }
 
-/// Gives `first` for the first `calls` asks, then another digest: an edit in between.
-fn edited_after(calls: usize) -> TrustedOf {
+// T-0375 R1-4: the check runs the app's `natamux`, as on POSIX.
+#[test]
+fn the_windows_check_puts_the_bin_folder_first_on_the_path() {
+    let env = Env::new();
+    let task = env.task();
+    let (windows, ptys) = env.windows("C:\\data\\settings.json", Some("C:\\Nata'mux\\bin"));
+    let _strict = strict();
+    let own = OwnAgent::default();
+    windows
+        .start(&task.id, "claude-code", Some("Go"), None, None, &own)
+        .unwrap();
+    let typed = ptys.lock().unwrap()[0].written().join("");
+    let check = "$global:LASTEXITCODE = 1; $env:PATH = 'C:\\Nata''mux\\bin;' + $env:PATH; \
+                 natamux repo verify-launch";
+    assert!(typed.contains(check), "{typed}");
+}
+
+/// Gives the approved digest for the first `calls` asks, then `later`.
+fn turns_after(calls: usize, later: TrustState) -> TrustedOf {
     let count = Arc::new(AtomicU32::new(0));
     Arc::new(move |_: Option<&str>, _: Option<&Path>| {
         let seen = count.fetch_add(1, Ordering::SeqCst) as usize;
-        let digest = if seen < calls { "approved" } else { "edited" };
-        TrustState::Trusted {
-            digest: digest.into(),
+        if seen < calls {
+            return TrustState::Trusted {
+                digest: "approved".into(),
+            };
         }
+        later.clone()
     })
+}
+
+/// An edit in between: the worktree is no longer approved.
+fn edited_after(calls: usize) -> TrustedOf {
+    let edited = TrustState::Changed {
+        digest: "edited".into(),
+        files: vec![".mcp.json".into()],
+    };
+    turns_after(calls, edited)
 }
 
 #[test]
@@ -247,4 +279,93 @@ fn a_failed_check_stops_the_script_before_the_agent() {
     assert!(!mark.exists(), "the agent ran after a failed check");
     run(0);
     assert!(mark.exists(), "the agent did not run after a passed check");
+}
+
+// T-0375 R1-1: Personal mode takes back an old trust too, at the gate and when a recheck aborts.
+#[test]
+fn personal_mode_takes_back_the_old_trust_of_a_changed_worktree() {
+    for trusted_of in [trust_always(false), edited_after(1)] {
+        let env = Env::new();
+        let (paths, marker) = old_markers(&env);
+        let runner = runner_with(&env, trusted_of);
+        let task = env.task();
+        let own = OwnAgent::default();
+        let _ = runner.start(&task.id, "claude-code", None, None, None, &own);
+        assert!(!marker.exists(), "the old Cursor marker is gone");
+        let copilot = std::fs::read_to_string(&paths.copilot_config).unwrap();
+        assert!(!copilot.contains(&env.workspace), "{copilot}");
+    }
+}
+
+// T-0375 R1-5: a new digest that is approved too (Natamux's own hook rewrite) is the one the
+// start goes on with.
+#[test]
+fn an_approved_new_digest_starts_with_that_digest() {
+    let env = Env::new();
+    let rewritten = TrustState::Trusted {
+        digest: "rewritten".into(),
+    };
+    let runner = runner_with(&env, turns_after(1, rewritten));
+    let task = env.task();
+    let _strict = strict();
+    let own = OwnAgent::default();
+    runner
+        .start(&task.id, "claude-code", Some("Go"), None, None, &own)
+        .unwrap();
+    let script = env.script_text(&task.id);
+    let verify = "natamux repo verify-launch --task 'T-0001' --digest 'rewritten' && ";
+    assert!(script.starts_with(verify), "{script}");
+}
+
+// The T-0373 spec test and T-0375 R1-5 end to end: the user approves the exact digest of a
+// worktree that holds an old Natamux hook file, and the Strict start works the first time.
+#[test]
+fn approving_the_exact_digest_of_a_worktree_lets_the_strict_start_run() {
+    let _strict = strict();
+    let (root, repo) = test_repo();
+    std::fs::write(repo.join(".mcp.json"), "{}\n").unwrap();
+    run_git(&repo, &["add", "-A"]);
+    run_git(&repo, &["commit", "-q", "-m", "config"]);
+    let data = root.path().join("data");
+    std::fs::create_dir_all(&data).unwrap();
+    let list = json!([{ "id": "default", "name": "app", "path": repo.to_string_lossy() }]);
+    std::fs::write(data.join("repos.json"), list.to_string()).unwrap();
+    let repos = Repos::new(&data, Arc::new(|| 0_i64));
+    let project = repos.trust_view("default").unwrap().hash;
+    repos.approve("default", &project).unwrap();
+
+    let worktree = root.path().join("task");
+    let target = worktree.to_string_lossy().to_string();
+    run_git(
+        &repo,
+        &["worktree", "add", "-q", "-b", "task", &target, "main"],
+    );
+    // A hook file an older Natamux wrote: the start writes it again.
+    std::fs::create_dir_all(worktree.join(".codex")).unwrap();
+    let old = "# Natamux hooks: Natamux writes this file again.\n[old]\n";
+    std::fs::write(worktree.join(".codex/config.toml"), old).unwrap();
+    exclude_from_git(&worktree, "/.codex/config.toml");
+    let view = repos.trust_view_in("default", Some(&worktree)).unwrap();
+    assert!(!view.trusted);
+    repos
+        .approve_in("default", Some(&worktree), &view.hash)
+        .unwrap();
+
+    let mut env = Env::new();
+    env.workspace = target;
+    let seen = Arc::clone(&repos);
+    let trusted_of: TrustedOf = Arc::new(move |id: Option<&str>, folder: Option<&Path>| {
+        seen.is_trusted_in_task(id, folder)
+    });
+    let runner = runner_with(&env, trusted_of);
+    let task = env.task();
+    let own = OwnAgent::default();
+    runner
+        .start(&task.id, "codex", Some("Go"), None, None, &own)
+        .unwrap();
+    assert_eq!(env.pty_count(), 1);
+    let script = env.script_text(&task.id);
+    assert!(script.starts_with("natamux repo verify-launch"), "{script}");
+    let digest = format!("--digest '{project}' && ");
+    assert!(script.contains(&digest), "{script}");
 }

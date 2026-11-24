@@ -87,12 +87,7 @@ impl Dashboard {
             base,
             branch: None,
         };
-        self.write(
-            source.start_agent(task_id, input),
-            false,
-            cx,
-            |this, task, _| this.take_task(task),
-        )
+        self.start_written(task_id, source.start_agent(task_id, input), cx)
     }
 
     pub fn push(&mut self, task_id: &str, cx: &mut Context<Self>) -> Written<Task> {

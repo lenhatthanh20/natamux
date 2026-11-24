@@ -255,8 +255,9 @@ fn pushes_it_to_a_branch_of_origin_replaces_it_and_deletes_it() {
     let second = snapshot_commit(&f.worktree, "two").unwrap();
     let ci_branch = format!("natamux-ci/{BRANCH}");
 
-    push_ref(&f.worktree, &first, &ci_branch).unwrap();
-    push_ref(&f.worktree, &second, &ci_branch).unwrap();
+    let url = text(&remote);
+    push_ref(&f.worktree, &first, &ci_branch, &url).unwrap();
+    push_ref(&f.worktree, &second, &ci_branch, &url).unwrap();
     assert_eq!(rev(&remote, &ci_branch), second);
 
     delete_remote_ref(&f.worktree, &ci_branch).unwrap();
@@ -264,6 +265,8 @@ fn pushes_it_to_a_branch_of_origin_replaces_it_and_deletes_it() {
         &remote,
         &["rev-parse", "--verify", &ci_branch]
     ));
+    let option = push_ref(&f.worktree, &second, &ci_branch, "--receive-pack=x");
+    assert!(option.unwrap_err().0.contains("not a push URL"));
 }
 
 #[test]

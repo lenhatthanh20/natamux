@@ -5,6 +5,7 @@
 use hyper::Method;
 use natamux_core::security::{AgentApi, Forced, SecurityMode, StrictSettings, force};
 use natamux_daemon::http::agent_actions::AGENT_DENIED;
+use natamux_daemon::privacy::audit::audit_path;
 use natamux_daemon::shared::event_bus::DaemonMessage;
 use natamux_daemon::shared::jobs::Jobs;
 use serde_json::{Value, json};
@@ -349,4 +350,82 @@ async fn strict_takes_the_agent_token_on_events_in_the_header_only() {
     assert_eq!(d.call(Method::GET, "/events", Some(&a)).await.0, 404);
     let desktop = format!("/events?token={TOKEN}");
     assert_eq!(d.call(Method::GET, &desktop, None).await.0, 404);
+    // T-0375 (R3-4): the refused `?token=` is one audit line.
+    assert_eq!(denied_lines(&d), 1);
+}
+
+/// The `agent-api.denied` lines of the audit log.
+fn denied_lines(d: &TestDaemon) -> usize {
+    let path = audit_path(&d.root.join("data"));
+    let text = std::fs::read_to_string(path).unwrap_or_default();
+    text.lines()
+        .filter(|line| line.contains("\"agent-api.denied\""))
+        .count()
+}
+
+// T-0375 (R3-4): a refusal in a handler writes its audit line, as one in the router does.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_refusal_in_a_handler_adds_one_audit_line() {
+    let d = three_tasks("scope-audit").await;
+    let on = json!({ "strict": false, "data": { "auditLog": true } });
+    let (status, _) = d.send(Method::PUT, "/security", Some(TOKEN), &on).await;
+    assert_eq!(status, 200);
+    let a = d.agent_token("T-0001");
+
+    let body = json!({ "title": "D", "parentId": "T-0002" });
+    let (status, _) = d.send(Method::POST, "/tasks", Some(&a), &body).await;
+    assert_eq!(status, 403);
+    assert_eq!(denied_lines(&d), 1);
+    let ci = json!({ "stage": "implement", "on": true });
+    let (status, _) = d.send(Method::PUT, "/tasks/T-0001/ci", Some(&a), &ci).await;
+    assert_eq!(status, 403);
+    assert_eq!(denied_lines(&d), 2);
+    // The router lets an agent read its own task's comments; the handler refuses.
+    let comments = "/tasks/T-0001/review-comments";
+    let (status, _) = d.call(Method::GET, comments, Some(&a)).await;
+    assert_eq!(status, 403);
+    assert_eq!(denied_lines(&d), 3);
+}
+
+// T-0375 (R3-2): the revoke ends the sockets the token opened; the desktop's stays.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_revoked_token_closes_its_event_and_terminal_sockets() {
+    let d = three_tasks("scope-revoke-sockets").await;
+    d.give_workspace("T-0001");
+    let a = d.agent_token("T-0001");
+    let mut events = d.dashboard(&a).await;
+    let mut desktop = d.dashboard(TOKEN).await;
+    let bus = std::sync::Arc::clone(&d.daemon.state.bus);
+    eventually(|| bus.size() == 2).await;
+    let (status, body) = d
+        .call(Method::POST, "/tasks/T-0001/terminal/ticket", Some(&a))
+        .await;
+    assert_eq!(status, 200, "{body}");
+    let ticket = body["ticket"].as_str().unwrap().to_string();
+    let mut terminal = d
+        .open_with(&format!("ticket={ticket}&cols=80&rows=24"))
+        .await;
+    eventually(|| !d.ptys().is_empty()).await;
+
+    d.daemon.state.terminals.revoke_agent("T-0001");
+
+    assert_eq!(events.close_code().await, 4401);
+    assert_eq!(terminal.close_code().await, 4401);
+    assert_eq!(bus.size(), 1);
+    let body = json!({ "title": "Moved T-0001" });
+    let path = "/tasks/T-0001";
+    assert_eq!(d.send(Method::PATCH, path, Some(TOKEN), &body).await.0, 200);
+    desktop
+        .until(|socket| {
+            socket
+                .controls()
+                .iter()
+                .any(|frame| mentions(frame, "Moved T-0001"))
+        })
+        .await;
+    let frames = events.controls();
+    assert!(
+        frames.iter().all(|frame| !mentions(frame, "Moved T-0001")),
+        "{frames:?}"
+    );
 }

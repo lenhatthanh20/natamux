@@ -24,7 +24,7 @@ use natamux_stages::prompts::{arg_values, fill};
 
 use crate::agents::errors::AgentError;
 use crate::agents::hook_config_watch::HookConfigWatch;
-use crate::agents::launch_guard::{LaunchGate, drop_trust, guard, with_verify};
+use crate::agents::launch_guard::{LaunchGate, drop_trust, guard, path_prefix, with_verify};
 use crate::agents::launch_policy_check::{StartWords, args_variable, check_words};
 use crate::agents::pasted_prompt::PastedPrompts;
 use crate::projects::repo_trust_worktree::TrustedOf;
@@ -268,11 +268,11 @@ impl AgentRunner {
         let (trusted_of, paths) = (&self.options.trusted_of, &self.options.trust_paths);
         let gate = guard(trusted_of, &task, &agent_kind(agent), paths)?;
         let (command, pasted) = self.command_of(&task, agent, prompt, session, own, &gate)?;
-        gate.recheck(trusted_of, &task, paths)?;
+        let gate = gate.recheck(trusted_of, &task, paths)?;
         let shell = terminal.unwrap_or(MAIN_TERMINAL);
         let check = gate.verify_digest().map(|digest| (task_id, digest));
         let line = self.launch_line(task_id, &command, terminal, check)?;
-        gate.recheck(trusted_of, &task, paths)?;
+        let gate = gate.recheck(trusted_of, &task, paths)?;
         // The agent that ran here before is over.
         self.agent_ended(task_id, shell);
         self.options
@@ -341,16 +341,18 @@ impl AgentRunner {
         &self,
         task: &Task,
         kind: &str,
-        strict: bool,
-        [model, stage_words]: [Option<&str>; 2],
+        gate: &LaunchGate,
+        [command, model, stage_words]: [Option<&str>; 3],
     ) -> Result<bool, AgentError> {
         let auto_mode = (self.options.permission_mode_of)(task.repo.as_deref()) == "auto";
         let variable = args_variable(kind);
         let words = StartWords {
             kind,
-            ask: !auto_mode,
-            strict,
+            // An untrusted worktree starts without auto flags, so it gets the ask check.
+            ask: !(auto_mode && gate.trusted()),
+            strict: gate.strict(),
             sources: [
+                ("agent command", command),
                 (
                     variable.as_str(),
                     self.extra_args.get(kind).map(String::as_str),
@@ -385,8 +387,13 @@ impl AgentRunner {
         let model = self
             .model_for(task, agent, own, trusted)
             .map(|model| format!("--model {}", quote_argument(&model, self.platform())));
-        let words = [model.as_deref(), stage_words.as_deref()];
-        let auto_mode = self.checked_mode(task, &kind, strict, words)?;
+        let program = self.program_of(agent);
+        let words = [
+            Some(program.as_str()),
+            model.as_deref(),
+            stage_words.as_deref(),
+        ];
+        let auto_mode = self.checked_mode(task, &kind, gate, words)?;
         let mut workspace_hooks = false;
         if let Some(workspace) = &task.workspace {
             workspace_hooks =
@@ -408,13 +415,7 @@ impl AgentRunner {
         .flatten()
         .filter(|words| !words.is_empty())
         .collect();
-        let text = match (session, prompt) {
-            (None, _) => one_line(&plain_text(
-                &prompt.map_or_else(|| first_prompt(task), str::to_string),
-            )),
-            (Some(_), Some(prompt)) => one_line(&plain_text(prompt)),
-            (Some(_), None) => String::new(),
-        };
+        let text = start_text(task, session, prompt);
         let (text, pasted) = match prompt_mode(&kind) {
             PromptMode::Pasted if !text.is_empty() => (String::new(), Some(text)),
             _ => (text, None),
@@ -422,7 +423,7 @@ impl AgentRunner {
         let command = launch_command(
             &kind,
             &LaunchOptions {
-                program: self.program_of(agent),
+                program,
                 extra_args: extra.join(" "),
                 prompt: text,
                 session: session.map(str::to_string),
@@ -457,8 +458,10 @@ impl AgentRunner {
         check: Option<(&str, &str)>,
     ) -> Result<String, AgentError> {
         let platform = self.platform();
+        let path = path_prefix(self.options.bin_dir.as_deref(), platform);
         if self.options.windows {
-            let command = with_verify(command, check, "", platform);
+            // Strict: the check puts the bin folder first in PATH, for the rest of the session.
+            let command = with_verify(command, check, &path, platform);
             let title = |text: &str| format!("$Host.UI.RawUI.WindowTitle = '{text}'");
             return Ok(format!(
                 "{}; {command}; if ($LASTEXITCODE -ne 0) {{ {} }}; {}",
@@ -477,13 +480,6 @@ impl AgentRunner {
             Some(terminal) => format!("-{terminal}"),
         };
         let script = launch_dir.join(format!("agent-launch-{task_id}{suffix}.sh"));
-        let path = self
-            .options
-            .bin_dir
-            .as_deref()
-            .map_or_else(String::new, |bin| {
-                format!("PATH={}:\"$PATH\" ", quote_argument(bin, platform))
-            });
         let command = with_verify(&format!("{path}{command}"), check, &path, platform);
         // `||` and printf, not `$?`, which fish does not have.
         write_private(&script, &format!("{command}{}\n", failed_mark())).map_err(io)?;
@@ -492,4 +488,13 @@ impl AgentRunner {
             quote_argument(&script.to_string_lossy(), platform)
         ))
     }
+}
+
+/// The prompt of a start: the task's first prompt when none is given, none for a bare resume.
+fn start_text(task: &Task, session: Option<&str>, prompt: Option<&str>) -> String {
+    if session.is_some() && prompt.is_none() {
+        return String::new();
+    }
+    let text = prompt.map_or_else(|| first_prompt(task), str::to_string);
+    one_line(&plain_text(&text))
 }

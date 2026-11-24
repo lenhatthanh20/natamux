@@ -13,6 +13,10 @@ use super::Dashboard;
 use crate::app::dashboard_data::{BulkRun, Part};
 use crate::app::source::{delete_all, reason, remove_all};
 use crate::components::toast_rules::ToastTone;
+use crate::components::toasts::{ToastAction, push_toast};
+use crate::projects::repo_trust_dialog::rules::repo_name;
+use crate::projects::repo_trust_dialog::{config_refused, review_task};
+use crate::sidebar::workspace_groups::DEFAULT_REPO_ID;
 use crate::tasks::delete_finished::{DeleteJob, DeleteOutcome, delete_summary, delete_toast};
 use crate::tasks::task_rules::actions_for;
 use crate::workspaces::finished_rules::removed_text;
@@ -331,12 +335,57 @@ impl Dashboard {
             agent: agent.into(),
             ..StartAgentInput::default()
         };
-        self.write(
-            source.start_agent(task_id, input),
-            false,
-            cx,
-            |this, task, _| this.take_task(task),
-        )
+        self.start_written(task_id, source.start_agent(task_id, input), cx)
+    }
+
+    /// A start: a refusal because the worktree's agent config changed offers its review.
+    pub(super) fn start_written(
+        &mut self,
+        task_id: &str,
+        answer: Answer<Task>,
+        cx: &mut Context<Self>,
+    ) -> Written<Task> {
+        let id = task_id.to_owned();
+        cx.spawn(async move |this, cx| {
+            let result = answer.await;
+            this.update(cx, |this, cx| {
+                match &result {
+                    Ok(task) => this.take_task(task),
+                    Err(error) => match this.review_action(&id, error, cx) {
+                        Some(review) => {
+                            push_toast(&reason(error), ToastTone::Error, None, vec![review], cx);
+                        }
+                        None => this.toast(&reason(error), ToastTone::Error, None, cx),
+                    },
+                }
+                this.touch_view(cx);
+            })
+            .ok();
+            result
+        })
+    }
+
+    /// Review config: the trust dialog of the task's worktree, for a refused start only.
+    fn review_action(
+        &self,
+        task_id: &str,
+        error: &ClientError,
+        cx: &Context<Self>,
+    ) -> Option<ToastAction> {
+        if !config_refused(error) {
+            return None;
+        }
+        let source = self.source.clone()?;
+        let repo = self.data.task(task_id).and_then(|task| task.repo.clone());
+        let repo = repo.unwrap_or_else(|| DEFAULT_REPO_ID.to_owned());
+        let name = repo_name(&self.data.repos, &repo);
+        let (task, this) = (task_id.to_owned(), cx.weak_entity());
+        Some(ToastAction::new("Review config", move |window, cx| {
+            this.update(cx, |_, cx| {
+                review_task(&source, &repo, &task, &name, window, cx);
+            })
+            .ok();
+        }))
     }
 
     // The wrap-up of screen 2 ends terminals.

@@ -32,4 +32,14 @@ fn network_calls_start_no_process_and_local_calls_still_run() {
     assert_eq!(spawn_count(), before);
     assert!(git(&cwd, &["--version"], None, &[]).is_ok());
     assert_eq!(spawn_count(), before + 1);
+
+    // T-0375 R8-3: no lazy fetch of a partial clone and no LFS download while offline.
+    if cfg!(unix) {
+        // One name per call: BSD printenv reads only the first.
+        for name in ["GIT_NO_LAZY_FETCH", "GIT_LFS_SKIP_SMUDGE"] {
+            let alias = format!("alias.envs=!printenv {name}");
+            let printed = git(&cwd, &["-c", &alias, "envs"], None, &[]).unwrap();
+            assert_eq!(printed, "1\n", "{name}");
+        }
+    }
 }

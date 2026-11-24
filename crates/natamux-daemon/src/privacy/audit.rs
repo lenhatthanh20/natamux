@@ -1,23 +1,31 @@
 //! The audit log, `logs/audit.log` in the data folder: one JSON line per blocked action or
 //! security change, with only `ts`, `event`, `id`, `result` and `settingsVersion`. Written only
-//! while `data.auditLog` is on (the Strict default), kept under `data.logMaxBytes`, mode 0600.
+//! while `data.auditLog` is on (the Strict default), mode 0600. Past `data.logMaxBytes` the file
+//! moves to `logs/audit.log.1` (replacing the older one) and a new file starts.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, PoisonError};
 
 use natamux_core::js::iso_now;
 use natamux_core::privacy::audit::{self, clean_word};
-use natamux_core::privacy::log_trim::trim_file;
 use natamux_core::security::{FILE_NAME, data_in};
 use natamux_core::workspaces::private_dir::{append_options, private_dir};
 use serde_json::json;
 use sha2::{Digest, Sha256};
 
 pub const AUDIT_FILE: &str = "logs/audit.log";
+pub const OLD_AUDIT_FILE: &str = "logs/audit.log.1";
+
+/// One writer at a time in this process: two writers could lose lines or rotate twice.
+static WRITING: Mutex<()> = Mutex::new(());
 
 pub fn audit_path(data_dir: &Path) -> PathBuf {
     data_dir.join(AUDIT_FILE)
+}
+
+pub fn old_audit_path(data_dir: &Path) -> PathBuf {
+    data_dir.join(OLD_AUDIT_FILE)
 }
 
 /// The first 16 hex digits of the SHA-256 of `security.json`, `none` with no file: which
@@ -48,6 +56,7 @@ pub fn line_of(ts: &str, event: &str, id: &str, result: &str, version: &str) -> 
 
 /// Adds one line when the audit log is on. A log that cannot be written never stops the action.
 pub fn write(data_dir: &Path, event: &str, id: &str, result: &str) {
+    let _writing = WRITING.lock().unwrap_or_else(PoisonError::into_inner);
     let settings = data_in(data_dir);
     if !settings.audit_log {
         return;
@@ -63,10 +72,11 @@ pub fn write(data_dir: &Path, event: &str, id: &str, result: &str) {
         eprintln!("The audit log could not be written: {error}");
         return;
     }
-    // Cut to three quarters, so a full log is not rewritten on every line.
+    // A rename, not a trim in place: a caller that fills the log cannot push the newest old
+    // lines out. The next write starts a new private file.
     let over = std::fs::metadata(&path).is_ok_and(|meta| meta.len() > settings.log_max_bytes);
-    if over {
-        let _ = trim_file(&path, settings.log_max_bytes / 4 * 3);
+    if over && let Err(error) = std::fs::rename(&path, old_audit_path(data_dir)) {
+        eprintln!("The audit log could not be rotated: {error}");
     }
 }
 

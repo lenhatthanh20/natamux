@@ -5,13 +5,14 @@ use std::path::Path;
 
 use natamux_core::security::{CI_FORBID_REASON, CiMode, ci_mode};
 use natamux_git::ci_snapshot::{
-    head_snapshot, new_commits, pin, remote_url, tree_of, unpin_task, working_files,
+    head_snapshot, new_commit_paths, new_commits, pin, remote_url, tree_of, unpin_task,
+    working_files,
 };
 use natamux_git::commit_push::{delete_remote_ref, snapshot_paths};
 use natamux_git::exec::GitError;
 use natamux_proto::events::task_event::StoredEvent;
 use natamux_proto::tasks::task::Task;
-use natamux_stages::ci::{CiTarget, ci_approval_of, ci_branch_of};
+use natamux_stages::ci::{CI_BRANCH_PREFIX, CiTarget, ci_approval_of, ci_branch_of};
 use serde_json::{Map, Value, json};
 
 use crate::stages::errors::{StageResult, action};
@@ -60,12 +61,46 @@ pub fn build_approval(
         "files": sent,
         "notSent": shown,
         "notSentCount": not_sent.len(),
-        "newCommits": new_commits(worktree).unwrap_or(0),
     });
-    Ok(match payload {
+    let mut payload = match payload {
         Value::Object(map) => map,
         _ => Map::new(),
-    })
+    };
+    payload.extend(new_commit_fields(worktree, &sent));
+    Ok(payload)
+}
+
+/// GitHub runs what is under this folder of the pushed commit.
+const WORKFLOWS: &str = ".github/workflows/";
+
+/// What the commits that no remote has yet add, and whether the push changes a workflow. A git
+/// error leaves the count and the flag unknown (null), so the ask never looks like "nothing new".
+fn new_commit_fields(worktree: &Path, sent: &[String]) -> Map<String, Value> {
+    let read = new_commits(worktree)
+        .and_then(|count| new_commit_paths(worktree).map(|paths| (count, paths)));
+    let fields = match read {
+        Ok((count, paths)) => {
+            let in_workflows = |path: &String| path.starts_with(WORKFLOWS);
+            let workflows = paths.iter().chain(sent).any(in_workflows);
+            let shown: Vec<&String> = paths.iter().take(SHOWN_FILES).collect();
+            json!({
+                "newCommits": count,
+                "commitFiles": shown,
+                "commitFilesCount": paths.len(),
+                "workflowsChanged": workflows,
+            })
+        }
+        Err(_) => json!({
+            "newCommits": null,
+            "commitFiles": [],
+            "commitFilesCount": null,
+            "workflowsChanged": null,
+        }),
+    };
+    match fields {
+        Value::Object(map) => map,
+        _ => Map::new(),
+    }
 }
 
 /// The line the stage card shows about what CI does not get.
@@ -126,9 +161,38 @@ pub fn pending_approval(events: &[StoredEvent], stage: &str) -> Option<Map<Strin
     pending
 }
 
-/// At task end the pins go, and the CI branch of origin too, unless CI pushes are forbidden:
+/// The CI branches of origin a task may have left: one per branch its rounds pushed, and the one
+/// of `branch`, its branch now. Empty for a task that never started a CI round, so its end makes
+/// no remote call, whatever its CI setting is now.
+pub fn ci_branches_of(events: &[StoredEvent], branch: Option<&str>) -> Vec<String> {
+    let rounds: Vec<&Map<String, Value>> = events
+        .iter()
+        .filter(|stored| {
+            let kind = stored.event.kind.as_str();
+            kind == "stage.ci-approved" || kind == "stage.ci-started"
+        })
+        .map(|stored| &stored.event.payload)
+        .collect();
+    if rounds.is_empty() {
+        return Vec::new();
+    }
+    let pushed = rounds
+        .iter()
+        .filter_map(|payload| payload.get("branch").and_then(Value::as_str))
+        .map(str::to_string);
+    // A round of a task with no branch names the bare prefix.
+    let mut names: Vec<String> = pushed
+        .chain(branch.map(ci_branch_of))
+        .filter(|name| name.len() > CI_BRANCH_PREFIX.len() && name.starts_with(CI_BRANCH_PREFIX))
+        .collect();
+    names.sort();
+    names.dedup();
+    names
+}
+
+/// At task end the pins go, and the CI branches of origin too, unless CI pushes are forbidden:
 /// then no remote call is made at all. Errors are only logged.
-pub fn clean_ci_refs(folder: &Path, task_id: &str, ref_name: &str, forbid: bool) {
+pub fn clean_ci_refs(folder: &Path, task_id: &str, ref_names: &[String], forbid: bool) {
     // An empty folder would run git in the daemon's own folder.
     if folder.as_os_str().is_empty() {
         return;
@@ -139,8 +203,10 @@ pub fn clean_ci_refs(folder: &Path, task_id: &str, ref_name: &str, forbid: bool)
     if forbid {
         return;
     }
-    if let Err(error) = delete_remote_ref(folder, ref_name) {
-        eprintln!("Could not delete the CI branch {ref_name} of {task_id}: {error}");
+    for ref_name in ref_names {
+        if let Err(error) = delete_remote_ref(folder, ref_name) {
+            eprintln!("Could not delete the CI branch {ref_name} of {task_id}: {error}");
+        }
     }
 }
 
@@ -206,6 +272,12 @@ impl StageRun {
 
     /// A person approved the exact tree shown (`approved-snapshot`): the round starts.
     pub fn approve_ci(&self, task_id: &str, stage_id: &str, tree: &str) -> StageResult<Task> {
+        // Its CI branch was deleted at the end; a round now would push it again.
+        if self.task(task_id)?.state.is_finished() {
+            return Err(action(
+                "The task has ended, so its CI check can no longer be approved.",
+            ));
+        }
         let Some(mut payload) = pending_approval(&self.events(task_id), stage_id) else {
             return Err(action(format!(
                 "No CI push of the {stage_id} stage waits for an approval."

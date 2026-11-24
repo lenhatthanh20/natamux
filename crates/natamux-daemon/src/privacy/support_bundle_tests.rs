@@ -51,3 +51,20 @@ fn the_bundle_has_only_the_fixed_fields() {
     assert_eq!(value["tasks"]["running"], 1);
     assert_eq!(value["security"]["keys"]["ciPush"], "approved-commit");
 }
+
+#[test]
+fn the_log_is_read_only_beside_the_apps_token_file() {
+    let app = std::env::temp_dir().join(format!("natamux-bundle-app-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&app);
+    std::fs::create_dir_all(app.join("logs")).unwrap();
+    std::fs::write(app.join("logs/daemon.log"), "other program\n").unwrap();
+    let data = app.join("data");
+    assert_eq!(daemon_log_path(&data), None);
+    assert!(log_tail(daemon_log_path(&data).as_deref()).is_empty());
+    std::fs::write(app.join(APP_TOKEN_FILE), "t").unwrap();
+    assert_eq!(
+        daemon_log_path(&data),
+        Some(app.join("logs").join("daemon.log"))
+    );
+    std::fs::remove_dir_all(&app).unwrap();
+}

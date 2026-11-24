@@ -166,3 +166,52 @@ fn a_query_fragment_or_backslash_cannot_hide_the_real_host() {
         Remote::Refused(_)
     ));
 }
+
+#[test]
+fn a_gh_host_with_other_characters_is_refused() {
+    let settings = network_of(
+        &json!({ "network": {
+            "egress": "allowlist",
+            "gh": [{ "host": "*.corp.com", "actions": ["read"] }],
+        }}),
+        false,
+    );
+    let action = "read";
+    let gh = |host| check(&settings, &Target::Gh { host, action });
+    assert!(gh("ghe.corp.com").is_ok());
+    for host in [
+        "evil.com?x.corp.com",
+        "evil.com/x.corp.com",
+        "",
+        "GHE.corp.com",
+    ] {
+        let reason = gh(host).unwrap_err();
+        assert!(reason.starts_with(PREFIX), "{host}: {reason}");
+    }
+}
+
+#[cfg(windows)]
+#[test]
+fn a_windows_network_share_is_refused() {
+    let settings = allowlist();
+    let action = "fetch";
+    for url in [
+        "file://server/share/x",
+        "file:////server/share/x",
+        "\\\\server\\share\\x",
+        "//server/share/x",
+    ] {
+        let reason = check(&settings, &Target::Git { url, action }).unwrap_err();
+        assert!(reason.starts_with(PREFIX), "{url}: {reason}");
+    }
+    assert_eq!(parse_remote("file:///C:/repos/app.git"), Remote::Local);
+    assert_eq!(parse_remote("C:\\repos\\app.git"), Remote::Local);
+}
+
+#[cfg(not(windows))]
+#[test]
+fn a_double_slash_path_stays_local_off_windows() {
+    assert_eq!(parse_remote("file://server/share/x"), Remote::Local);
+    assert_eq!(parse_remote("//server/share/x"), Remote::Local);
+    assert_eq!(parse_remote("\\\\server\\share\\x"), Remote::Local);
+}

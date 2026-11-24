@@ -47,6 +47,7 @@ fn shown<'a>(
     let (dialog, cx) = cx.add_window_view(move |_, cx| RepoTrustDialog {
         source: Arc::new(Source::FakeDaemon),
         repo_id,
+        task: None,
         name: "Shop".into(),
         view: view(),
         then: Some(then),
@@ -114,6 +115,19 @@ fn a_refused_approval_shows_the_reason_and_stays(cx: &mut TestAppContext) {
     assert_eq!(ran.get(), 0);
 }
 
+// T-0375 R1-2: only a start refused for changed agent config offers the review of the worktree.
+#[test]
+fn a_start_refused_for_changed_config_is_told_apart() {
+    let status = |status: u16, message: &str| ClientError::Status {
+        status,
+        message: message.into(),
+    };
+    let changed = format!("The agent config changed. {CONFIG_CHANGED_REASON}");
+    assert!(config_refused(&status(409, &changed)));
+    assert!(!config_refused(&status(409, "Waiting on T-0002")));
+    assert!(!config_refused(&status(500, CONFIG_CHANGED_REASON)));
+}
+
 /// Workflow test T21 (plan 7.5): the dialog opened by `review` over an open dialog, in an app
 /// window with the dialog layer. Not now, Approve and Esc each run `then` once, and `then` may
 /// update the view that asked; the dialog under it stays open.
@@ -125,7 +139,7 @@ mod flow {
     use gpui::{AppContext as _, Entity, EntityId, TestAppContext, VisualTestContext};
     use ui::prelude::*;
 
-    use super::super::{RepoTrustDialog, Then, review};
+    use super::super::{RepoTrustDialog, Then, review, review_task};
     use crate::app::fake_daemon;
     use crate::app::source::Source;
     use crate::app::test_driver::{activate, press, press_now};
@@ -177,7 +191,7 @@ mod flow {
     }
 
     fn trusted() -> bool {
-        let view = fake_daemon::shared().repo_trust(PROJECT);
+        let view = fake_daemon::shared().repo_trust(PROJECT, None);
         view.expect("the project").trusted
     }
 
@@ -219,6 +233,32 @@ mod flow {
         cx.run_until_parked();
         ran_once_over(&asked, cx);
         assert!(trusted());
+    }
+
+    // T-0375 R1-2: the dialog of a blocked start reads and approves the task's worktree, not the
+    // project folder.
+    #[gpui::test]
+    fn the_dialog_of_a_task_shows_and_approves_its_worktree(cx: &mut TestAppContext) {
+        let (host, _, cx) = test_views::init_app(cx, |_, _, cx| cx.new(|_| Counted { draws: 0 }));
+        host.update_in(cx, |_, window, cx| {
+            let source = Arc::new(Source::FakeDaemon);
+            review_task(&source, PROJECT, "T-0042", "Natamux", window, cx);
+        });
+        cx.run_until_parked();
+        let top = cx.update(|_, cx| DialogLayer::top_view(cx));
+        let dialog = top.and_then(|view| view.downcast::<RepoTrustDialog>().ok());
+        let dialog = dialog.expect("the trust dialog of the task");
+        dialog.read_with(cx, |dialog, _| {
+            let (view, _) = dialog.shown();
+            assert_eq!(view.changed, [".mcp.json"]);
+            assert_eq!(view.hash, format!("fake-{PROJECT}-T-0042"));
+        });
+        press(cx, "tab");
+        activate(cx);
+        cx.run_until_parked();
+        let fake = fake_daemon::shared();
+        assert!(fake.repo_trust(PROJECT, Some("T-0042")).unwrap().trusted);
+        assert!(!fake.repo_trust(PROJECT, Some("T-0043")).unwrap().trusted);
     }
 
     #[gpui::test]

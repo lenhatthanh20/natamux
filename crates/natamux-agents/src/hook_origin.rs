@@ -31,7 +31,7 @@ fn exclude_file(worktree: &Path) -> Option<PathBuf> {
         Some(common) => common,
         None => {
             let mut git = Command::new("git");
-            natamux_core::security::harden_git(&mut git);
+            natamux_core::security::harden_git_at(&mut git, worktree);
             git.args(["rev-parse", "--git-common-dir"])
                 .current_dir(worktree)
                 .stdin(Stdio::null())
