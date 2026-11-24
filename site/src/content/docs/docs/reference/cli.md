@@ -152,7 +152,7 @@ natamux stage ci T-42 on --stage implement
 natamux stage ci-approve implement --task T-42 --tree 4b825dc6
 ```
 
-`ci-approve` approves a CI push under Strict `ciPush: approved-snapshot`. Give the tree id from the `stage.ci-approval-needed` event; if the work changed, the daemon refuses the old id. Only a person can approve: the agent token of a task gets 403.
+`ci-approve` approves a CI push under Strict `ciPush: approved-snapshot`. Give the tree id from the `stage.ci-approval-needed` event; if the work changed, the daemon refuses the old id, and it refuses once the task is done or cancelled. Only a person can approve: the agent token of a task gets 403.
 
 ## event and events
 
@@ -205,7 +205,7 @@ natamux support-bundle
 natamux support-bundle --out ~/Desktop/natamux.json
 ```
 
-Saves the support bundle (`GET /support-bundle`) to `natamux-support-bundle.json`, or the `--out` file, readable only by you. It holds the versions, OS, uptime, the security state, the number of tasks in each state and the last 200 daemon log lines with secrets masked and typed input left out. It holds no task text, events or environment. Read it before you send it. The token of a task terminal gets 403.
+Saves the support bundle (`GET /support-bundle`) to `natamux-support-bundle.json`, or the `--out` file, readable only by you. It holds the versions, OS, uptime, the security state, the number of tasks in each state and the last 200 daemon log lines with secrets masked and typed input left out (only for the app's own daemon, not one you start by hand). It holds no task text, events or environment. Read it before you send it. The token of a task terminal gets 403.
 
 ## purge-data
 
@@ -214,7 +214,7 @@ natamux purge-data
 natamux purge-data --yes
 ```
 
-Removes Natamux's task data from this machine: the task files, events, screens and attachments, the index, the logs, the launch scripts, the sandbox folders, and the app's token and port files. Worktrees and settings stay. Without `--yes` it lists what it would remove. It refuses while a worktree in the data folder has uncommitted or untracked files (and lists them), while the app's daemon runs, and in a task's terminal. It needs no token. Running it again changes nothing. See the [data inventory](https://github.com/lenhatthanh20/natamux/blob/main/docs/data-inventory.md).
+Removes Natamux's task data from this machine: the task files, events, screens and attachments, the index, the logs, the launch scripts, the sandbox folders, and the app's token and port files. Worktrees and settings stay. Without `--yes` it lists what it would remove. It refuses while a worktree in the data folder has uncommitted or untracked files (and lists them), while the app's daemon runs, in a task's terminal, and when the data folder is not an absolute path or holds no `index.sqlite`. It needs no token. Running it again changes nothing. See the [data inventory](https://github.com/lenhatthanh20/natamux/blob/main/docs/data-inventory.md).
 
 ## hooks and hook
 

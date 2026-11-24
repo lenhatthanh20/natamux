@@ -142,3 +142,61 @@ fn the_view_tells_mode_backend_and_why() {
     let ready = isolation_in(root.path(), Ok(5)).view();
     assert_eq!((ready.ok, ready.abi), (true, Some(5)));
 }
+
+#[test]
+fn a_task_in_a_main_checkout_is_refused_while_isolation_is_on() {
+    // T-0375 R7-1: its `.git` folder, which the daemon's git reads, is in the agent's reach.
+    let root = TempDir::new("iso-main");
+    std::fs::create_dir_all(root.path().join("wt/.git")).unwrap();
+    let isolation = isolation_in(root.path(), Ok(4));
+    let error = isolation
+        .isolate_shell(&mut options(root.path(), "T-1"))
+        .unwrap_err();
+    assert_eq!(error.to_string(), MAIN_CHECKOUT_REASON);
+    let mut command = Command::new("true");
+    let worktree = root.path().join("wt");
+    let error = isolation
+        .isolate_command(&mut command, &worktree, None)
+        .unwrap_err();
+    assert_eq!(error.to_string(), MAIN_CHECKOUT_REASON);
+}
+
+#[test]
+fn a_worktree_there_at_the_start_gets_its_checked_git_folders_pinned() {
+    // T-0375 R7-1: after a restart, before the daemon's first git call in it.
+    let (root, repo) = natamux_git::test_support::test_repo();
+    let worktree = root.path().join("T-1");
+    let path = worktree.to_string_lossy().into_owned();
+    natamux_git::test_support::run_git(&repo, &["worktree", "add", "-q", "-b", "t-1", &path]);
+    let isolation = isolation_in(root.path(), Ok(4));
+    isolation.pin_worktree("T-1", &worktree);
+    let (_, pinned) = natamux_core::security::pinned_git_dirs(&worktree).unwrap();
+    assert_eq!(pinned, natamux_git::exec::linked_git_dirs(&worktree));
+    assert!(pinned.is_some());
+}
+
+#[test]
+fn a_fake_repo_in_the_shared_refs_is_refused_at_the_start() {
+    // T-0375 review 1: the agent writes `refs/heads`, and the daemon was off while it pointed
+    // `.git` at a repo built there.
+    let (root, repo) = natamux_git::test_support::test_repo();
+    let worktree = root.path().join("T-1");
+    let path = worktree.to_string_lossy().into_owned();
+    natamux_git::test_support::run_git(&repo, &["worktree", "add", "-q", "-b", "t-1", &path]);
+    let fake = std::fs::canonicalize(repo.join(".git"))
+        .unwrap()
+        .join("refs/heads/x");
+    let git_dir = fake.join("worktrees/T-1");
+    for dir in [&git_dir, &fake.join("objects"), &fake.join("refs")] {
+        std::fs::create_dir_all(dir).unwrap();
+    }
+    std::fs::write(fake.join("HEAD"), "ref: refs/heads/t-1\n").unwrap();
+    std::fs::write(git_dir.join("commondir"), "../..\n").unwrap();
+    let dot_git = worktree.join(".git");
+    std::fs::write(git_dir.join("gitdir"), dot_git.to_string_lossy().as_bytes()).unwrap();
+    std::fs::write(&dot_git, format!("gitdir: {}\n", git_dir.display())).unwrap();
+    assert!(natamux_git::exec::linked_git_dirs(&worktree).is_some());
+    isolation_in(root.path(), Ok(4)).pin_worktree("T-1", &worktree);
+    let (_, pinned) = natamux_core::security::pinned_git_dirs(&worktree).unwrap();
+    assert_eq!(pinned, None);
+}

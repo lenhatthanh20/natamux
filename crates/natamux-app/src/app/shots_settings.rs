@@ -1,7 +1,7 @@
 //! Screen 7's `--shot` states: the palettes, the shortcut sheet, the account menu, the Settings
 //! page (T-0174) with its app pages, a search and a project's tabs, the Projects dialog, Sign in,
-//! the app update in the status bar and in Settings (T-0214), the repo trust dialog, and What's
-//! new (T-0301).
+//! the app update in the status bar and in Settings (T-0214), the repo trust dialog, What's new
+//! (T-0301), and the states of `shots_trust`.
 
 use std::time::Duration;
 
@@ -14,6 +14,7 @@ use super::options::Shot;
 use super::settings_agents::open_agent_sheet;
 use super::settings_rules::SettingsPage;
 use super::shortcut_sheet;
+use super::shots_trust;
 use super::update::show_for_shot;
 use super::update_state::UpdateState;
 use super::whats_new;
@@ -96,12 +97,13 @@ pub fn is_screen7_shot(shot: Shot) -> bool {
             | Shot::SettingsUpdateReady
             | Shot::RepoTrustDialog
             | Shot::WhatsNew
-    )
+    ) || shots_trust::is_trust_shot(shot)
 }
 
 /// The fake's data of the shot, before the window watches it.
 pub fn prepare(shot: Shot) {
     fake_daemon::shared().set_gh_missing(shot == Shot::ImportIssues);
+    shots_trust::prepare(shot);
     if matches!(shot, Shot::RepoTrustDialog | Shot::ProjectSettingsTrust) {
         fake_daemon::shared().distrust_repo(PROJECT);
     }
@@ -232,7 +234,7 @@ fn enter(
                 review(&source, PROJECT, &name, None, window, cx);
             }
         }
-        _ => {}
+        _ => shots_trust::enter(shot, &dashboard, window, cx),
     }
     None
 }

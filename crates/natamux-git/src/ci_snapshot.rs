@@ -73,19 +73,62 @@ pub fn working_files(worktree: &Path) -> Result<WorkingFiles, GitError> {
     })
 }
 
-/// The commits of HEAD that no branch of a remote has yet.
-pub fn new_commits(worktree: &Path) -> Result<u64, GitError> {
-    let count = run(
-        worktree,
-        &["rev-list", "--count", "HEAD", "--not", "--remotes"],
-    )?;
-    Ok(count.parse().unwrap_or(0))
+/// HEAD minus every remote branch. Natamux's own CI branches do not count as on the remote: they
+/// hold copies of the task's work, not reviewed code.
+fn not_on_a_remote() -> [String; 4] {
+    [
+        "HEAD".into(),
+        "--not".into(),
+        format!("--exclude=*/{CI_REF_PREFIX}*"),
+        "--remotes".into(),
+    ]
 }
 
-/// The push URL of origin, without a user name or password.
+/// The commits of HEAD that no branch of a remote has yet.
+pub fn new_commits(worktree: &Path) -> Result<u64, GitError> {
+    let range = not_on_a_remote();
+    let mut args = vec!["rev-list", "--count"];
+    args.extend(range.iter().map(String::as_str));
+    let count = run(worktree, &args)?;
+    count
+        .parse()
+        .map_err(|_| GitError(format!("git rev-list gave {count:?}, not a count")))
+}
+
+/// The paths those commits change, each once. A merge counts only what differs from all its
+/// parents, so a merged branch of the remote is not listed again.
+pub fn new_commit_paths(worktree: &Path) -> Result<Vec<String>, GitError> {
+    let range = not_on_a_remote();
+    let mut args = vec!["log", "--cc", "--name-only", "-z"];
+    args.extend(["--no-renames", "--format="]);
+    args.extend(range.iter().map(String::as_str));
+    let mut paths = names(&git_bytes(worktree, &args)?);
+    paths.sort();
+    paths.dedup();
+    Ok(paths)
+}
+
+/// Every push URL of origin: a push to the name goes to each.
+fn push_urls(worktree: &Path) -> Result<Vec<String>, GitError> {
+    let out = run(
+        worktree,
+        &["remote", "get-url", "--push", "--all", "origin"],
+    )?;
+    Ok(out.lines().map(str::to_string).collect())
+}
+
+fn more_than_one(count: usize) -> GitError {
+    refused(format!(
+        "origin has {count} push URLs; a CI push goes to one."
+    ))
+}
+
+/// The push URL of origin, without a user name or password. More than one is an error.
 pub fn remote_url(worktree: &Path) -> Result<String, GitError> {
-    let url = run(worktree, &["remote", "get-url", "--push", "origin"])?;
-    Ok(without_userinfo(&url))
+    match push_urls(worktree)?.as_slice() {
+        [url] => Ok(without_userinfo(url)),
+        urls => Err(more_than_one(urls.len())),
+    }
 }
 
 /// `https://user:token@host/x` gives `https://host/x`. The scp form (`git@host:x`) has no
@@ -136,9 +179,14 @@ fn refused(reason: String) -> GitError {
 }
 
 /// Checks an approval against the worktree now, with no network call: the mode still allows the
-/// push, origin is the approved remote, the commit holds the approved tree, and the branch is a CI
-/// branch.
+/// push, origin has one push URL and it is the approved remote, the commit holds the approved
+/// tree, and the branch is a CI branch.
 pub fn verify_approved(worktree: &Path, push: &ApprovedPush) -> Result<(), GitError> {
+    approved_url(worktree, push).map(drop)
+}
+
+/// `verify_approved`, giving the push URL it checked (with its userinfo, which git may need).
+fn approved_url(worktree: &Path, push: &ApprovedPush) -> Result<String, GitError> {
     let now = ci_mode();
     if push.mode == CiMode::Forbid || now == CiMode::Forbid {
         return Err(refused("Strict mode forbids CI pushes.".into()));
@@ -158,7 +206,12 @@ pub fn verify_approved(worktree: &Path, push: &ApprovedPush) -> Result<(), GitEr
     }
     checked_ref(push.ref_name)?;
     // A repository without origin has no URL; the push then fails on its own.
-    let remote = remote_url(worktree).unwrap_or_default();
+    let urls = push_urls(worktree).unwrap_or_default();
+    if urls.len() > 1 {
+        return Err(more_than_one(urls.len()));
+    }
+    let url = urls.into_iter().next().unwrap_or_default();
+    let remote = without_userinfo(&url);
     if remote != push.remote {
         return Err(refused(format!(
             "the remote changed since the approval (approved {:?}, now {remote:?}).",
@@ -172,13 +225,14 @@ pub fn verify_approved(worktree: &Path, push: &ApprovedPush) -> Result<(), GitEr
             push.commit
         )));
     }
-    Ok(())
+    Ok(url)
 }
 
-/// Pushes exactly the approved commit to its CI branch, after `verify_approved`.
+/// Pushes exactly the approved commit to its CI branch, after `verify_approved`, to the one URL
+/// it checked.
 pub fn push_approved(worktree: &Path, push: &ApprovedPush) -> Result<(), GitError> {
-    verify_approved(worktree, push)?;
-    push_ref(worktree, push.commit, push.ref_name)
+    let url = approved_url(worktree, push)?;
+    push_ref(worktree, push.commit, push.ref_name, &url)
 }
 
 #[cfg(test)]

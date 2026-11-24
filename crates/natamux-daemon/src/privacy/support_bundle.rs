@@ -105,10 +105,15 @@ pub fn build(input: BundleInput<'_>) -> SupportBundle {
     }
 }
 
-/// The daemon log the app writes beside the data folder (`<app>/logs/daemon.log`).
+/// The token file the app writes into its folder (natamux-client config).
+const APP_TOKEN_FILE: &str = "daemon-token";
+
+/// The daemon log the app writes beside the data folder (`<app>/logs/daemon.log`). Only when
+/// the parent folder is the app's: for a daemon run by hand it may be any other program's log.
 pub fn daemon_log_path(data_dir: &Path) -> Option<PathBuf> {
     data_dir
         .parent()
+        .filter(|app| app.join(APP_TOKEN_FILE).is_file())
         .map(|app| app.join("logs").join("daemon.log"))
 }
 

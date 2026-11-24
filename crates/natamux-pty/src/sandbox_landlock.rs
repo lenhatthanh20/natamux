@@ -21,6 +21,8 @@ const CREATE_RULESET_VERSION: libc::c_long = 1;
 const RULE_PATH_BENEATH: libc::c_long = 1;
 const RULE_NET_PORT: libc::c_long = 2;
 const CONNECT_TCP: u64 = 1 << 1;
+const SCOPE_ABSTRACT_UNIX_SOCKET: u64 = 1 << 0;
+const SCOPE_SIGNAL: u64 = 1 << 1;
 const NO_FLAGS: libc::c_long = 0;
 const ON: libc::c_ulong = 1;
 const UNUSED: libc::c_ulong = 0;
@@ -43,6 +45,8 @@ struct RulesetAttr {
     handled_access_fs: u64,
     /// ABI 4: the size passed stops before this field when TCP is not handled.
     handled_access_net: u64,
+    /// ABI 6: the size passed stops before this field on an older kernel.
+    scoped: u64,
 }
 
 #[repr(C)]
@@ -110,15 +114,24 @@ pub fn build(plan: &IsolationPlan) -> io::Result<Ruleset> {
     }
     let handled = handled(abi);
     let tcp = plan.tcp_connect.as_deref().filter(|_| abi >= 4);
+    // Signals and abstract unix sockets stay inside the sandbox; the daemon can still signal in.
+    let scoped = abi >= 6;
     let attr = RulesetAttr {
         handled_access_fs: handled,
         handled_access_net: if tcp.is_some() { CONNECT_TCP } else { 0 },
+        scoped: if scoped {
+            SCOPE_ABSTRACT_UNIX_SOCKET | SCOPE_SIGNAL
+        } else {
+            0
+        },
     };
-    // An older kernel knows only the first field.
-    let size = if tcp.is_some() {
+    // An older kernel knows only the fields before the ones it has no ABI for.
+    let size = if scoped {
         std::mem::size_of::<RulesetAttr>()
+    } else if tcp.is_some() {
+        std::mem::offset_of!(RulesetAttr, scoped)
     } else {
-        std::mem::size_of::<u64>()
+        std::mem::offset_of!(RulesetAttr, handled_access_net)
     };
     // SAFETY: the attribute lives for the call and its size is given.
     let fd = unsafe {
@@ -239,7 +252,9 @@ mod tests {
     #[test]
     fn the_packed_rule_has_the_size_the_kernel_reads() {
         assert_eq!(std::mem::size_of::<PathBeneathAttr>(), 12);
-        assert_eq!(std::mem::size_of::<RulesetAttr>(), 16);
+        assert_eq!(std::mem::size_of::<RulesetAttr>(), 24);
+        assert_eq!(std::mem::offset_of!(RulesetAttr, handled_access_net), 8);
+        assert_eq!(std::mem::offset_of!(RulesetAttr, scoped), 16);
         assert_eq!(std::mem::size_of::<NetPortAttr>(), 16);
     }
 }

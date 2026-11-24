@@ -76,6 +76,53 @@ fn an_outside_edit_while_running_keeps_the_stricter_state_and_warns() {
 }
 
 #[test]
+fn changing_both_files_while_running_is_still_an_outside_change() {
+    let root = folder("both");
+    let source = Source::open(&root);
+    source.write(STRICT).unwrap();
+    for name in [FILE_NAME, WRITTEN_NAME] {
+        std::fs::write(root.join(name), OFF).unwrap();
+    }
+    source.check_now();
+    let state = source.current();
+    assert!(state.mode.is_strict());
+    assert_eq!(state.warning.as_deref(), Some(OUTSIDE_CHANGE_WARNING));
+    for name in [FILE_NAME, WRITTEN_NAME] {
+        std::fs::remove_file(root.join(name)).unwrap();
+    }
+    source.check_now();
+    let state = source.current();
+    assert!(state.mode.is_strict());
+    assert_eq!(state.warning.as_deref(), Some(OUTSIDE_CHANGE_WARNING));
+    // The daemon's own save still turns Strict off, with no warning.
+    let saved = source.write(OFF).unwrap();
+    assert_eq!(saved, SecurityState::default());
+    source.check_now();
+    assert_eq!(source.current(), SecurityState::default());
+}
+
+#[test]
+fn a_poisoned_lock_keeps_the_last_state() {
+    let root = folder("poisoned");
+    let source = Source::open(&root);
+    source.write(STRICT).unwrap();
+    let generation = source.generation();
+    let poisoner = std::thread::scope(|scope| {
+        scope
+            .spawn(|| {
+                let _inner = source.inner.lock();
+                panic!("poison the lock");
+            })
+            .join()
+    });
+    assert!(poisoner.is_err());
+    assert!(source.inner.is_poisoned());
+    assert!(source.current().mode.is_strict());
+    assert_eq!(source.check_now(), generation);
+    assert_eq!(source.generation(), generation);
+}
+
+#[test]
 fn an_outside_edit_found_at_start_keeps_the_stricter_state_and_warns() {
     let root = folder("start");
     Source::open(&root).write(STRICT).unwrap();

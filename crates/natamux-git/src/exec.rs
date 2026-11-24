@@ -9,6 +9,7 @@ use std::time::Duration;
 
 use natamux_core::js::js_trim;
 use natamux_core::privacy::redact::redact_text;
+use natamux_core::security::{Egress, network_for};
 
 use crate::process::{CapturedBytes, capture_bytes, text_of};
 
@@ -107,13 +108,14 @@ pub(crate) fn run_checked(
     if let Some(refused) = crate::offline::backstop(cwd, args, pinned) {
         return Err(refused);
     }
+    let env = call_env(cwd, env);
     let mut command = Command::new("git");
-    natamux_core::security::harden_git_in(&mut command, cwd, env);
     command
-        .args(args)
-        .current_dir(cwd)
         .env("GIT_TERMINAL_PROMPT", "0")
         .envs(env.iter().map(|(key, value)| (key, value)));
+    // After the caller's variables: the pinned git folders of an isolated worktree must win.
+    natamux_core::security::harden_git_in(&mut command, cwd, &env);
+    command.args(args).current_dir(cwd);
     natamux_core::login_path::apply(&mut command);
     note_spawn();
     let ran = capture_bytes(
@@ -130,6 +132,37 @@ pub(crate) fn run_checked(
         args.first().unwrap_or(&""),
         error_text(&ran, args)
     ))))
+}
+
+/// `env`, and no lazy fetch of a partial clone and no LFS download while the network is closed:
+/// both reach a remote from commands the backstop does not know.
+pub(crate) fn call_env(cwd: &Path, env: &[(String, String)]) -> Vec<(String, String)> {
+    let mut env = env.to_vec();
+    if natamux_core::offline::offline() || network_for(cwd).egress != Egress::Open {
+        for key in ["GIT_NO_LAZY_FETCH", "GIT_LFS_SKIP_SMUDGE"] {
+            env.push((key.to_string(), "1".to_string()));
+        }
+    }
+    env
+}
+
+/// The variables of a program that runs git in `cwd` by itself (gh): while the hardening is on,
+/// that git gets the pinned git folders of an isolated worktree, no hook, no fsmonitor and no
+/// system config.
+pub fn tool_git_env(cwd: &Path) -> Vec<(String, String)> {
+    let config = natamux_core::security::hardening_config();
+    if config.is_empty() {
+        return Vec::new();
+    }
+    let entries: Vec<(&str, &str)> = config
+        .iter()
+        .map(|(key, value)| (key.as_str(), value.as_str()))
+        .collect();
+    let count = std::env::var("GIT_CONFIG_COUNT").ok();
+    let mut env = with_git_config(count.as_deref(), &entries);
+    env.push(("GIT_CONFIG_NOSYSTEM".to_string(), "1".to_string()));
+    env.extend(natamux_core::security::git_pins(cwd));
+    env
 }
 
 /// `errorText`: why a git call failed, as Node words it.
@@ -180,16 +213,7 @@ pub fn git_blob_limited(worktree: &Path, spec: &str, max: u64) -> Result<BlobRea
     if spec.contains('\n') {
         return Err(fail(format!("Not a valid object name {spec}")));
     }
-    let mut command = Command::new("git");
-    natamux_core::security::harden_git(&mut command);
-    command
-        .args(["cat-file", "--batch"])
-        .current_dir(worktree)
-        .env("GIT_TERMINAL_PROMPT", "0")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null());
-    natamux_core::login_path::apply(&mut command);
+    let mut command = blob_command(worktree);
     note_spawn();
     let mut child = command.spawn().map_err(|error| {
         if error.kind() == std::io::ErrorKind::NotFound {
@@ -206,6 +230,23 @@ pub fn git_blob_limited(worktree: &Path, spec: &str, max: u64) -> Result<BlobRea
         Some(read) => Ok(read),
         None => Err(fail(format!("Not a valid object name {spec}"))),
     }
+}
+
+/// The `git cat-file --batch` of `git_blob_limited`. A base blob that a partial clone lacks
+/// would otherwise be fetched from the remote while the network is closed.
+fn blob_command(worktree: &Path) -> Command {
+    let mut command = Command::new("git");
+    natamux_core::security::harden_git_at(&mut command, worktree);
+    command
+        .args(["cat-file", "--batch"])
+        .current_dir(worktree)
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .envs(call_env(worktree, &[]))
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+    natamux_core::login_path::apply(&mut command);
+    command
 }
 
 // None: git says the object is missing.
@@ -238,8 +279,17 @@ fn read_blob(child: &mut Child, spec: &str, max: u64) -> std::io::Result<Option<
 }
 
 /// The git folder of a checkout or linked worktree, and the folder its worktrees share. None
-/// when `worktree` has no `.git` of its own (a subfolder) or it is not one this knows.
+/// when `worktree` has no `.git` of its own (a subfolder) or it is not one this knows. In an
+/// isolated worktree, its subfolders too, the pinned folders: the `.git` file is the agent's.
 pub fn git_dirs(worktree: &Path) -> Option<(PathBuf, PathBuf)> {
+    match natamux_core::security::pinned_git_dirs(worktree) {
+        Some((_, pinned)) => pinned,
+        None => dot_git_dirs(worktree),
+    }
+}
+
+/// What the `.git` of `worktree` names.
+fn dot_git_dirs(worktree: &Path) -> Option<(PathBuf, PathBuf)> {
     let dot_git = worktree.join(".git");
     let meta = std::fs::metadata(&dot_git).ok()?;
     if meta.is_dir() {
@@ -264,7 +314,7 @@ pub fn git_dirs(worktree: &Path) -> Option<(PathBuf, PathBuf)> {
 /// must name this worktree's `.git` back. None for a checkout with its own `.git` folder.
 pub fn linked_git_dirs(worktree: &Path) -> Option<(PathBuf, PathBuf)> {
     let real = |path: &Path| std::fs::canonicalize(path).ok();
-    let (git_dir, common) = git_dirs(worktree)?;
+    let (git_dir, common) = dot_git_dirs(worktree)?;
     let git_dir = real(&git_dir)?;
     let parent = git_dir.parent()?;
     if parent.file_name()? != "worktrees" {

@@ -420,7 +420,7 @@ impl Store {
     pub fn set_ci(&mut self, task_id: &str, stage_id: &str, on: bool) -> TaskResult<Task> {
         let task = self.get_task(task_id)?;
         let (_, stage) = self.stage_of(&task, stage_id)?;
-        crate::tasks::records_ci::refuse_ci_on(on)?;
+        crate::tasks::records_ci::refuse_ci_on(&self.data_dir(), task_id, on)?;
         if on && !offers_ci(&stage) {
             return Err(TaskError::Edit(format!(
                 "The {} stage cannot be checked on CI. Turn it on for the stage in the project settings first",

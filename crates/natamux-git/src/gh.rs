@@ -12,7 +12,7 @@ use natamux_proto::tasks::task::PullRequestStatus;
 use serde_json::Value;
 
 use crate::commit_push::utf16_prefix;
-use crate::exec::{MAX_OUTPUT_BYTES, note_spawn};
+use crate::exec::{MAX_OUTPUT_BYTES, note_spawn, tool_git_env};
 use crate::process::{Captured, capture};
 
 /// A gh that hangs, for example after the machine sleeps, must not block every later PR check.
@@ -63,10 +63,12 @@ pub fn run_gh_with_timeout(
     args: &[String],
     timeout: Duration,
 ) -> Result<String, GitHubError> {
-    let pinned = crate::gh_egress::gh_target(cwd, args)?;
+    let pinned = crate::gh_egress::gh_target(cwd, args);
+    let pinned = pinned.map_err(|reason| GitHubError::new(&reason))?;
     let mut command = Command::new("gh");
     command
         .envs(pinned)
+        .envs(tool_git_env(cwd))
         .args(args)
         .current_dir(cwd)
         .env("GH_PROMPT_DISABLED", "1")

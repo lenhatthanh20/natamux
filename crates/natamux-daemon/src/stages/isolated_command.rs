@@ -11,7 +11,8 @@ use crate::terminals::isolation::Isolation;
 
 pub fn isolated_run_command(isolation: Arc<Isolation>) -> RunCommand {
     Arc::new(move |command: &str, cwd: &Path| {
-        let prepare = |process: &mut std::process::Command| isolation.isolate_command(process, cwd);
+        let prepare =
+            |process: &mut std::process::Command| isolation.isolate_command(process, cwd, None);
         run_shell_command_with(
             command,
             cwd,

@@ -3,16 +3,16 @@
 use std::path::Path;
 
 use natamux_agents::trust::untrust_workspace;
-use natamux_core::security::{CiMode, ci_mode};
+use natamux_core::security::{CiMode, ci_mode, unpin_git_dirs};
 use natamux_git::branches::delete_branch_force;
 use natamux_git::changes::list_changes;
 use natamux_git::ci_snapshot::unpin_task;
 use natamux_git::commit_push::delete_remote_ref;
 use natamux_git::worktrees::{WorktreeState, has_submodules, remove_worktree, worktree_state};
 use natamux_proto::tasks::task::Task;
-use natamux_stages::ci::ci_branch_of;
 use natamux_stages::files::archive_stage_files;
 
+use crate::stages::ci_approval::ci_branches_of;
 use crate::tasks::records::WorkspaceChange;
 use crate::workspaces::branch_name::delete_finished_branch;
 use crate::workspaces::errors::{RemoveWorkspaceResult, WorkspaceError, WorkspaceResult};
@@ -75,6 +75,8 @@ impl WorkspaceService {
         // A removed project must not block the delete of the task.
         let repo_dir = match self.repo_dir_of(task.repo.as_deref()) {
             Ok(dir) => dir,
+            // With no branch nothing was to be deleted, so nothing failed.
+            Err(_) if task.branch.is_none() => return Ok(()),
             Err(error) => {
                 (self.log)(&format!(
                     "Could not delete the branch of {task_id}: {error}"
@@ -82,13 +84,7 @@ impl WorkspaceService {
                 return Ok(());
             }
         };
-        // The pins are Natamux's own refs, so they go whatever the task used; a task that is not
-        // finished may hold them too.
-        if let Err(error) = unpin_task(&repo_dir, task_id) {
-            (self.log)(&format!(
-                "Could not remove the CI pins of {task_id}: {error}"
-            ));
-        }
+        self.delete_ci_refs_of(task, &repo_dir);
         let Some(branch) = &task.branch else {
             return Ok(());
         };
@@ -101,17 +97,31 @@ impl WorkspaceService {
             return Ok(());
         }
         delete_branch_force(&repo_dir, branch);
+        Ok(())
+    }
+
+    /// The pins are Natamux's own refs, so they go whatever the task used; a task that is not
+    /// finished may hold them too. The CI branches of origin go when the task ran a CI round,
+    /// whatever its CI setting is now; a task that never did makes no remote call.
+    fn delete_ci_refs_of(&self, task: &Task, repo_dir: &Path) {
+        let task_id = task.id.as_str();
+        if let Err(error) = unpin_task(repo_dir, task_id) {
+            (self.log)(&format!(
+                "Could not remove the CI pins of {task_id}: {error}"
+            ));
+        }
         // Under `ciPush: forbid` Natamux makes no remote call for CI at all.
-        let forbid = ci_mode() == CiMode::Forbid;
-        if !forbid && task.ci_stages.as_ref().is_some_and(|s| !s.is_empty()) {
-            let ref_name = ci_branch_of(branch);
-            if let Err(error) = delete_remote_ref(&repo_dir, &ref_name) {
+        if ci_mode() == CiMode::Forbid {
+            return;
+        }
+        let events = self.tasks.list_events(task_id).unwrap_or_default();
+        for ref_name in ci_branches_of(&events, task.branch.as_deref()) {
+            if let Err(error) = delete_remote_ref(repo_dir, &ref_name) {
                 (self.log)(&format!(
                     "Could not delete the CI branch {ref_name} of {task_id}: {error}"
                 ));
             }
         }
-        Ok(())
     }
 
     fn remove_with(
@@ -164,6 +174,8 @@ impl WorkspaceService {
             if let Some(paths) = &self.trust_paths {
                 untrust_workspace(&workspace, paths);
             }
+            // A worktree made again at this path must not keep the old pin, refused or not.
+            unpin_git_dirs(folder);
 
             let branch_deleted = match (&task.branch, rule) {
                 // An old record may hold a main branch.

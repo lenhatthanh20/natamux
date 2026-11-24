@@ -117,6 +117,22 @@ fn a_pending_approval_ends_with_its_answer_or_a_new_start() {
 }
 
 #[test]
+fn the_ci_branches_are_those_of_every_round_and_none_without_a_round() {
+    let events = [
+        stored(1, "stage.ci-approved", json!({ "branch": "natamux-ci/a" })),
+        stored(2, "stage.ci-started", json!({ "branch": "natamux-ci/a" })),
+        stored(3, "stage.ci-approved", json!({ "branch": "natamux-ci/b" })),
+        stored(4, "stage.ci-started", json!({ "branch": "natamux-ci/" })),
+        stored(5, "stage.started", json!({ "branch": "main" })),
+    ];
+    assert_eq!(
+        ci_branches_of(&events, Some("c")),
+        ["natamux-ci/a", "natamux-ci/b", "natamux-ci/c"]
+    );
+    assert!(ci_branches_of(&events[4..], Some("c")).is_empty());
+}
+
+#[test]
 fn cleaning_removes_the_pins_and_never_calls_the_remote_under_forbid() {
     let (root, dir) = dirty_repo();
     let remote = bare_origin(root.path());
@@ -125,12 +141,13 @@ fn cleaning_removes_the_pins_and_never_calls_the_remote_under_forbid() {
     run_git(&dir, &["push", "-q", "origin", &target]);
     pin(&dir, "T-1", "implement", head.trim()).unwrap();
 
-    clean_ci_refs(&dir, "T-1", "natamux-ci/t-1", true);
+    let refs = ["natamux-ci/t-1".to_string()];
+    clean_ci_refs(&dir, "T-1", &refs, true);
 
     assert_eq!(run_git(&dir, &["for-each-ref", "refs/natamux/ci/"]), "");
     let left = run_git(&remote, &["for-each-ref", "--format=%(refname)"]);
     assert_eq!(left.trim(), "refs/heads/natamux-ci/t-1");
 
-    clean_ci_refs(&dir, "T-1", "natamux-ci/t-1", false);
+    clean_ci_refs(&dir, "T-1", &refs, false);
     assert_eq!(run_git(&remote, &["for-each-ref"]), "");
 }

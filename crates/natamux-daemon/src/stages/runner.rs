@@ -19,7 +19,6 @@ use natamux_proto::stages::schema::{Stage, StageKind, Step};
 use natamux_proto::tasks::task::{Task, TaskState};
 use natamux_proto::terminals::list::TerminalLane;
 use natamux_stages::actions::{ENDS_STAGE, lane_state};
-use natamux_stages::ci::ci_branch_of;
 use natamux_stages::files::{
     archive_stage_files, exclude_stage_dir, restore_stage_files, working_dir,
 };
@@ -29,7 +28,7 @@ use natamux_store::task_files::STAGE_DIR;
 use serde_json::{Value, json};
 
 use crate::shared::event_bus::DaemonMessage;
-use crate::stages::ci_approval::clean_ci_refs;
+use crate::stages::ci_approval::{ci_branches_of, clean_ci_refs};
 use crate::stages::errors::{StageError, StageResult};
 use crate::stages::run::{EventInput, StageRun, StageRunOptions, Work, key, step_in};
 use crate::tasks::errors::TaskError;
@@ -154,23 +153,20 @@ impl StageRun {
         }
     }
 
-    /// The CI branch only held snapshots for checks. A finished task that used CI deletes it once,
-    /// in the project folder, with its local pins. Gone already, or offline: only logged.
+    /// The CI branches only held snapshots for checks. A finished task deletes them once, in the
+    /// project folder, with its local pins, whatever its CI setting is now. Gone already, or
+    /// offline: only logged.
     fn delete_ci_branch(&self, task: &Task) {
-        let used_ci = task
-            .ci_stages
-            .as_ref()
-            .is_some_and(|stages| !stages.is_empty());
-        let (true, true, Some(branch)) = (task.state.is_finished(), used_ci, &task.branch) else {
-            return;
-        };
-        if !self.state().ci_cleaned.insert(task.id.clone()) {
+        if !task.state.is_finished() || !self.state().ci_cleaned.insert(task.id.clone()) {
             return;
         }
-        let (task_id, ref_name) = (task.id.clone(), ci_branch_of(branch));
+        let (task_id, branch) = (task.id.clone(), task.branch.clone());
         let folder = self.repo_path(task);
         let forbid = ci_mode() == CiMode::Forbid;
-        self.background(move |_| clean_ci_refs(&folder, &task_id, &ref_name, forbid));
+        self.background(move |run| {
+            let refs = ci_branches_of(&run.events(&task_id), branch.as_deref());
+            clean_ci_refs(&folder, &task_id, &refs, forbid);
+        });
     }
 
     fn archive(&self, task: &Task) {

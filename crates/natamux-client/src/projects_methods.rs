@@ -33,19 +33,25 @@ impl Client {
 }
 
 impl Client {
-    /// The project's commands for the approval dialog.
-    pub fn repo_trust(&self, repo_id: &str) -> Answer<RepoTrustView> {
-        let repo_id = repo_id.to_string();
-        self.with_config(
-            move |config| async move { projects::api::repo_trust(&config, &repo_id).await },
-        )
+    /// The project's commands for the approval dialog. `task`: read in its worktree.
+    pub fn repo_trust(&self, repo_id: &str, task: Option<&str>) -> Answer<RepoTrustView> {
+        let (repo_id, task) = (repo_id.to_string(), task.map(str::to_string));
+        self.with_config(move |config| async move {
+            projects::api::repo_trust(&config, &repo_id, task.as_deref()).await
+        })
     }
 
     /// `hash`: the one the dialog showed. A 409 means the commands changed since.
-    pub fn approve_repo(&self, repo_id: &str, hash: &str) -> Answer<RepoTrustView> {
+    pub fn approve_repo(
+        &self,
+        repo_id: &str,
+        hash: &str,
+        task: Option<&str>,
+    ) -> Answer<RepoTrustView> {
         let (repo_id, hash) = (repo_id.to_string(), hash.to_string());
+        let task = task.map(str::to_string);
         self.with_config(move |config| async move {
-            projects::api::approve_repo(&config, &repo_id, &hash).await
+            projects::api::approve_repo(&config, &repo_id, &hash, task.as_deref()).await
         })
     }
 }

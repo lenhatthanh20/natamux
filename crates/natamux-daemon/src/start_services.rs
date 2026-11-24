@@ -25,6 +25,7 @@ use crate::shared::scheduler::Scheduler;
 use crate::stages::runner::StageRunner;
 use crate::tasks::errors::TaskError;
 use crate::tasks::service::{TaskService, TaskServiceOptions, is_task_ended};
+use crate::terminals::isolation::Isolation;
 use crate::terminals::limits::MAIN_TERMINAL;
 use crate::terminals::open_shells::OpenShells;
 use crate::terminals::service::TerminalService;
@@ -216,6 +217,21 @@ pub(super) fn idle_pause(
             }
         }),
     })
+}
+
+/// Pins the git folders of each task worktree before the daemon's first git call in it: its
+/// agent may have rewritten `.git` while the daemon was off. A main checkout is never isolated.
+pub(super) fn pin_worktrees(store: &TaskStore, isolation: Option<&Isolation>) {
+    let Some(isolation) = isolation else {
+        return;
+    };
+    for task in store.tasks.list_tasks(None).unwrap_or_default() {
+        if let Some(workspace) = task.workspace.as_deref()
+            && task.main_checkout != Some(true)
+        {
+            isolation.pin_worktree(&task.id, Path::new(workspace));
+        }
+    }
 }
 
 fn io_error(error: TaskError) -> std::io::Error {

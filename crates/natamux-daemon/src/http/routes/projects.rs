@@ -77,6 +77,12 @@ async fn run(
     status: StatusCode,
     work: impl FnOnce() -> Result<Option<Value>, RepoError> + Send + 'static,
 ) -> Answer {
+    // A test that forced a security mode sees it on the blocking thread too.
+    let forced = natamux_core::security::forced();
+    let work = move || {
+        let _mode = forced.map(natamux_core::security::force);
+        work()
+    };
     match tokio::task::spawn_blocking(work).await {
         Ok(Ok(Some(body))) => json_answer(status, &body),
         Ok(Ok(None)) => {

@@ -3,12 +3,27 @@
 //! runs no hook, no fsmonitor command and no `ext::` remote, and skips the system config. Before
 //! each call, `harden_git_in` also replaces every setting that names a command when it comes from
 //! the repo's own config. Process-wide: isolation is set once, at the daemon's start.
+//!
+//! An isolated worktree's `.git` file is the agent's too: its git folders, checked by the
+//! isolation plan, are pinned here and passed to git as `GIT_DIR`, `GIT_COMMON_DIR` and
+//! `GIT_WORK_TREE`, so git never follows that file.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock, PoisonError};
 
 static EMPTY_HOOKS: OnceLock<PathBuf> = OnceLock::new();
+
+/// An isolated worktree (canonical) and its checked git folder and shared folder. None: the
+/// check failed.
+pub type Pinned = (PathBuf, Option<(PathBuf, PathBuf)>);
+static PINNED: Mutex<Vec<Pinned>> = Mutex::new(Vec::new());
+
+/// The protocols git may use while the hardening is on: no remote helper (`foo::url`,
+/// `remote.<n>.vcs`), which is a program the repo names.
+const ALLOWED_PROTOCOLS: &str = "https:ssh:file:git";
+/// What a repo `core.gitproxy` gets (see `overrides_of`).
+const NO_GIT_PROTOCOL: &str = "protocol.git.allow=never";
 
 /// The settings that name a command git may run (POSIX extended regex over git's key names).
 const COMMAND_KEYS: &str = concat!(
@@ -23,16 +38,91 @@ pub fn install_git_hardening(empty_hooks: PathBuf) {
     let _ = EMPTY_HOOKS.set(empty_hooks);
 }
 
-/// The arguments that go before git's own, while the hardening is on.
-pub fn hardening_args() -> Vec<String> {
+/// The settings of the hardening, while it is on.
+pub fn hardening_config() -> Vec<(String, String)> {
     let Some(hooks) = EMPTY_HOOKS.get() else {
         return Vec::new();
     };
-    config_args([
-        format!("core.hooksPath={}", hooks.display()),
-        "core.fsmonitor=false".to_string(),
-        "protocol.ext.allow=never".to_string(),
-    ])
+    vec![
+        ("core.hooksPath".to_string(), hooks.display().to_string()),
+        ("core.fsmonitor".to_string(), "false".to_string()),
+        ("protocol.ext.allow".to_string(), "never".to_string()),
+    ]
+}
+
+/// The arguments that go before git's own, while the hardening is on.
+pub fn hardening_args() -> Vec<String> {
+    let entries = hardening_config().into_iter();
+    config_args(entries.map(|(key, value)| format!("{key}={value}")))
+}
+
+/// Keeps the git folders that the isolation plan checked for an isolated worktree; `dirs` None:
+/// the check failed, so git there gets a git folder that does not exist. A pair checked before
+/// is never replaced, by a failed check or by another pair: the agent may have built the new one
+/// in a folder it writes. True when the pin now holds `dirs`.
+pub fn pin_git_dirs(worktree: &Path, dirs: Option<(PathBuf, PathBuf)>) -> bool {
+    let root = real(worktree);
+    let mut pinned = PINNED.lock().unwrap_or_else(PoisonError::into_inner);
+    match pinned.iter_mut().find(|(each, _)| *each == root) {
+        Some((_, old)) if old.is_none() => *old = dirs,
+        Some((_, old)) => return *old == dirs,
+        None => pinned.push((root, dirs)),
+    }
+    true
+}
+
+/// Forgets the pin of a worktree that is removed, so one made again at that path is checked anew.
+pub fn unpin_git_dirs(worktree: &Path) {
+    // The folder may be gone already: its parent names it.
+    let gone = worktree
+        .parent()
+        .zip(worktree.file_name())
+        .map(|(parent, name)| real(parent).join(name));
+    let roots = [Some(real(worktree)), gone];
+    let mut pinned = PINNED.lock().unwrap_or_else(PoisonError::into_inner);
+    pinned.retain(|(root, _)| !roots.iter().flatten().any(|each| each == root));
+}
+
+/// The isolated worktree that holds `cwd` and its pinned git folders. None when `cwd` is in no
+/// isolated worktree.
+pub fn pinned_git_dirs(cwd: &Path) -> Option<Pinned> {
+    let pinned = PINNED.lock().unwrap_or_else(PoisonError::into_inner);
+    if pinned.is_empty() {
+        return None;
+    }
+    let cwd = real(cwd);
+    pinned
+        .iter()
+        .filter(|(root, _)| cwd.starts_with(root))
+        .max_by_key(|(root, _)| root.components().count())
+        .cloned()
+}
+
+fn real(path: &Path) -> PathBuf {
+    std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+}
+
+/// The variables that pin git in `cwd` to the checked git folders, while the hardening is on.
+/// Empty when `cwd` is in no isolated worktree.
+pub fn git_pins(cwd: &Path) -> Vec<(String, String)> {
+    EMPTY_HOOKS
+        .get()
+        .map(|hooks| pins_of(hooks, cwd))
+        .unwrap_or_default()
+}
+
+fn pins_of(hooks: &Path, cwd: &Path) -> Vec<(String, String)> {
+    let text = |path: &Path| path.to_string_lossy().into_owned();
+    match pinned_git_dirs(cwd) {
+        None => Vec::new(),
+        Some((root, Some((git_dir, common)))) => vec![
+            ("GIT_DIR".to_string(), text(&git_dir)),
+            ("GIT_COMMON_DIR".to_string(), text(&common)),
+            // The top of the worktree, also for a call from a subfolder.
+            ("GIT_WORK_TREE".to_string(), text(&root)),
+        ],
+        Some((_, None)) => vec![("GIT_DIR".to_string(), text(&hooks.join("refused")))],
+    }
 }
 
 fn config_args(entries: impl IntoIterator<Item = String>) -> Vec<String> {
@@ -49,25 +139,54 @@ pub fn harden_git(command: &mut Command) {
     let args = hardening_args();
     if !args.is_empty() {
         command.args(args).env("GIT_CONFIG_NOSYSTEM", "1");
+        // A narrower list the caller set before stays.
+        if env_of(command, "GIT_ALLOW_PROTOCOL").is_none() {
+            command.env("GIT_ALLOW_PROTOCOL", ALLOWED_PROTOCOLS);
+        }
     }
 }
 
-/// `harden_git`, and the repo's command settings replaced, for a git call in `cwd` with `env`.
+/// `harden_git`, and the pinned git folders when `cwd` is in an isolated worktree.
+pub fn harden_git_at(command: &mut Command, cwd: &Path) {
+    harden_git(command);
+    command.envs(git_pins(cwd));
+}
+
+/// `harden_git_at`, and the repo's command settings replaced, for a git call in `cwd` with `env`.
 /// It asks git which settings it would read; when that fails, the call gets a git folder that
-/// does not exist, so it fails without reading the repo's config.
+/// does not exist, so it fails without reading the repo's config. Call it after the caller's
+/// own variables: the pins and that refusal must win.
 pub fn harden_git_in(command: &mut Command, cwd: &Path, env: &[(String, String)]) {
     let Some(hooks) = EMPTY_HOOKS.get() else {
         return;
     };
     harden_git(command);
+    let pins = pins_of(hooks, cwd);
+    command.envs(pins.iter().map(|(key, value)| (key, value)));
+    // The probe reads the pinned git folders too, never the agent's `.git` file.
+    let env: &[(String, String)] = &[env, pins.as_slice()].concat();
     match command_settings(cwd, env).and_then(|listing| overrides_of(&listing)) {
         Some(entries) => {
+            // With GIT_ALLOW_PROTOCOL set, git skips `protocol.git.allow`.
+            if entries.iter().any(|entry| entry == NO_GIT_PROTOCOL) && allows_git(command) {
+                command.env("GIT_ALLOW_PROTOCOL", "https:ssh:file");
+            }
             command.args(config_args(entries));
         }
         None => {
             command.env("GIT_DIR", hooks.join("refused"));
         }
     }
+}
+
+fn env_of(command: &Command, name: &str) -> Option<String> {
+    let (_, value) = command.get_envs().find(|(key, _)| *key == name)?;
+    Some(value?.to_string_lossy().into_owned())
+}
+
+fn allows_git(command: &Command) -> bool {
+    let list = env_of(command, "GIT_ALLOW_PROTOCOL").unwrap_or_default();
+    list.split(':').any(|name| name == "git")
 }
 
 /// `git config --show-scope -z --get-regexp` of the command keys, as git would read them.
@@ -134,7 +253,7 @@ fn overrides_of(listing: &str) -> Option<Vec<String>> {
             }
         } else if key == "core.gitproxy" {
             // A list where the first match wins: a later `-c` cannot replace it.
-            out.push("protocol.git.allow=never".to_string());
+            out.push(NO_GIT_PROTOCOL.to_string());
         } else {
             out.extend(replacement(&entries, key));
         }

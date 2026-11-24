@@ -505,7 +505,8 @@ jobs:
             start-task-branch-menu start-task-filled start-task-filled-end start-task-no-worktree
             start-task-one-agent start-task-error sidebar-blurred remove-workspace-anyway
             update-downloading update-ready update-failed settings-update-ready
-            repo-trust-dialog whats-new diff-find editor-find editor-go-to-line editor-outline
+            repo-trust-dialog review-config-toast repo-trust-task ci-approval-commits
+            whats-new diff-find editor-find editor-go-to-line editor-outline
             diff-blame editor-blame board-more board-scrolled
             terminal-look terminal-cursors terminal-cursors-underline terminal-cursors-bar
             terminal-selection terminal-alt-screen terminal-scrolled terminal-context-menu
@@ -550,7 +551,8 @@ jobs:
             start-task-branch-menu start-task-filled start-task-filled-end start-task-no-worktree
             start-task-one-agent start-task-error sidebar-blurred remove-workspace-anyway
             update-downloading update-ready update-failed settings-update-ready
-            repo-trust-dialog whats-new diff-find editor-find editor-go-to-line editor-outline
+            repo-trust-dialog review-config-toast repo-trust-task ci-approval-commits
+            whats-new diff-find editor-find editor-go-to-line editor-outline
             diff-blame editor-blame board-more board-scrolled
             terminal-look terminal-cursors terminal-cursors-underline terminal-cursors-bar
             terminal-selection terminal-alt-screen terminal-scrolled terminal-context-menu
@@ -847,9 +849,15 @@ jobs:
         run: cargo test --locked -p natamux-client --test live_daemon --test live_daemon_git --test live_daemon_settings --test live_daemon_files --test live_daemon_projects --no-run
       - name: Wait for the images of e2e-image
         run: scripts/ci-wait-artifact.sh rust-production-images e2e-image
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: rust-production-images
+      # Through the API the wait step read, and again on a miss: download-artifact asks another
+      # service, which did not know the artifact yet one second after the upload ended.
+      - name: Download the images
+        run: |
+          for _ in $(seq 6); do
+            gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name rust-production-images && exit 0
+            sleep 10
+          done
+          exit 1
       - name: Start the Rust daemon of this run
         run: |
           docker load -i images.tar.zst

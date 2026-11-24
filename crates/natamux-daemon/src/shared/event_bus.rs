@@ -9,6 +9,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use natamux_core::json::to_js_string;
+use natamux_core::security::{self, SecurityMode};
 use natamux_proto::events::task_event::TaskEvent;
 use natamux_proto::tasks::job::Job;
 use natamux_proto::tasks::task::Task;
@@ -86,6 +87,15 @@ pub enum DaemonMessage {
 
 fn task_value(task: &Task) -> Value {
     serde_json::to_value(task).unwrap_or(Value::Null)
+}
+
+/// What the agent of the parent sees of a direct subtask, on `GET /tasks/{child}` and `/events`.
+pub fn task_view(task: &Task) -> Value {
+    json!({
+        "id": task.id, "title": task.title, "state": task.state, "stage": task.stage,
+        "parentId": task.parent_id, "pr": task.pr, "prStatus": task.pr_status,
+        "stageSince": task.stage_since, "branch": task.branch,
+    })
 }
 
 impl DaemonMessage {
@@ -188,6 +198,19 @@ impl DaemonMessage {
         };
         to_js_string(&value)
     }
+
+    /// The frame of a task message for the agent of the parent: the kind and the task's short
+    /// view only, never the event, as `GET /tasks/{child}` answers.
+    pub fn to_child_json(&self) -> String {
+        match self {
+            DaemonMessage::TaskCreated { task }
+            | DaemonMessage::TaskUpdated { task, .. }
+            | DaemonMessage::TaskChanged { task } => {
+                to_js_string(&json!({ "kind": self.kind(), "task": task_view(task) }))
+            }
+            _ => self.to_json(),
+        }
+    }
 }
 
 /// Which messages a client on /events gets (F6).
@@ -213,18 +236,36 @@ impl ClientScope {
             _ => message.task_id() == Some(own.as_str()),
         }
     }
+
+    /// The message is about a direct subtask: the scope gets its short view only.
+    fn sees_a_child(&self, message: &DaemonMessage) -> bool {
+        let ClientScope::Task(own) = self else {
+            return false;
+        };
+        match message {
+            DaemonMessage::TaskCreated { task }
+            | DaemonMessage::TaskUpdated { task, .. }
+            | DaemonMessage::TaskChanged { task } => task.id != *own,
+            _ => false,
+        }
+    }
 }
 
 type Listener = Arc<dyn Fn(&DaemonMessage) + Send + Sync>;
 /// A dashboard on /events gets the message as JSON text.
 type TextListener = Arc<dyn Fn(&str) + Send + Sync>;
+/// Ends a socket an agent token opened, once that token is revoked.
+type End = Box<dyn FnOnce() + Send>;
 
 #[derive(Default)]
 pub struct EventBus {
     listeners: Mutex<Vec<(u64, Listener)>>,
     clients: Mutex<Vec<(u64, ClientScope, TextListener)>>,
+    /// By task: what ends the sockets its agent token opened.
+    ends: Mutex<Vec<(u64, String, End)>>,
     next: AtomicU64,
-    outbox: Mutex<VecDeque<DaemonMessage>>,
+    /// Each message with the security mode a test forced on the thread that queued it.
+    outbox: Mutex<VecDeque<(DaemonMessage, Option<SecurityMode>)>>,
     sending: Mutex<()>,
 }
 
@@ -242,7 +283,7 @@ impl EventBus {
     /// Queues a message; it goes out at the next `flush`, after every message queued before it.
     pub fn enqueue(&self, message: DaemonMessage) {
         if let Ok(mut outbox) = self.outbox.lock() {
-            outbox.push_back(message);
+            outbox.push_back((message, security::forced()));
         }
     }
 
@@ -252,7 +293,10 @@ impl EventBus {
             let Ok(_sending) = self.sending.try_lock() else {
                 return;
             };
-            while let Some(message) = self.pop() {
+            while let Some((message, forced)) = self.pop() {
+                // Another thread may send it: the listeners see the mode of the one that queued
+                // it, as in `StageRun::background`.
+                let _mode = forced.map(security::force);
                 self.deliver(&message);
             }
             drop(_sending);
@@ -278,7 +322,7 @@ impl EventBus {
         }
     }
 
-    fn pop(&self) -> Option<DaemonMessage> {
+    fn pop(&self) -> Option<(DaemonMessage, Option<SecurityMode>)> {
         self.outbox.lock().ok()?.pop_front()
     }
 
@@ -293,22 +337,27 @@ impl EventBus {
                 eprintln!("A listener failed on {}", message.kind());
             }
         }
-        let clients: Vec<TextListener> = self.clients.lock().map_or_else(
+        let clients: Vec<(bool, TextListener)> = self.clients.lock().map_or_else(
             |_| Vec::new(),
             |list| {
                 list.iter()
                     .filter(|(_, scope, _)| scope.allows(message))
-                    .map(|(_, _, each)| Arc::clone(each))
+                    .map(|(_, scope, each)| (scope.sees_a_child(message), Arc::clone(each)))
                     .collect()
             },
         );
         if clients.is_empty() {
             return;
         }
-        // The text is made once per message for all dashboards.
-        let text = message.to_json();
-        for client in clients {
-            if catch_unwind(AssertUnwindSafe(|| client(&text))).is_err() {
+        // Each text is made once per message for all dashboards.
+        let (mut full, mut child) = (None, None);
+        for (sees_a_child, client) in clients {
+            let text: &str = if sees_a_child {
+                child.get_or_insert_with(|| message.to_child_json())
+            } else {
+                full.get_or_insert_with(|| message.to_json())
+            };
+            if catch_unwind(AssertUnwindSafe(|| client(text))).is_err() {
                 eprintln!("A dashboard failed on {}", message.kind());
             }
         }
@@ -329,6 +378,41 @@ impl EventBus {
         }
         if let Ok(mut clients) = self.clients.lock() {
             clients.retain(|(known, _, _)| *known != id);
+        }
+        if let Ok(mut ends) = self.ends.lock() {
+            ends.retain(|(known, _, _)| *known != id);
+        }
+    }
+
+    /// `end` runs when the agent token of `task_id` is revoked (`end_agent`), so a socket that
+    /// token opened closes. `unsubscribe` with the id drops it unrun.
+    pub fn on_agent_end(&self, task_id: &str, end: impl FnOnce() + Send + 'static) -> u64 {
+        let id = self.next.fetch_add(1, Ordering::SeqCst) + 1;
+        if let Ok(mut ends) = self.ends.lock() {
+            ends.push((id, task_id.to_string(), Box::new(end)));
+        }
+        id
+    }
+
+    /// The agent token of `task_id` was revoked: its `/events` clients get no more messages, and
+    /// every socket it opened ends. Desktop clients stay.
+    pub fn end_agent(&self, task_id: &str) {
+        let scope = ClientScope::Task(task_id.to_string());
+        if let Ok(mut clients) = self.clients.lock() {
+            clients.retain(|(_, each, _)| *each != scope);
+        }
+        let ended: Vec<End> = match self.ends.lock() {
+            Ok(mut ends) => {
+                let (gone, kept): (Vec<_>, Vec<_>) =
+                    ends.drain(..).partition(|(_, task, _)| task == task_id);
+                *ends = kept;
+                gone.into_iter().map(|(_, _, end)| end).collect()
+            }
+            Err(_) => Vec::new(),
+        };
+        // Outside the lock: an end may unsubscribe.
+        for end in ended {
+            end();
         }
     }
 

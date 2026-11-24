@@ -35,7 +35,7 @@ pub(crate) const HOOK_FILE_KEYS: [&str; 4] = ["hooks", "statusLine", "ui", "vers
 /// Whether git tracks `path` in `worktree`. No git, or not a repository: not tracked.
 pub fn is_tracked(worktree: &Path, path: &str) -> bool {
     let mut git = Command::new("git");
-    natamux_core::security::harden_git(&mut git);
+    natamux_core::security::harden_git_at(&mut git, worktree);
     git.args(["ls-files", "--error-unmatch", "--", path])
         .current_dir(worktree)
         .stdin(Stdio::null())

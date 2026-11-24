@@ -64,7 +64,11 @@ pub fn fetch_upstream(repo_dir: &Path, branch: &str) {
             repo_dir,
             &["config", "--get", &format!("branch.{branch}.merge")],
         )?;
-        let (remote, merge) = (js_trim(&remote), js_trim(&merge));
+        // Both become arguments: a value such as `--upload-pack=<cmd>` would run a command.
+        let (remote, merge) = (
+            checked_ref(js_trim(&remote))?,
+            checked_ref(js_trim(&merge))?,
+        );
         // A fetch of a URL updates no remote-tracking ref by itself, so the pinned call names it.
         let short = merge.strip_prefix("refs/heads/").unwrap_or(merge);
         let tracking = format!("+{merge}:refs/remotes/{remote}/{short}");

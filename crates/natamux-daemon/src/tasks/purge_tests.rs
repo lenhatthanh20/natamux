@@ -19,22 +19,6 @@ fn an_entry_of_the_tasks_folder_names_its_task_exactly() {
 }
 
 #[test]
-fn a_script_names_its_task_and_no_other_file_does() {
-    for (name, task) in [
-        ("agent-launch-T-1.sh", Some("T-1")),
-        ("agent-launch-T-1-2.sh", Some("T-1")),
-        ("stage-command-T-1.sh", Some("T-1")),
-        ("agent-launch-T-10.sh", Some("T-10")),
-        ("agent-launch-T-1.txt", None),
-        ("agent-launch-T-1-2.sh.bak", None),
-        ("repo-trust.json", None),
-        ("T-1.md", None),
-    ] {
-        assert_eq!(task_of_script(name), task, "{name}");
-    }
-}
-
-#[test]
 fn a_name_that_is_not_a_task_id_is_refused() {
     let dir = std::env::temp_dir();
     assert!(task_paths(&dir, "../x").is_err());

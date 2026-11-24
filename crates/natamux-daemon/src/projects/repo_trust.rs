@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 
-use natamux_core::security::mode;
+use natamux_core::security::mode_in;
 use natamux_proto::projects::repo::ProjectSettings;
 use natamux_proto::projects::repo_trust::{RepoCommand, RepoTrustView};
 use natamux_proto::stages::schema::{Condition, Step};
@@ -238,7 +238,8 @@ impl Repos {
         let project = PathBuf::from(&repo.path);
         let folder = folder.unwrap_or(&project);
         let setup = setup_files(folder);
-        let (agents, unverifiable) = match config_sources(folder, mode().is_strict()) {
+        // The folder's own `.natamux.json` may make it Strict.
+        let (agents, unverifiable) = match config_sources(folder, mode_in(folder).is_strict()) {
             Ok(files) => (files, None),
             Err(reason) => (Vec::new(), Some(reason)),
         };
@@ -263,7 +264,8 @@ impl Repos {
         let commands = commands_of(&settings);
         let setup = setup_files(Path::new(&repo.path));
         // Agent config that cannot be checked is never approved by a save.
-        let Ok(agents) = config_sources(Path::new(&repo.path), mode().is_strict()) else {
+        let folder = Path::new(&repo.path);
+        let Ok(agents) = config_sources(folder, mode_in(folder).is_strict()) else {
             return Ok(());
         };
         let before = self.trust.approvals().get(id).cloned();

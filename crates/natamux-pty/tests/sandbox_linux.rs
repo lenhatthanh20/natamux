@@ -10,7 +10,7 @@ use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use natamux_pty::sandbox_plan::{isolate_command, landlock_abi, tcp_confined};
+use natamux_pty::sandbox_plan::{isolate_command, landlock_abi, own_tty, tcp_confined};
 use natamux_pty::sandbox_sweep::holders;
 use natamux_pty::{Env, IsolationPlan, PtyEvents, Signal, SpawnOptions, spawn_shell};
 
@@ -287,4 +287,56 @@ fn a_program_that_left_the_shell_with_setsid_is_killed_by_its_mark() {
         std::thread::sleep(Duration::from_millis(50));
     }
     assert!(!shell.pty.leftover());
+}
+
+/// T-0375 (R7-3): from Landlock ABI 6 a sandboxed shell cannot signal a process outside the
+/// sandbox (the daemon), and still signals its own children.
+#[test]
+fn a_sandboxed_shell_cannot_signal_out() {
+    let abi = landlock_abi().unwrap();
+    if abi < 6 {
+        println!("Landlock ABI {abi} < 6: signals are not scoped, so this kernel cannot prove it");
+        return;
+    }
+    let dirs = Dirs::new("signal");
+    let line = format!(
+        "kill -0 {} && echo SENT || echo BLOCKED; sleep 30 & kill $! && echo OWN-KILLED",
+        std::process::id()
+    );
+    let out = sandboxed(&dirs.plan(), &line, &dirs.at("a"));
+    assert!(out.contains("BLOCKED") && !out.contains("SENT"), "{out}");
+    assert!(out.contains("OWN-KILLED"), "{out}");
+}
+
+/// T-0375 (R7-5): an isolated shell writes its own terminal and cannot open another pty of the
+/// user, neither to write to it nor to read the keys typed into it.
+#[test]
+fn an_isolated_shell_reaches_only_its_own_pty() {
+    use std::os::fd::AsRawFd;
+    let dirs = Dirs::new("own-tty");
+    let other = nix::pty::openpty(None::<&nix::pty::Winsize>, None).unwrap();
+    let link = format!("/proc/self/fd/{}", other.slave.as_raw_fd());
+    let other_tty = std::fs::read_link(link).unwrap().display().to_string();
+    let mut shell = Shell::new(&dirs, dirs.plan(), "NATAMUX_SANDBOX=own-tty");
+    shell.run("echo OWN-$((40+2)) > \"$(tty)\"");
+    shell.wait_for("OWN-42");
+    shell.run(&format!(
+        "echo x > '{other_tty}' || echo NO-WRITE-$((40+2))"
+    ));
+    shell.wait_for("NO-WRITE-42");
+    shell.run(&format!("( : < '{other_tty}' ) || echo NO-READ-$((40+2))"));
+    shell.wait_for("NO-READ-42");
+    shell.pty.kill(Signal::Kill);
+}
+
+#[test]
+fn own_tty_leaves_one_pty_and_no_pts_folder_in_reach() {
+    let plan = Dirs::new("own-plan").plan();
+    let own = own_tty(&plan, Some(Path::new("/dev/pts/77"))).unwrap();
+    assert!(!own.read_only.contains(&PathBuf::from("/dev")));
+    assert!(!own.read_write.contains(&PathBuf::from("/dev/pts")));
+    assert!(own.read_write.contains(&PathBuf::from("/dev/pts/77")));
+    assert!(own.read_write.contains(&PathBuf::from("/dev/ptmx")));
+    assert!(own.read_write.contains(&PathBuf::from("/dev/tty")));
+    assert!(own.read_only.contains(&PathBuf::from("/dev/null")));
 }

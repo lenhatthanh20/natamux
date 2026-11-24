@@ -2,7 +2,11 @@ use super::*;
 use crate::launch::{AUTO_FLAGS, LAUNCHABLE_AGENTS};
 
 fn word(agent: &str, words: &str) -> Option<String> {
-    forbidden_word(agent, words).map(|hit| hit.word)
+    forbidden_word(agent, words, false).map(|hit| hit.word)
+}
+
+fn strict_word(agent: &str, words: &str) -> Option<String> {
+    forbidden_word(agent, words, true).map(|hit| hit.word)
 }
 
 #[test]
@@ -55,7 +59,7 @@ fn the_extra_flags_are_forbidden_in_every_form() {
     ];
     for (agent, words) in cases {
         let line = format!("--model x {words} --verbose");
-        let hit = forbidden_word(agent, &line).unwrap_or_else(|| panic!("{agent}: {words}"));
+        let hit = forbidden_word(agent, &line, false).unwrap_or_else(|| panic!("{agent}: {words}"));
         assert!(hit.reason.contains(&hit.word), "{}", hit.reason);
         assert!(hit.reason.contains(agent), "{}", hit.reason);
     }
@@ -172,4 +176,58 @@ fn harmless_short_flags_pass() {
     ] {
         assert_eq!(word(agent, words), None, "{agent}: {words}");
     }
+}
+
+// T-0375 R5-1: other spellings that turn approvals off.
+#[test]
+fn strict_refuses_claude_settings_and_tool_allow_lists() {
+    for words in [
+        "--settings x",
+        "--settings=x",
+        "--allowedTools Bash",
+        "--allowed-tools Bash",
+    ] {
+        assert!(strict_word("claude-code", words).is_some(), "{words}");
+    }
+    assert_eq!(word("claude-code", "--allowedTools Read"), None);
+    assert_eq!(word("claude-code", "--settings x"), None);
+}
+
+#[test]
+fn ask_mode_refuses_the_other_spellings_of_no_approvals() {
+    for (agent, words) in [
+        ("gemini", "--approvalMode yolo"),
+        ("gemini", "--approvalMode=yolo"),
+        ("qwen", "--approvalMode yolo"),
+        ("qwen", "--approvalMode=auto_edit"),
+        ("codex", "-c profiles.p.approval_policy=never"),
+        ("codex", "--config x.sandbox_mode=danger-full-access"),
+        (
+            "claude-code",
+            r#"--settings '{"permissions":{"defaultMode":"bypassPermissions"}}'"#,
+        ),
+        (
+            "claude-code",
+            "--settings={\"defaultMode\":\"bypassPermissions\"}",
+        ),
+    ] {
+        assert!(word(agent, words).is_some(), "{agent}: {words}");
+    }
+    assert_eq!(word("gemini", "--approvalMode default"), None);
+    for words in [
+        "-c profiles.p.approval_policy=on-request",
+        "-c my_approval_policy=never",
+    ] {
+        assert_eq!(word("codex", words), None, "{words}");
+    }
+}
+
+// T-0375 R5-4: the safe codex sandbox is no auto flag.
+#[test]
+fn the_workspace_write_sandbox_passes() {
+    assert_eq!(word("codex", "--sandbox workspace-write"), None);
+    assert_eq!(strict_word("codex", "--sandbox=workspace-write"), None);
+    assert!(word("codex", "--ask-for-approval never").is_some());
+    let network = "-c sandbox_workspace_write.network_access=true";
+    assert!(word("codex", network).is_some());
 }

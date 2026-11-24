@@ -6,7 +6,7 @@ use std::path::Path;
 
 use serde_json::Value;
 
-use super::source::{FILE_NAME, WRITTEN_NAME, evaluate};
+use super::source::{FILE_NAME, evaluate, read, written_in};
 
 pub const DEFAULT_LOG_MAX_BYTES: u64 = 1024 * 1024;
 /// A smaller cap would cut a log to a few lines.
@@ -49,10 +49,6 @@ pub fn data_of(value: &Value, strict: bool) -> DataSettings {
     settings
 }
 
-fn read(path: &Path) -> Option<Vec<u8>> {
-    std::fs::read(path).ok()
-}
-
 fn value_of(bytes: Option<&[u8]>) -> Value {
     bytes
         .and_then(|bytes| serde_json::from_slice::<Value>(bytes).ok())
@@ -63,8 +59,12 @@ fn value_of(bytes: Option<&[u8]>) -> Value {
 /// outside change), the audit log is on if either has it, the smaller cap counts, and nothing is
 /// deleted: deletion never follows settings Natamux did not write.
 pub fn data_in(data_dir: &Path) -> DataSettings {
+    data_with(data_dir, written_in(data_dir))
+}
+
+/// `data_in` with the copy the daemon wrote given.
+fn data_with(data_dir: &Path, written: Option<Vec<u8>>) -> DataSettings {
     let file = read(&data_dir.join(FILE_NAME));
-    let written = read(&data_dir.join(WRITTEN_NAME));
     let strict = super::mode().is_strict()
         || evaluate(file.as_deref(), written.as_deref())
             .mode
@@ -93,6 +93,7 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+    use crate::security::{Source, WRITTEN_NAME};
 
     #[test]
     fn defaults_keep_everything_and_audit_only_in_strict() {
@@ -133,6 +134,35 @@ mod tests {
         .unwrap();
         let changed = data_in(&dir);
         assert_eq!((changed.retention_days, changed.audit_log), (0, true));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn the_running_daemons_copy_counts_when_both_files_change() {
+        let dir = std::env::temp_dir().join(format!("natamux-data-both-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let strict = r#"{"strict":true,"data":{"retentionDays":7}}"#;
+        let source = Source::open(&dir);
+        source.write(strict).unwrap();
+        assert_eq!(data_with(&dir, source.written()).retention_days, 7);
+        let looser = r#"{"strict":false,"data":{"retentionDays":1}}"#;
+        std::fs::write(dir.join(FILE_NAME), looser).unwrap();
+        std::fs::write(dir.join(WRITTEN_NAME), looser).unwrap();
+        // Deletion never follows settings Natamux did not write; Strict keeps the audit log.
+        let kept = data_with(&dir, source.written());
+        assert_eq!((kept.retention_days, kept.audit_log), (0, true));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn an_unreadable_file_keeps_the_audit_log() {
+        let dir = std::env::temp_dir().join(format!("natamux-data-dir-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        // A folder where the file should be: reading it fails with an error other than NotFound.
+        std::fs::create_dir_all(dir.join(FILE_NAME)).unwrap();
+        let broken = data_in(&dir);
+        assert_eq!((broken.retention_days, broken.audit_log), (0, true));
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

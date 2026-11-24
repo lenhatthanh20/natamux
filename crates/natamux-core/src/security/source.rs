@@ -1,11 +1,13 @@
 //! `security.json` in the data folder, read again at most once per second, and the tamper check:
 //! the daemon keeps a copy of the last bytes it wrote (`security-written.json`). When the file
 //! differs from that copy, it changed outside `PUT /security`, so the stricter of the two counts
-//! and a warning is shown until the next save.
+//! and a warning is shown until the next save. While the daemon runs, the copy it compares with
+//! is the one in memory: changing both files on disk is still an outside change. At start it
+//! trusts the copy on disk.
 
 use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
 use super::decide::tighten;
@@ -35,7 +37,7 @@ pub struct Source {
     inner: Mutex<Inner>,
 }
 
-fn read(path: &Path) -> Option<Vec<u8>> {
+pub(super) fn read(path: &Path) -> Option<Vec<u8>> {
     match std::fs::read(path) {
         Ok(bytes) => Some(bytes),
         Err(error) if error.kind() == io::ErrorKind::NotFound => None,
@@ -48,6 +50,16 @@ fn state_of(bytes: Option<&[u8]>) -> SecurityState {
     match bytes {
         None => SecurityState::default(),
         Some(bytes) => read_text(&String::from_utf8_lossy(bytes)),
+    }
+}
+
+/// The copy of what the daemon last wrote in `data_dir`: the installed Source's copy in memory
+/// when it is for this folder, so changing both files on disk is still an outside change. Else
+/// (no Source installed, as in the CLI or the app, or another folder) the copy on disk.
+pub(super) fn written_in(data_dir: &Path) -> Option<Vec<u8>> {
+    match super::installed() {
+        Some(source) if source.path.parent() == Some(data_dir) => source.written(),
+        _ => read(&data_dir.join(WRITTEN_NAME)),
     }
 }
 
@@ -89,11 +101,20 @@ impl Source {
         &self.path
     }
 
-    /// The state now; reads the files again when the last read is a second old.
+    /// The bytes this Source last wrote, or read from the copy on disk at open.
+    pub fn written(&self) -> Option<Vec<u8>> {
+        self.lock().written.clone()
+    }
+
+    /// A panic that held the lock leaves the last state, which is still the right one: falling
+    /// back to the default would turn Strict off.
+    fn lock(&self) -> MutexGuard<'_, Inner> {
+        self.inner.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// The state now; reads the file again when the last read is a second old.
     pub fn current(&self) -> SecurityState {
-        let Ok(mut inner) = self.inner.lock() else {
-            return SecurityState::default();
-        };
+        let mut inner = self.lock();
         if inner.checked.elapsed() >= RECHECK {
             self.reload(&mut inner);
         }
@@ -102,32 +123,30 @@ impl Source {
 
     /// Reads the files now. Gives the generation, which goes up when the state changed.
     pub fn check_now(&self) -> u64 {
-        let Ok(mut inner) = self.inner.lock() else {
-            return 0;
-        };
+        let mut inner = self.lock();
         self.reload(&mut inner);
         inner.generation
     }
 
     pub fn generation(&self) -> u64 {
-        self.inner.lock().map_or(0, |inner| inner.generation)
+        self.lock().generation
     }
 
     /// The bytes are compared, not the file time: two edits in one second with the same size
-    /// would look the same by time and size.
+    /// would look the same by time and size. The copy on disk is not read again: whoever can
+    /// change the file can change the copy too.
     fn reload(&self, inner: &mut Inner) {
         inner.checked = Instant::now();
-        let (file, written) = (read(&self.path), read(&self.written_path));
-        if file == inner.file && written == inner.written {
+        let file = read(&self.path);
+        if file == inner.file {
             return;
         }
-        let mut state = evaluate(file.as_deref(), written.as_deref());
+        let mut state = evaluate(file.as_deref(), inner.written.as_deref());
         // An outside change that is undone later must not loosen what was kept meanwhile.
-        if inner.state.warning.is_some() && file != written {
+        if inner.state.warning.is_some() && file != inner.written {
             state.mode = tighten(&inner.state.mode, &state.mode);
         }
         inner.file = file;
-        inner.written = written;
         self.set(inner, state);
     }
 
@@ -141,10 +160,7 @@ impl Source {
     /// The save of `PUT /security`: the copy first, then the file, so a crash in between reads
     /// as an outside change and keeps the stricter state.
     pub fn write(&self, text: &str) -> io::Result<SecurityState> {
-        let mut inner = self
-            .inner
-            .lock()
-            .map_err(|_| io::Error::other("security settings lock"))?;
+        let mut inner = self.lock();
         if let Some(folder) = self.path.parent() {
             private_dir(folder)?;
         }

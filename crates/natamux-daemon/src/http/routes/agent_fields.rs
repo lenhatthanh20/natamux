@@ -7,7 +7,7 @@ use hyper::Method;
 use serde_json::Value;
 
 use crate::http::agent_actions::AgentAction;
-use crate::http::agent_rules::denial_line;
+use crate::http::agent_rules::{audit_denied_later, denial_line};
 use crate::http::errors::{Answer, forbidden, internal_error, task_error};
 use crate::http::server::AppState;
 use crate::tasks::errors::TaskResult;
@@ -21,9 +21,9 @@ pub async fn refused(
     edited: Option<&str>,
 ) -> Option<Answer> {
     let body = body.cloned().unwrap_or(Value::Null);
-    let (state, own_id, editing) = (Arc::clone(state), own.to_string(), edited.is_some());
+    let (shared, own_id, editing) = (Arc::clone(state), own.to_string(), edited.is_some());
     let checked =
-        tokio::task::spawn_blocking(move || why_refused(&state, &own_id, &body, editing)).await;
+        tokio::task::spawn_blocking(move || why_refused(&shared, &own_id, &body, editing)).await;
     let why = match checked {
         Ok(Ok(why)) => why?,
         Ok(Err(error)) => return Some(task_error(&error)),
@@ -44,6 +44,7 @@ pub async fn refused(
         ),
     };
     eprintln!("{line}");
+    audit_denied_later(state, own).await;
     Some(forbidden(why))
 }
 

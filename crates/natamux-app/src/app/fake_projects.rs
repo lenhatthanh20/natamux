@@ -8,7 +8,9 @@ use natamux_client::ClientError;
 use natamux_core::workspaces::branch_name::branch_name_for;
 use natamux_proto::projects::issues::GitHubIssue;
 use natamux_proto::projects::repo::{AddRepo, Repo};
-use natamux_proto::projects::repo_trust::{RepoCommand, RepoTrustView, SetupScript};
+use natamux_proto::projects::repo_trust::{
+    CONFIG_CHANGED_REASON, RepoCommand, RepoTrustView, SetupScript,
+};
 use natamux_proto::tasks::task::Task;
 
 use super::{Answer, Data, FakeDaemon, not_found};
@@ -22,6 +24,10 @@ pub(super) struct ProjectsState {
     gh_missing: bool,
     /// The projects whose commands wait for approval.
     untrusted: BTreeSet<String>,
+    /// The tasks whose worktree the user approved.
+    approved_tasks: BTreeSet<String>,
+    /// The tasks whose start is refused until their worktree is approved.
+    refused_starts: BTreeSet<String>,
     /// The projects whose commands a flow test changed after the dialog read them.
     #[cfg(test)]
     changed: BTreeSet<String>,
@@ -48,6 +54,8 @@ impl ProjectsState {
             ],
             gh_missing: false,
             untrusted: BTreeSet::new(),
+            approved_tasks: BTreeSet::new(),
+            refused_starts: BTreeSet::new(),
             #[cfg(test)]
             changed: BTreeSet::new(),
         }
@@ -143,8 +151,9 @@ impl Data {
         Ok(repo)
     }
 
-    /// Every project has the same sample commands, so the hash is the id's.
-    fn repo_trust(&self, repo_id: &str) -> Answer<RepoTrustView> {
+    /// Every project has the same sample commands, so the hash is the id's. A task's worktree
+    /// has a changed agent config file of its own.
+    fn repo_trust(&self, repo_id: &str, task: Option<&str>) -> Answer<RepoTrustView> {
         if !self.repos.iter().any(|repo| repo.id == repo_id) {
             return Err(not_found("Project", repo_id));
         }
@@ -175,22 +184,46 @@ impl Data {
             view.commands
                 .push(command("Stage test: check", "cargo test --locked"));
         }
+        if let Some(task) = task {
+            view.trusted = view.trusted && self.projects.approved_tasks.contains(task);
+            view.hash = format!("fake-{repo_id}-{task}");
+            view.changed = vec![".mcp.json".into()];
+        }
         Ok(view)
     }
 
+    /// The daemon's 409 for a start whose worktree agent config changed since its approval.
+    pub(super) fn start_refused(&self, task_id: &str) -> Answer<()> {
+        let refused = self.projects.refused_starts.contains(task_id);
+        if refused && !self.projects.approved_tasks.contains(task_id) {
+            return Err(ClientError::Status {
+                status: 409,
+                message: CONFIG_CHANGED_REASON.into(),
+            });
+        }
+        Ok(())
+    }
+
     /// The daemon's 409 when the hash is not the one of the commands now.
-    fn approve_repo(&mut self, repo_id: &str, hash: &str) -> Answer<RepoTrustView> {
-        if self.repo_trust(repo_id)?.hash != hash {
+    fn approve_repo(
+        &mut self,
+        repo_id: &str,
+        hash: &str,
+        task: Option<&str>,
+    ) -> Answer<RepoTrustView> {
+        if self.repo_trust(repo_id, task)?.hash != hash {
             return Err(ClientError::Status {
                 status: 409,
                 message: format!("The commands of {repo_id} changed. Review them again."),
             });
         }
-        if self.projects.untrusted.remove(repo_id) {
+        if let Some(task) = task {
+            self.projects.approved_tasks.insert(task.into());
+        } else if self.projects.untrusted.remove(repo_id) {
             let event = self.repos_event();
             self.send(event);
         }
-        self.repo_trust(repo_id)
+        self.repo_trust(repo_id, task)
     }
 
     fn gh(&self) -> Answer<()> {
@@ -269,17 +302,28 @@ impl FakeDaemon {
         self.data().import_issues(numbers, repo)
     }
 
-    pub fn repo_trust(&self, repo_id: &str) -> Answer<RepoTrustView> {
-        self.data().repo_trust(repo_id)
+    pub fn repo_trust(&self, repo_id: &str, task: Option<&str>) -> Answer<RepoTrustView> {
+        self.data().repo_trust(repo_id, task)
     }
 
-    pub fn approve_repo(&self, repo_id: &str, hash: &str) -> Answer<RepoTrustView> {
-        self.data().approve_repo(repo_id, hash)
+    pub fn approve_repo(
+        &self,
+        repo_id: &str,
+        hash: &str,
+        task: Option<&str>,
+    ) -> Answer<RepoTrustView> {
+        self.data().approve_repo(repo_id, hash, task)
     }
 
     /// For the `repo-trust-dialog` shot: the project's commands wait for approval.
     pub fn distrust_repo(&self, repo_id: &str) {
         self.data().projects.untrusted.insert(repo_id.into());
+    }
+
+    /// For the `review-config-toast` shot: the task's start is refused until its worktree is
+    /// approved.
+    pub fn refuse_start(&self, task_id: &str) {
+        self.data().projects.refused_starts.insert(task_id.into());
     }
 
     /// The project's commands change: a dialog that read the old ones gets a 409 on Approve.

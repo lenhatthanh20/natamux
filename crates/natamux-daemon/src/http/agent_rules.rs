@@ -2,6 +2,7 @@
 //! `agent_actions` classifies, on its own task or a direct subtask, and in Strict mode only what
 //! its grants allow. Everything else answers 403 before routing.
 
+use std::path::Path;
 use std::sync::Arc;
 
 use hyper::body::Incoming;
@@ -72,6 +73,8 @@ pub fn caller(
     {
         // Strict: an address ends up in logs and shell history, so agents send the header.
         if *in_query && security::mode().is_strict() {
+            // On this thread: `caller` is not async, and the line is small.
+            audit_denied(&state.data_dir, &task);
             return None;
         }
         return Some(Caller::Agent(task));
@@ -126,7 +129,8 @@ pub fn agent_may(
     agent_decision(method, parts, own, is_child, &SecurityMode::Personal).is_ok()
 }
 
-/// The log line of a refused agent call: never the body, the query or the token.
+/// The log line of a refused agent call: never the body, the query or the token. The path parts
+/// are percent-decoded, so control characters are escaped: a `%0A` cannot start a forged line.
 pub fn denial_line(
     action: Option<AgentAction>,
     method: &Method,
@@ -134,10 +138,26 @@ pub fn denial_line(
     own: &str,
 ) -> String {
     let action = action.map_or("unclassified", AgentAction::name);
-    format!(
-        "agent-api: denied {action} {method} /{} task={own}",
-        parts.join("/")
-    )
+    let mut path = String::new();
+    for c in parts.join("/").chars() {
+        if c.is_control() {
+            path.extend(c.escape_default());
+        } else {
+            path.push(c);
+        }
+    }
+    format!("agent-api: denied {action} {method} /{path} task={own}")
+}
+
+/// The audit line of a refused agent call: one per blocked action.
+pub fn audit_denied(data_dir: &Path, own: &str) {
+    crate::privacy::audit::write(data_dir, "agent-api.denied", own, "denied");
+}
+
+/// `audit_denied` on a blocking thread, for the handlers: the file write may block.
+pub async fn audit_denied_later(state: &AppState, own: &str) {
+    let (data_dir, own) = (state.data_dir.clone(), own.to_string());
+    let _ = tokio::task::spawn_blocking(move || audit_denied(&data_dir, &own)).await;
 }
 
 /// The 403 for a route the agent token of `own` may not call. The subtask lookup reads the
@@ -164,11 +184,7 @@ pub async fn refusal(
     };
     let denied = agent_decision(method, parts, own, |_| is_child, &security::mode()).err()?;
     eprintln!("{}", denial_line(denied, method, parts, own));
-    let (data_dir, own_id) = (state.data_dir.clone(), own.to_string());
-    let _ = tokio::task::spawn_blocking(move || {
-        crate::privacy::audit::write(&data_dir, "agent-api.denied", &own_id, "denied");
-    })
-    .await;
+    audit_denied_later(state, own).await;
     Some(error_answer(
         StatusCode::FORBIDDEN,
         "forbidden",
@@ -334,5 +350,14 @@ mod tests {
         );
         let line = denial_line(None, &Method::GET, &["nothing"], "T-1");
         assert_eq!(line, "agent-api: denied unclassified GET /nothing task=T-1");
+    }
+
+    #[test]
+    fn a_decoded_line_break_in_the_path_stays_on_one_line() {
+        let parts = ["tasks", "T-2\nagent-api: denied x GET /y task=T-9\r"];
+        let line = denial_line(None, &Method::GET, &parts, "T-1");
+        assert!(!line.contains('\n') && !line.contains('\r'), "{line}");
+        assert!(line.contains("T-2\\nagent-api"), "{line}");
+        assert!(line.ends_with(" task=T-1"), "{line}");
     }
 }

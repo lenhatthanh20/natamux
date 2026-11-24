@@ -2,14 +2,17 @@
 //! files, events, screens, attachments, the index, the logs, the launch scripts, the sandbox
 //! folders, and the app's token and port files. The worktrees are the user's code and stay;
 //! settings (projects, security) stay too. Refused while a worktree has uncommitted work, while
-//! the daemon runs (the app's saved port, or NATAMUX_PORT, else 4317), and in a task's terminal.
-//! A second run finds nothing and changes nothing.
+//! the daemon runs (the app's saved port, or NATAMUX_PORT, else 4317), in a task's terminal, and
+//! for a data folder that is not absolute or has no `index.sqlite`. A second run finds nothing
+//! and changes nothing.
 
 use std::io;
 use std::net::{SocketAddr, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
+
+use natamux_proto::tasks::data_files::task_of_script;
 
 use crate::args::Parsed;
 use crate::run::{EXIT_FAILED, EXIT_OK, EXIT_USAGE, Env, Io};
@@ -31,8 +34,8 @@ pub struct DataPaths {
 // The daemon's own default (natamux-daemon config); the CLI does not depend on that crate.
 const DEFAULT_PORT: u16 = 4317;
 const DATA_FOLDERS: [&str; 3] = ["tasks", "logs", "sandbox"];
-const DATA_FILES: [&str; 3] = ["index.sqlite", "index.sqlite-wal", "index.sqlite-shm"];
-const SCRIPT_PREFIXES: [&str; 2] = ["agent-launch-", "stage-command-"];
+const INDEX: &str = "index.sqlite";
+const DATA_FILES: [&str; 3] = [INDEX, "index.sqlite-wal", "index.sqlite-shm"];
 const APP_PATHS: [&str; 3] = ["logs", "daemon-token", "daemon-port"];
 
 pub fn parse(words: &[String], values: &Parsed) -> Result<PurgeCommand, String> {
@@ -79,9 +82,7 @@ pub fn targets(paths: &DataPaths) -> Vec<PathBuf> {
         scripts
             .filter(|entry| {
                 let name = entry.file_name().to_string_lossy().into_owned();
-                SCRIPT_PREFIXES
-                    .iter()
-                    .any(|prefix| name.starts_with(prefix))
+                task_of_script(&name).is_some()
             })
             .map(|entry| entry.path()),
     );
@@ -117,7 +118,11 @@ pub fn dirty_worktrees(worktrees: &Path) -> Vec<PathBuf> {
 
 /// Removes the targets. A path that is gone already is fine.
 pub fn purge(paths: &DataPaths) -> io::Result<Vec<PathBuf>> {
-    let found = targets(paths);
+    let mut found = targets(paths);
+    // The index goes last: a purge stopped by an error can run again, as the index marks the
+    // folder as Natamux's.
+    let index = paths.data.join(INDEX);
+    found.sort_by_key(|path| *path == index);
     for path in &found {
         let removed = match std::fs::symlink_metadata(path) {
             Ok(meta) if meta.is_dir() => std::fs::remove_dir_all(path),
@@ -167,6 +172,13 @@ pub fn run_with(command: &PurgeCommand, paths: &DataPaths, env: &Env, io: &mut d
         io.stderr("purge-data runs only outside a task's terminal: a person runs it.\n");
         return EXIT_USAGE;
     }
+    if !paths.data.is_absolute() {
+        io.stderr(&format!(
+            "The data folder must be an absolute path: {}. Nothing was removed.\n",
+            paths.data.display()
+        ));
+        return EXIT_USAGE;
+    }
     let dirty = dirty_worktrees(&paths.worktrees);
     if !dirty.is_empty() {
         io.stderr(&format!(
@@ -183,6 +195,14 @@ pub fn run_with(command: &PurgeCommand, paths: &DataPaths, env: &Env, io: &mut d
     if found.is_empty() {
         io.stdout("Nothing to remove.\n");
         return EXIT_OK;
+    }
+    // A wrong NATAMUX_DATA_DIR must not lose another folder's `tasks` or `logs`.
+    if !paths.data.join(INDEX).is_file() {
+        io.stderr(&format!(
+            "{} has no {INDEX}, so it is not a Natamux data folder. Nothing was removed.\n",
+            paths.data.display()
+        ));
+        return EXIT_FAILED;
     }
     if !command.yes {
         io.stderr(&format!(

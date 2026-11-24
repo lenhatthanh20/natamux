@@ -1,4 +1,5 @@
 use futures::channel::mpsc::UnboundedReceiver;
+use natamux_proto::agents::start::StartAgentInput;
 
 use super::*;
 
@@ -133,9 +134,9 @@ fn import_makes_a_draft_task_and_skips_imported_issues() {
 #[test]
 fn seeded_projects_are_approved_and_an_added_one_waits() {
     let fake = FakeDaemon::default();
-    assert!(fake.repo_trust("natamux").unwrap().trusted);
+    assert!(fake.repo_trust("natamux", None).unwrap().trusted);
     let repo = fake.add_repo(&add("/srv/app", None, None)).unwrap();
-    let view = fake.repo_trust(&repo.id).unwrap();
+    let view = fake.repo_trust(&repo.id, None).unwrap();
     assert!(!view.trusted);
     assert_eq!(view.hash, "fake-app");
     assert!(!view.commands.is_empty());
@@ -147,9 +148,9 @@ fn approving_the_shown_hash_trusts_and_sends_repos_changed() {
     let fake = FakeDaemon::default();
     let repo = fake.add_repo(&add("/srv/app", None, None)).unwrap();
     let mut feed = watch(&fake);
-    let hash = fake.repo_trust(&repo.id).unwrap().hash;
-    assert!(fake.approve_repo(&repo.id, &hash).unwrap().trusted);
-    assert!(fake.repo_trust(&repo.id).unwrap().trusted);
+    let hash = fake.repo_trust(&repo.id, None).unwrap().hash;
+    assert!(fake.approve_repo(&repo.id, &hash, None).unwrap().trusted);
+    assert!(fake.repo_trust(&repo.id, None).unwrap().trusted);
     assert!(matches!(
         feed.try_recv().unwrap(),
         natamux_client::DashboardEvent::Repos { .. }
@@ -160,9 +161,24 @@ fn approving_the_shown_hash_trusts_and_sends_repos_changed() {
 fn an_old_hash_answers_409_and_an_unknown_project_404() {
     let fake = FakeDaemon::default();
     fake.distrust_repo("natamux");
-    let error = fake.approve_repo("natamux", "old").unwrap_err();
+    let error = fake.approve_repo("natamux", "old", None).unwrap_err();
     assert_eq!(code(error).0, 409);
-    assert!(!fake.repo_trust("natamux").unwrap().trusted);
-    let error = fake.repo_trust("nope").unwrap_err();
+    assert!(!fake.repo_trust("natamux", None).unwrap().trusted);
+    let error = fake.repo_trust("nope", None).unwrap_err();
     assert_eq!(code(error), (404, "Project nope not found".into()));
+}
+
+#[test]
+fn a_refused_start_answers_409_until_the_worktree_is_approved() {
+    let fake = FakeDaemon::default();
+    fake.refuse_start("T-0143");
+    let input = StartAgentInput {
+        agent: "codex".into(),
+        ..StartAgentInput::default()
+    };
+    let error = fake.start_agent("T-0143", input.clone()).unwrap_err();
+    assert_eq!(code(error), (409, CONFIG_CHANGED_REASON.into()));
+    let hash = fake.repo_trust("natamux", Some("T-0143")).unwrap().hash;
+    fake.approve_repo("natamux", &hash, Some("T-0143")).unwrap();
+    assert!(fake.start_agent("T-0143", input).is_ok());
 }

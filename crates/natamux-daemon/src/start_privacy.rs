@@ -1,13 +1,10 @@
 //! Privacy work at daemon start. Before the tasks load: finish deletes a crash cut short, and
-//! tighten files an older version wrote wider than only the user. After the start: cut the audit
-//! log to its cap and start retention.
+//! tighten files an older version wrote wider than only the user. After the start: retention.
 
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 
-use natamux_core::privacy::log_trim::trim_file;
-use natamux_core::security::data_in;
 use natamux_core::workspaces::private_dir::{private_dir, private_file};
 use natamux_store::task_index::TaskIndex;
 
@@ -15,13 +12,10 @@ use crate::http::server::AppState;
 use crate::privacy::{audit, retention, support_bundle};
 use crate::tasks::purge::sweep_orphans;
 
-/// Once the daemon serves: the audit log under its cap, then retention (now and every 24 h).
+/// Once the daemon serves: retention (now and every 24 h). The audit log keeps its own cap: a
+/// write past it starts a new file.
 pub fn after_start(state: &Arc<AppState>) {
     support_bundle::mark_start();
-    let cap = data_in(&state.data_dir).log_max_bytes;
-    if let Err(error) = trim_file(&audit::audit_path(&state.data_dir), cap) {
-        eprintln!("The audit log could not be cut to its size: {error}");
-    }
     retention::start(state);
 }
 

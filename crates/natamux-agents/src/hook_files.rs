@@ -435,11 +435,18 @@ pub fn exclude_from_git(worktree: &Path, line: &str) {
 }
 
 fn try_exclude(worktree: &Path, line: &str) -> std::io::Result<()> {
+    // An isolated worktree's `.git` file is the agent's: only the checked shared folder counts.
+    if let Some((_, checked)) = natamux_core::security::pinned_git_dirs(worktree) {
+        let Some((_, common)) = checked else {
+            return Ok(());
+        };
+        return add_exclude_line(worktree, &common, line);
+    }
     if let Some(common) = crate::git_files::common_dir(worktree) {
         return add_exclude_line(worktree, &common, line);
     }
     let mut git = Command::new("git");
-    natamux_core::security::harden_git(&mut git);
+    natamux_core::security::harden_git_at(&mut git, worktree);
     git.args(["rev-parse", "--git-common-dir"])
         .current_dir(worktree)
         .stdin(Stdio::null())

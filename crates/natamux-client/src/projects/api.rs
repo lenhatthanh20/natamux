@@ -76,19 +76,45 @@ pub async fn list_skills(config: &Config, repo_id: &str) -> Result<SkillList, Cl
     call(config, Method::GET, &path).await
 }
 
-/// The commands of a project that run on this machine, and whether the user approved them.
-pub async fn repo_trust(config: &Config, repo_id: &str) -> Result<RepoTrustView, ClientError> {
+/// `?task=<id>`: the trust of that task's worktree, where its agent reads its config.
+fn trust_path(repo_id: &str, task: Option<&str>) -> String {
     let path = format!("/repos/{}/trust", encode(repo_id));
-    call(config, Method::GET, &path).await
+    match task {
+        Some(task) => format!("{path}?task={}", encode(task)),
+        None => path,
+    }
 }
 
-/// Approves the commands the user saw. The daemon answers 409 when they changed since.
+/// The commands of a project that run on this machine, and whether the user approved them. With
+/// `task`, the agent config is read in that task's worktree.
+pub async fn repo_trust(
+    config: &Config,
+    repo_id: &str,
+    task: Option<&str>,
+) -> Result<RepoTrustView, ClientError> {
+    call(config, Method::GET, &trust_path(repo_id, task)).await
+}
+
+/// Approves the commands the user saw. The daemon answers 409 when they changed since. With
+/// `task`, the digest of that task's worktree is approved.
 pub async fn approve_repo(
     config: &Config,
     repo_id: &str,
     hash: &str,
+    task: Option<&str>,
 ) -> Result<RepoTrustView, ClientError> {
-    let path = format!("/repos/{}/trust", encode(repo_id));
     let body = ApproveRepo { hash: hash.into() };
-    call_with(config, Method::POST, &path, &body).await
+    call_with(config, Method::POST, &trust_path(repo_id, task), &body).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::trust_path;
+
+    #[test]
+    fn a_task_call_names_the_task() {
+        assert_eq!(trust_path("web", None), "/repos/web/trust");
+        let task = trust_path("web", Some("T-0007"));
+        assert_eq!(task, "/repos/web/trust?task=T-0007");
+    }
 }

@@ -11,7 +11,7 @@ use natamux_stages::actions::{AGENT_REFUSED_ACTIONS, STAGE_ACTIONS, StageAction}
 use natamux_stages::files::{list_stage_files, read_stage_file, write_stage_file};
 use serde_json::{Value, json};
 
-use crate::http::agent_rules::Caller;
+use crate::http::agent_rules::{Caller, audit_denied_later};
 use crate::http::errors::{
     Answer, error_answer, forbidden, internal_error, json_answer, stage_error, zod_answer,
 };
@@ -157,6 +157,7 @@ pub async fn act(
     // a command stage passes with its ticket.
     let ticketed_pass = what == StageAction::Pass && redeemed;
     if by_agent && AGENT_REFUSED_ACTIONS.contains(&what) && !ticketed_pass {
+        audit_denied_later(&state, &id).await;
         return forbidden(&format!("{} a stage", what.as_str()));
     }
     input.by_agent = by_agent;
@@ -193,7 +194,9 @@ pub async fn set_mark(
     by_agent: bool,
     mark: Mark,
 ) -> Answer {
+    // The agent token reaches its own task only (`agent_rules`), so `id` is its task.
     if by_agent {
+        audit_denied_later(&state, &id).await;
         return forbidden(mark.refused());
     }
     let id = match task_id_param(&id) {
@@ -241,6 +244,7 @@ pub async fn ci_approve(
     by_agent: bool,
 ) -> Answer {
     if by_agent {
+        audit_denied_later(&state, &id).await;
         return forbidden("approve a CI push");
     }
     let id = match task_id_param(&id) {

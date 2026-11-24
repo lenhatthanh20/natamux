@@ -1,5 +1,6 @@
 //! The CI approval dialog (Strict `approved-snapshot`): it shows the exact tree and files CI
-//! gets, and Approve sends that tree id, so the daemon refuses the push if anything moved.
+//! gets, the commits no remote has yet and a warning for workflow files, and Approve sends that
+//! tree id, so the daemon refuses the push if anything moved. A finished task has no ask.
 
 use natamux_proto::events::task_event::TaskEvent;
 use natamux_proto::tasks::task::Task;
@@ -8,9 +9,9 @@ use ui::prelude::*;
 use super::DetailsPanel;
 use crate::app::dashboard::Dashboard;
 use crate::components::confirm::Confirm;
-use crate::stages::ci_approval_rules::{ask_description, ask_rows, pending_ci_asks};
+use crate::stages::ci_approval_rules::{ask_description, ask_rows, open_ci_asks};
 
-/// The dialog lists at most this many files; the rest is one row.
+/// The dialog lists at most this many files of each list; the rest is one row.
 const SHOWN_FILES: usize = 12;
 
 impl DetailsPanel {
@@ -28,7 +29,7 @@ impl DetailsPanel {
             .and_then(|read| read.as_ref().ok())
             .map(|stored| stored.iter().map(|each| each.event.clone()).collect())
             .unwrap_or_default();
-        let asks = pending_ci_asks(&events);
+        let asks = open_ci_asks(task.state, &events);
         let Some(ask) = asks.into_iter().find(|ask| ask.stage == stage) else {
             return;
         };

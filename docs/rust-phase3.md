@@ -238,6 +238,9 @@ The fake's `natamux` project has three open GitHub issues (one imported already)
 | `settings-update-ready` | Settings on General with an update ready: the Version row's line and **Restart to Update** (T-0214) |
 | `whats-new` | The What's new dialog: the built-in release notes of the running version up to `## Download`, the link to older versions, **Full changelog** and **Close** (T-0301) |
 | `repo-trust-dialog` | The repo trust dialog of `natamux`: its commands with where each comes from, the setup script, the note, **Not now** and **Approve** (T-0224) |
+| `review-config-toast` | Start agent refused because the worktree's agent config changed: the error toast with **Review config** (T-0375) |
+| `repo-trust-task` | The repo trust dialog of one task's worktree, with the files changed since the last approval (T-0375) |
+| `ci-approval-commits` | The CI approval with the workflow warning, the sent files and the files of the commits no remote has (T-0375) |
 
 ### States of the MIT move
 

@@ -2,6 +2,7 @@
 //! the words of its dialog. It names the exact tree, so the daemon pushes only what was shown.
 
 use natamux_proto::events::task_event::TaskEvent;
+use natamux_proto::tasks::task::TaskState;
 use serde_json::Value;
 
 /// One CI push that waits for a person (`stage.ci-approval-needed`).
@@ -14,6 +15,13 @@ pub struct CiAsk {
     pub files: Vec<String>,
     pub not_sent: Vec<String>,
     pub not_sent_count: u64,
+    /// The commits that no remote has yet; None when the daemon could not read them.
+    pub new_commits: Option<u64>,
+    /// The paths those commits change (cut by the daemon), and how many there are.
+    pub commit_files: Vec<String>,
+    pub commit_files_count: u64,
+    /// A path under `.github/workflows/` changes; None when unknown.
+    pub workflows_changed: Option<bool>,
 }
 
 fn text(event: &TaskEvent, name: &str) -> String {
@@ -36,7 +44,12 @@ fn list(event: &TaskEvent, name: &str) -> Vec<String> {
         .collect()
 }
 
+fn number(event: &TaskEvent, name: &str) -> Option<u64> {
+    event.payload.get(name).and_then(Value::as_u64)
+}
+
 fn ask_of(event: &TaskEvent, stage: &str) -> CiAsk {
+    let commit_files = list(event, "commitFiles");
     CiAsk {
         stage: stage.to_string(),
         tree: text(event, "tree"),
@@ -44,11 +57,14 @@ fn ask_of(event: &TaskEvent, stage: &str) -> CiAsk {
         remote: text(event, "remote"),
         files: list(event, "files"),
         not_sent: list(event, "notSent"),
-        not_sent_count: event
+        not_sent_count: number(event, "notSentCount").unwrap_or(0),
+        new_commits: number(event, "newCommits"),
+        commit_files_count: number(event, "commitFilesCount").unwrap_or(commit_files.len() as u64),
+        commit_files,
+        workflows_changed: event
             .payload
-            .get("notSentCount")
-            .and_then(Value::as_u64)
-            .unwrap_or(0),
+            .get("workflowsChanged")
+            .and_then(Value::as_bool),
     }
 }
 
@@ -72,6 +88,15 @@ pub fn pending_ci_asks(events: &[TaskEvent]) -> Vec<CiAsk> {
         }
     }
     asks
+}
+
+/// The asks a person can still answer: none once the task is done or cancelled, since the daemon
+/// refuses an approval then.
+pub fn open_ci_asks(state: TaskState, events: &[TaskEvent]) -> Vec<CiAsk> {
+    if state.is_finished() {
+        return Vec::new();
+    }
+    pending_ci_asks(events)
 }
 
 /// The first 7 characters of an object id, as git shows it.
@@ -102,21 +127,63 @@ pub fn ask_description(ask: &CiAsk) -> String {
         };
         text.push_str(&format!(" Not sent: {}{more}.", ask.not_sent.join(", ")));
     }
+    text.push_str(&commits_line(ask));
     text
 }
 
-/// The dialog's rows: the files CI gets, at most `max`, then one row for the rest.
-pub fn ask_rows(ask: &CiAsk, max: usize) -> Vec<(String, String)> {
-    let mut rows: Vec<(String, String)> = ask
-        .files
-        .iter()
-        .take(max)
-        .map(|file| (format!("ci-file-{file}"), file.clone()))
-        .collect();
-    if ask.files.len() > max {
-        let rest = ask.files.len() - max;
-        rows.push(("ci-file-more".into(), format!("and {rest} more files")));
+const UNKNOWN_COMMITS: &str =
+    " Natamux could not read which commits no remote has yet; they are sent too.";
+
+/// The commits go too: the pushed commit holds HEAD's history.
+fn commits_line(ask: &CiAsk) -> String {
+    let commits = match ask.new_commits {
+        None => return UNKNOWN_COMMITS.to_string(),
+        Some(0) => return String::new(),
+        Some(1) => "1 commit".to_string(),
+        Some(n) => format!("{n} commits"),
+    };
+    let files = match ask.commit_files_count {
+        1 => "1 file".to_string(),
+        n => format!("{n} files"),
+    };
+    format!(" It also sends {commits} that no remote has ({files}).")
+}
+
+/// The warning row of a push that changes a GitHub workflow, which CI then runs; also when
+/// Natamux could not tell.
+fn warning_row(ask: &CiAsk) -> Option<(String, String)> {
+    let text = match ask.workflows_changed {
+        Some(false) => return None,
+        Some(true) => "Warning: this push changes .github/workflows/, and CI runs that code.",
+        None => "Warning: Natamux could not check this push for workflow changes.",
+    };
+    Some(("ci-warning".into(), text.into()))
+}
+
+/// At most `max` files, then one row for the `count - shown` others.
+fn push_files(
+    rows: &mut Vec<(String, String)>,
+    kind: &str,
+    files: &[String],
+    count: u64,
+    max: usize,
+) {
+    let shown = files.iter().take(max);
+    rows.extend(shown.map(|file| (format!("{kind}-{file}"), file.clone())));
+    let rest = count.saturating_sub(files.len().min(max) as u64);
+    if rest > 0 {
+        rows.push((format!("{kind}-more"), format!("and {rest} more files")));
     }
+}
+
+/// The dialog's rows: the workflow warning, the files CI gets, then the files the new commits
+/// change, each list at most `max` rows and one row for the rest.
+pub fn ask_rows(ask: &CiAsk, max: usize) -> Vec<(String, String)> {
+    let mut rows: Vec<(String, String)> = warning_row(ask).into_iter().collect();
+    let sent = ask.files.len() as u64;
+    push_files(&mut rows, "ci-file", &ask.files, sent, max);
+    let count = ask.commit_files_count;
+    push_files(&mut rows, "commit-file", &ask.commit_files, count, max);
     rows
 }
 

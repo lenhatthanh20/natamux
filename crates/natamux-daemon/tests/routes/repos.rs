@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use hyper::Method;
+use natamux_core::security::{SecurityMode, StrictSettings, force};
 use natamux_git::test_support::run_git;
 use serde_json::{Value, json};
 
@@ -344,6 +345,26 @@ async fn saves_the_permission_mode_of_the_agents_and_refuses_an_unknown_one() {
             .as_str()
             .unwrap()
             .contains("agents.permissionMode")
+    );
+}
+
+// The T-0373 spec named this test. One thread, so the forced mode reaches the daemon's handler.
+#[tokio::test]
+async fn strict_mode_refuses_a_save_of_the_auto_permission_mode() {
+    let d = git_daemon("settings-strict-auto").await;
+    let _strict = force(SecurityMode::Strict(StrictSettings::default()));
+    let ask = json!({ "agents": { "permissionMode": "ask" } });
+    assert_eq!(put_settings(&d, &[], ask).await.0, 200);
+
+    let auto = json!({ "agents": { "permissionMode": "auto" } });
+    let (status, refused) = put_settings(&d, &[], auto).await;
+    assert_eq!(status, 400, "{refused}");
+    let message = refused["message"].as_str().unwrap();
+    assert!(message.contains("agentAutoMode"), "{message}");
+    let (_, after) = d.get(SETTINGS).await;
+    assert_eq!(
+        after["settings"]["agents"],
+        json!({ "permissionMode": "ask" })
     );
 }
 

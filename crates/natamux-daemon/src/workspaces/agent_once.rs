@@ -74,7 +74,8 @@ pub fn run_agent_once_with(isolation: Option<Arc<Isolation>>) -> RunAgentOnce {
     Arc::new(move |run: AgentRun| {
         isolation.allows_agent(&run.agent)?;
         let cwd = run.cwd.clone();
-        let prepare = |command: &mut Command| isolation.isolate_command(command, &cwd);
+        let prepare =
+            |command: &mut Command, env: &Env| isolation.isolate_command(command, &cwd, Some(env));
         run_prepared(run, &daemon_env(), &prepare)
     })
 }
@@ -92,11 +93,12 @@ pub fn run_agent_once(run: AgentRun) -> Result<String, String> {
 
 // `daemon_env` is a parameter so a test can run with the variables a daemon has.
 fn run_with_env(run: AgentRun, daemon_env: &Env) -> Result<String, String> {
-    run_prepared(run, daemon_env, &|_| Ok(()))
+    run_prepared(run, daemon_env, &|_, _| Ok(()))
 }
 
-/// Changes the command last, before it starts (isolation). An error means no start.
-type Prepare<'a> = &'a dyn Fn(&mut Command) -> std::io::Result<()>;
+/// Changes the command last, before it starts (isolation). It gets the env the command was given
+/// after `env_clear`. An error means no start.
+type Prepare<'a> = &'a dyn Fn(&mut Command, &Env) -> std::io::Result<()>;
 
 pub(crate) fn run_prepared(
     run: AgentRun,
@@ -126,7 +128,8 @@ pub(crate) fn run_prepared(
         .stderr(Stdio::piped());
     natamux_core::login_path::apply(&mut command);
     detach(&mut command, shell.detached);
-    prepare(&mut command).map_err(|error| format!("{name} could not start: {error}"))?;
+    prepare(&mut command, &shell.env)
+        .map_err(|error| format!("{name} could not start: {error}"))?;
     let mut child = command
         .spawn()
         .map_err(|error| format!("{name} could not start: {error}"))?;

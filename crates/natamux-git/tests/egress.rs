@@ -16,7 +16,7 @@ use natamux_git::branches::list_remote_branches;
 use natamux_git::commit_push::{delete_remote_ref, push_branch, push_ref};
 use natamux_git::egress::{RemoteOp, resolve_remote, run_pinned};
 use natamux_git::exec::{git, spawn_count};
-use natamux_git::graph::fetch_origin_branch;
+use natamux_git::graph::{fetch_origin_branch, fetch_upstream};
 use serde_json::json;
 
 static ONE_AT_A_TIME: Mutex<()> = Mutex::new(());
@@ -95,6 +95,18 @@ fn file_url(path: &Path) -> String {
 
 fn has_ref(bare: &Path, name: &str) -> bool {
     git(bare, &["rev-parse", "--verify", "--quiet", name], None, &[]).is_ok()
+}
+
+/// Adds `text` to the repository's config: `git config` reads a value that starts with `-` as an
+/// option.
+fn append_config(repo: &Path, text: &str) {
+    use std::io::Write;
+    let config = repo.join(".git").join("config");
+    let mut file = std::fs::OpenOptions::new()
+        .append(true)
+        .open(config)
+        .unwrap();
+    file.write_all(text.as_bytes()).unwrap();
 }
 
 /// The spawns of `call` beyond what resolving the remote alone costs: a refused call must add none.
@@ -197,7 +209,9 @@ fn force_push_and_delete_are_refused_when_only_push_is_allowed() {
     let head = run_git(&repo, &["rev-parse", "HEAD"]).trim().to_string();
     let mut errors = Vec::new();
     let extra = extra_spawns(&repo, RemoteOp::Push, || {
-        errors.push(push_ref(&repo, &head, "natamux-ci/t-1").unwrap_err().0);
+        let url = "https://github.com/acme/app.git";
+        let pushed = push_ref(&repo, &head, "natamux-ci/t-1", url);
+        errors.push(pushed.unwrap_err().0);
     });
     assert_eq!(extra, 0);
     let extra = extra_spawns(&repo, RemoteOp::Push, || {
@@ -221,4 +235,44 @@ fn open_egress_runs_the_old_call() {
     let _net = force_network(NetworkSettings::defaults(false));
     push_branch(&repo, "main").unwrap();
     assert!(has_ref(&origin, "refs/heads/main"));
+}
+
+#[test]
+fn a_remote_that_starts_with_a_dash_runs_no_command() {
+    let _one = ONE_AT_A_TIME.lock().unwrap_or_else(|it| it.into_inner());
+    let (root, repo) = test_repo();
+    let marker = root.path().join("x");
+    let option = format!("--upload-pack=touch {}", marker.display());
+    append_config(
+        &repo,
+        &format!(
+            "[remote \"origin\"]\n\turl = {option}\n\
+             [branch \"main\"]\n\tremote = origin\n\tmerge = refs/heads/main\n"
+        ),
+    );
+    let _net = force_network(allowlist());
+    let error = list_remote_branches(&repo).unwrap_err().0;
+    assert!(error.starts_with("egress policy:"), "{error}");
+    let error = push_branch(&repo, "main").unwrap_err().0;
+    assert!(error.starts_with("egress policy:"), "{error}");
+    fetch_upstream(&repo, "main");
+    assert!(!marker.exists());
+}
+
+#[test]
+fn an_upstream_remote_that_starts_with_a_dash_runs_no_command_with_open_egress() {
+    let _one = ONE_AT_A_TIME.lock().unwrap_or_else(|it| it.into_inner());
+    let (root, repo) = test_repo();
+    let marker = root.path().join("y");
+    append_config(
+        &repo,
+        &format!(
+            "[branch \"main\"]\n\tremote = --upload-pack=touch {}\n\
+             \tmerge = refs/heads/main\n",
+            marker.display()
+        ),
+    );
+    let _net = force_network(NetworkSettings::defaults(false));
+    fetch_upstream(&repo, "main");
+    assert!(!marker.exists());
 }

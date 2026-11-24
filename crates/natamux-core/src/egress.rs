@@ -79,6 +79,16 @@ fn network_remote(authority: &str, path: &str) -> Remote {
     }
 }
 
+// Windows reaches a `\\server\share` path or a `file://server/` URL over SMB: any host.
+const SHARE: &str = "a Windows network share as a remote is refused";
+
+/// `\\server` and `//server`, also mixed: a Windows network path.
+fn unc_path(path: &str) -> bool {
+    path.as_bytes()
+        .get(..2)
+        .is_some_and(|two| two.iter().all(|byte| matches!(byte, b'/' | b'\\')))
+}
+
 /// Reads a remote URL in the forms git takes: `https://`, `ssh://`, scp-like `user@host:path`,
 /// `file://` and folder paths.
 pub fn parse_remote(url: &str) -> Remote {
@@ -86,6 +96,9 @@ pub fn parse_remote(url: &str) -> Remote {
     if let Some((scheme, rest)) = url.split_once("://") {
         let scheme = scheme.to_ascii_lowercase();
         return match scheme.as_str() {
+            "file" if cfg!(windows) && (!rest.starts_with('/') || unc_path(rest)) => {
+                Remote::Refused(SHARE.into())
+            }
             "file" => Remote::Local,
             "https" | "ssh" | "git+ssh" | "ssh+git" => {
                 // curl and git end the authority at `/`, `?` or `#`; a `\` is read as `/` by some.
@@ -103,6 +116,9 @@ pub fn parse_remote(url: &str) -> Remote {
     // `ext::cmd`, `fd::` and other `<transport>::<address>` forms run a helper.
     if url.contains("::") {
         return Remote::Refused("a remote helper (`<transport>::`) is refused".into());
+    }
+    if cfg!(windows) && unc_path(url) {
+        return Remote::Refused(SHARE.into());
     }
     let windows_drive = url.as_bytes().get(1) == Some(&b':')
         && url.as_bytes().first().is_some_and(u8::is_ascii_alphabetic);
@@ -163,6 +179,14 @@ fn check_git(settings: &NetworkSettings, url: &str, action: &str) -> Result<(), 
 }
 
 fn check_gh(settings: &NetworkSettings, host: &str, action: &str) -> Result<(), String> {
+    // `evil.com?x.corp.com` would match `*.corp.com` by its end.
+    let host_char =
+        |byte: u8| byte.is_ascii_lowercase() || byte.is_ascii_digit() || b".:-".contains(&byte);
+    if host.is_empty() || !host.bytes().all(host_char) {
+        return Err(refused(format!(
+            "gh {action}: the host {host:?} is refused"
+        )));
+    }
     let rules = settings
         .gh
         .as_ref()

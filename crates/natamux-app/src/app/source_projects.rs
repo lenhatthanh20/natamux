@@ -16,15 +16,24 @@ impl Source {
     }
 
     /// `GET /repos/:id/trust`: the commands the project runs, and whether they are approved.
-    pub fn repo_trust(&self, repo_id: &str) -> Answer<RepoTrustView> {
-        self.ask(|c| c.repo_trust(repo_id), |f| f.repo_trust(repo_id))
+    /// `task`: the agent config of that task's worktree (`?task=`).
+    pub fn repo_trust(&self, repo_id: &str, task: Option<&str>) -> Answer<RepoTrustView> {
+        self.ask(
+            |c| c.repo_trust(repo_id, task),
+            |f| f.repo_trust(repo_id, task),
+        )
     }
 
     /// `POST /repos/:id/trust` with the hash the dialog showed; 409 when the commands changed.
-    pub fn approve_repo(&self, repo_id: &str, hash: &str) -> Answer<RepoTrustView> {
+    pub fn approve_repo(
+        &self,
+        repo_id: &str,
+        hash: &str,
+        task: Option<&str>,
+    ) -> Answer<RepoTrustView> {
         self.ask(
-            |c| c.approve_repo(repo_id, hash),
-            |f| f.approve_repo(repo_id, hash),
+            |c| c.approve_repo(repo_id, hash, task),
+            |f| f.approve_repo(repo_id, hash, task),
         )
     }
 

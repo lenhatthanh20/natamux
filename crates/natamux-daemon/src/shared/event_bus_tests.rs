@@ -309,3 +309,94 @@ fn a_task_scoped_client_gets_its_own_and_its_subtasks_messages_only() {
     );
     assert_eq!(all.lock().unwrap().len(), 10);
 }
+
+fn scoped(bus: &EventBus, own: &str) -> Arc<Mutex<Vec<String>>> {
+    let got: Arc<Mutex<Vec<String>>> = Arc::default();
+    let sink = Arc::clone(&got);
+    bus.subscribe_client(ClientScope::Task(own.into()), move |text| {
+        sink.lock().unwrap().push(text.to_string())
+    });
+    got
+}
+
+// T-0375 (R3-1): the parent's socket gets the same short view of a subtask as its `GET`.
+#[test]
+fn a_parent_scoped_client_gets_only_the_view_of_a_subtask() {
+    let bus = EventBus::new();
+    let got = scoped(&bus, "T-0001");
+    let all = texts(&bus);
+    let child = Task {
+        description: "C-MARK".into(),
+        workspace: Some("/w/T-0003".into()),
+        ..task_of("T-0003", Some("T-0001"))
+    };
+    let event: TaskEvent = serde_json::from_value(json!({
+        "taskId": "T-0003", "source": "agent", "type": "agent.message", "at": "x",
+        "payload": { "text": "E-MARK" },
+    }))
+    .unwrap();
+    bus.publish(DaemonMessage::TaskUpdated {
+        task: child,
+        event,
+        accepted: true,
+        moved: None,
+    });
+    let own = DaemonMessage::TaskChanged {
+        task: task_of("T-0001", None),
+    };
+    bus.publish(own.clone());
+
+    let got = got.lock().unwrap().clone();
+    let frame: Value = serde_json::from_str(&got[0]).unwrap();
+    assert_eq!(frame["kind"], "task.updated");
+    assert_eq!(frame["task"], task_view(&task_of("T-0003", Some("T-0001"))));
+    assert!(frame.get("event").is_none(), "{frame}");
+    assert!(!got[0].contains("C-MARK") && !got[0].contains("E-MARK"));
+    // Its own task and the desktop get the whole task.
+    assert_eq!(got[1], own.to_json());
+    assert!(all.lock().unwrap()[0].contains("C-MARK"));
+}
+
+// T-0375 (R3-2): a revoked agent's clients get nothing more and its sockets end; others stay.
+#[test]
+fn ending_an_agent_drops_its_clients_and_runs_its_ends_once() {
+    let bus = EventBus::new();
+    let got = scoped(&bus, "T-0001");
+    let _other = scoped(&bus, "T-0002");
+    let all = texts(&bus);
+    let ended: Arc<Mutex<Vec<&str>>> = Arc::default();
+    let (one, two) = (Arc::clone(&ended), Arc::clone(&ended));
+    bus.on_agent_end("T-0001", move || one.lock().unwrap().push("T-0001"));
+    bus.on_agent_end("T-0002", move || two.lock().unwrap().push("T-0002"));
+
+    bus.end_agent("T-0001");
+    bus.end_agent("T-0001");
+    bus.publish(DaemonMessage::ShellsChanged {
+        task_id: "T-0001".into(),
+    });
+
+    assert!(got.lock().unwrap().is_empty());
+    assert_eq!(*ended.lock().unwrap(), ["T-0001"]);
+    assert_eq!(all.lock().unwrap().len(), 1);
+    assert_eq!(bus.size(), 2);
+}
+
+// T-0375 (R2-6): the listeners run under the mode forced where the message was queued, even
+// when another thread sends it.
+#[test]
+fn a_message_is_delivered_under_the_mode_forced_where_it_was_queued() {
+    use natamux_core::security::{StrictSettings, force, mode};
+
+    let bus = EventBus::new();
+    let seen: Arc<Mutex<Vec<bool>>> = Arc::default();
+    let sink = Arc::clone(&seen);
+    bus.subscribe(move |_| sink.lock().unwrap().push(mode().is_strict()));
+    {
+        let _strict = force(SecurityMode::Strict(StrictSettings::default()));
+        bus.enqueue(message());
+    }
+    let sender = Arc::clone(&bus);
+    std::thread::spawn(move || sender.flush()).join().unwrap();
+
+    assert_eq!(*seen.lock().unwrap(), [true]);
+}

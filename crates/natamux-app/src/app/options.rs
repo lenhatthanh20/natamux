@@ -150,6 +150,11 @@ pub enum Shot {
     UpdateFailed,
     SettingsUpdateReady,
     RepoTrustDialog,
+    /// T-0375: Start agent refused for a changed agent config, the trust dialog of the task's
+    /// worktree, and the CI approval with new commits and a workflow change.
+    ReviewConfigToast,
+    RepoTrustTask,
+    CiApprovalCommits,
     WhatsNew,
     /// T-0316: the find bar in the diff, Show whitespace on.
     DiffFind,
@@ -211,7 +216,7 @@ pub enum Shot {
 }
 
 impl Shot {
-    pub const ALL: [Shot; 176] = [
+    pub const ALL: [Shot; 179] = [
         Shot::TasksTable,
         Shot::TasksBoard,
         Shot::BoardHoverCard,
@@ -315,6 +320,9 @@ impl Shot {
         Shot::UpdateFailed,
         Shot::SettingsUpdateReady,
         Shot::RepoTrustDialog,
+        Shot::ReviewConfigToast,
+        Shot::RepoTrustTask,
+        Shot::CiApprovalCommits,
         Shot::WhatsNew,
         Shot::DiffFind,
         Shot::EditorFind,
@@ -495,6 +503,9 @@ impl Shot {
             Shot::UpdateFailed => "update-failed",
             Shot::SettingsUpdateReady => "settings-update-ready",
             Shot::RepoTrustDialog => "repo-trust-dialog",
+            Shot::ReviewConfigToast => "review-config-toast",
+            Shot::RepoTrustTask => "repo-trust-task",
+            Shot::CiApprovalCommits => "ci-approval-commits",
             Shot::WhatsNew => "whats-new",
             Shot::DiffFind => "diff-find",
             Shot::EditorFind => "editor-find",
