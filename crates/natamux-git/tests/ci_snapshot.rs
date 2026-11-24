@@ -192,6 +192,24 @@ fn refuses_a_push_after_origin_moved_and_neither_remote_gets_a_ref() {
 }
 
 #[test]
+fn refuses_multiple_push_urls_even_when_the_first_was_approved() {
+    let r = repo();
+    let remote = remote_url(&r.work).unwrap();
+    let other = bare(&r.root, "other.git");
+    let (commit, tree) = head_snapshot(&r.work).unwrap();
+    for url in [remote.as_str(), other.to_str().unwrap()] {
+        git(
+            &r.work,
+            &["remote", "set-url", "--add", "--push", "origin", url],
+        );
+    }
+    let approved = push(CiMode::Snapshot, &commit, &tree, &remote);
+    assert!(push_approved(&r.work, &approved).is_err());
+    assert_eq!(refs(&r.origin), "");
+    assert_eq!(refs(&other), "");
+}
+
+#[test]
 fn refuses_a_changed_mode_a_tree_that_differs_and_a_branch_outside_natamux_ci() {
     let r = repo();
     let remote = remote_url(&r.work).unwrap();

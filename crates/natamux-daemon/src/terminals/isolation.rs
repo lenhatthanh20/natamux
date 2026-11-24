@@ -11,7 +11,7 @@ use std::sync::Arc;
 use natamux_agents::hook_files::{WorkspaceHooks, prepare_agent_hooks};
 use natamux_agents::launch_isolation::{ISOLATION_AGENT_REASON, isolated_adapter_ok};
 use natamux_core::formats::is_task_id_shape;
-use natamux_core::security::{IsolationSettings, install_git_hardening, load_isolation, network};
+use natamux_core::security::{IsolationSettings, install_git_hardening, load_isolation, network_for};
 use natamux_core::workspaces::private_dir::{private_dir, write_private};
 use natamux_proto::projects::security::IsolationView;
 use natamux_pty::sandbox_plan::{isolate_command, landlock_abi};
@@ -157,7 +157,7 @@ impl Isolation {
             sweep_mark: Some(format!("{SANDBOX_MARK}={mark}")),
             ..self.input(&options.cwd, &dirs)
         });
-        plan.tcp_connect = tcp_ports(&env, &network());
+        plan.tcp_connect = tcp_ports(&env, &network_for(&options.cwd));
         options.env = env;
         options.isolation = Some(plan);
         Ok(())
@@ -178,7 +178,7 @@ impl Isolation {
             path: env.get("PATH").map(String::as_str),
             ..self.input(worktree, &dirs)
         });
-        plan.tcp_connect = tcp_ports(&env, &network());
+        plan.tcp_connect = tcp_ports(&env, &network_for(worktree));
         command.env_clear().envs(&env);
         isolate_command(command, &plan)
     }

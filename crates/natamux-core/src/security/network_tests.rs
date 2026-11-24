@@ -78,6 +78,8 @@ fn an_outside_change_keeps_the_stricter_settings() {
     let kept = network_in(&dir, false);
     assert_eq!(kept.egress, Egress::Allowlist);
     assert!(!kept.updater);
+    std::fs::remove_file(dir.join(FILE_NAME)).unwrap();
+    assert_eq!(network_in(&dir, false).egress, Egress::Allowlist);
     std::fs::remove_dir_all(&dir).unwrap();
     assert_eq!(network_in(&dir, false), NetworkSettings::defaults(false));
 }
@@ -95,6 +97,8 @@ fn a_repo_only_tightens_egress_and_offline_is_loopback() {
     std::fs::write(dir.join(".natamux.json"), repo("open").to_string()).unwrap();
     assert_eq!(network_for(&dir).egress, Egress::Allowlist);
     std::fs::write(dir.join(".natamux.json"), repo("loopback").to_string()).unwrap();
+    assert_eq!(network_for(&dir).egress, Egress::Loopback);
+    std::fs::write(dir.join(".natamux.json"), repo("invalid").to_string()).unwrap();
     assert_eq!(network_for(&dir).egress, Egress::Loopback);
     std::fs::remove_dir_all(&dir).unwrap();
 }

@@ -269,7 +269,8 @@ pub fn network_in(data_dir: &Path, strict: bool) -> NetworkSettings {
     let now = file_network(&data_dir.join(FILE_NAME), strict);
     let written = file_network(&data_dir.join(WRITTEN_NAME), strict);
     match (now, written) {
-        (None, _) => NetworkSettings::defaults(strict),
+        (None, None) => NetworkSettings::defaults(strict),
+        (None, Some(written)) => written,
         (Some(now), None) => now,
         (Some(now), Some(written)) if now == written => now,
         (Some(now), Some(written)) => tighten_network(&now, &written),
@@ -308,7 +309,7 @@ pub fn network_for(folder: &Path) -> NetworkSettings {
         .as_ref()
         .and_then(|repo| repo.pointer("/security/network/egress"))
         .and_then(Value::as_str)
-        .and_then(Egress::parse);
+        .map(|text| Egress::parse(text).unwrap_or(Egress::Loopback));
     if let Some(wanted) = wanted {
         settings.egress = settings.egress.max(wanted);
     }

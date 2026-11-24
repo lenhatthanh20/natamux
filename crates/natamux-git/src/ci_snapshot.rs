@@ -6,7 +6,8 @@ use std::path::Path;
 use natamux_core::js::js_trim;
 use natamux_core::security::{CiMode, ci_mode};
 
-use crate::commit_push::{CI_REF_PREFIX, push_ref, snapshot_paths};
+use crate::commit_push::{CI_REF_PREFIX, PUSH_TIMEOUT, snapshot_paths};
+use crate::egress::{RemoteOp, resolve_remote, run_pinned};
 use crate::exec::{GitError, checked_ref, git, git_bytes};
 
 /// The files of a worktree that differ from HEAD. `untracked` files are never sent to CI; ignored
@@ -178,7 +179,18 @@ pub fn verify_approved(worktree: &Path, push: &ApprovedPush) -> Result<(), GitEr
 /// Pushes exactly the approved commit to its CI branch, after `verify_approved`.
 pub fn push_approved(worktree: &Path, push: &ApprovedPush) -> Result<(), GitError> {
     verify_approved(worktree, push)?;
-    push_ref(worktree, push.commit, push.ref_name)
+    let url = resolve_remote(worktree, RemoteOp::Push, "origin")?;
+    if without_userinfo(&url) != push.remote {
+        return Err(refused("the remote changed since the approval.".into()));
+    }
+    let target = format!("{}:refs/heads/{}", push.commit, push.ref_name);
+    run_pinned(
+        worktree,
+        &url,
+        &["push", "--force", "--quiet", "--", &url, &target],
+        Some(PUSH_TIMEOUT),
+    )
+    .map(drop)
 }
 
 #[cfg(test)]

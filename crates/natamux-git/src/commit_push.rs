@@ -21,7 +21,7 @@ pub const NOTHING_TO_COMMIT: &str =
     "There is nothing to commit. The workspace matches its last commit.";
 
 /// A push or a pull can take a while, but one that hangs must not hold the stage forever.
-const PUSH_TIMEOUT: Duration = Duration::from_secs(2 * 60);
+pub(crate) const PUSH_TIMEOUT: Duration = Duration::from_secs(2 * 60);
 
 /// What `commit_all` and `read_commit_diff` fail with: git, or `NothingToCommitError`.
 #[derive(Clone, Debug, PartialEq, Eq)]
