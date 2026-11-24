@@ -87,25 +87,19 @@ fn too_wide(dir: &Path, home: &Path, data_dir: &Path) -> bool {
         || dir.starts_with(data_dir)
 }
 
-/// The folders of a PATH, read only. A `.../bin` folder gives its parent, so a toolchain finds
-/// its own `lib` (an npm global install, `~/.cargo`), unless that parent is too wide.
+/// Grant executable folders themselves. Their parent can also store credentials.
 pub fn toolchain_dirs(path: &str, home: &Path, data_dir: &Path) -> Vec<PathBuf> {
-    let mut dirs: Vec<PathBuf> = Vec::new();
+    let real = |path: &Path| std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    let home = real(home);
+    let data_dir = real(data_dir);
+    let mut dirs = Vec::new();
     for entry in std::env::split_paths(path) {
         if !entry.is_absolute() || !entry.is_dir() {
             continue;
         }
-        let parent = entry
-            .parent()
-            .filter(|_| entry.file_name().is_some_and(|name| name == "bin"))
-            .map(Path::to_path_buf);
-        let chosen = parent
-            .filter(|parent| !too_wide(parent, home, data_dir))
-            .or_else(|| (!too_wide(&entry, home, data_dir)).then(|| entry.clone()));
-        if let Some(dir) = chosen
-            && !dirs.contains(&dir)
-        {
-            dirs.push(dir);
+        let entry = real(&entry);
+        if !too_wide(&entry, &home, &data_dir) && !dirs.contains(&entry) {
+            dirs.push(entry);
         }
     }
     dirs
