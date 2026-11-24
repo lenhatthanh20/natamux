@@ -7,6 +7,15 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v1.1.0 (2026-11-24)
+
+- Strict mode: turn it on in **Settings > Security** for work with strict security rules. Agents start in their ask mode, agent config is approved per worktree, and CI gets only what you allow. See [Security and privacy](/docs/help/security-and-privacy/#strict-mode) and [Strict mode settings](/docs/reference/configuration/#strict-mode-securityjson).
+- **Check on CI** sends only the last commit plus changes to tracked files. Untracked files are never sent; the card names them. See [Stages](/docs/concepts/stages/).
+- An agent reaches only its own task and its subtasks. In the `ask` permission mode, an agent argument that turns off approvals stops the start.
+- When a task's agent config differs from what you approved, **Start agent** shows **Review config**. Projects with an agent config file ask for one new approval.
+- Deleting a task removes all its files, logs mask secrets, and data files are readable only by you. New commands: `natamux security`, `natamux support-bundle` and `natamux purge-data`. See [CLI](/docs/reference/cli/).
+- A [code signing policy](/docs/help/code-signing/) page. Windows programs show their version in the file properties.
+
 ## v1.0.36 (2026-11-22)
 
 - The Windows installer and the Linux `.tar.gz` (in a folder you can write) update themselves: **Restart Now** installs the new version and opens it. See [Desktop app](/docs/guides/desktop-app/#updates).
