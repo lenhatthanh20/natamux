@@ -2,7 +2,7 @@
 
 use hyper::Method;
 use natamux_contract::daemon::{Body, Daemon, Token};
-use natamux_contract::transcript::Transcript;
+use natamux_contract::transcript::{Allowed, Transcript};
 use serde_json::{Value, json};
 
 use crate::{agent_token, both, call, data_file, get, kept, post};
@@ -61,6 +61,41 @@ async fn events() {
         }
         t.note("agent reads", kept(&d.request(Method::GET, "/tasks/CT-1502", Body::None, Token::Given(&token)).await));
         t.note("agent log", kept(&get(&d, "/tasks/CT-1502/events").await));
+        t
+    })
+    .await;
+}
+
+/// T-0390: a turn that background work started marks the task with `backgroundResultAt`. The Node
+/// daemon has no such field, so those two steps may differ; a task without it keeps its shape.
+#[tokio::test]
+#[ignore = "needs both daemons: the daemon-contract CI job"]
+async fn background_result() {
+    let rust_only = "backgroundResultAt is a field of the Rust daemon only (T-0390)";
+    let allowed = [
+        Allowed {
+            step: "marked",
+            reason: rust_only,
+        },
+        Allowed {
+            step: "task",
+            reason: rust_only,
+        },
+    ];
+    both("background-result", &allowed, |d: Daemon, mut t: Transcript| async move {
+        let id = "CT-1503";
+        post(&d, "/tasks", json!({ "title": format!("{id}: Background result") })).await;
+        let agent = |kind: &str, payload: Value| {
+            json!({ "source": "agent", "type": kind, "payload": payload })
+        };
+        send(&d, id, human("task.readied", json!({}))).await;
+        send(&d, id, human("stage.started", json!({}))).await;
+        let work = json!({ "waitingFor": ["Bash: pnpm test"] });
+        t.note("waiting", send(&d, id, agent("agent.waiting", work)).await);
+        t.note("unmarked task", kept(&get(&d, &format!("/tasks/{id}")).await));
+        let marked = json!({ "waitingFor": ["Bash: pnpm test"], "backgroundResult": true });
+        t.note("marked", send(&d, id, agent("agent.waiting", marked)).await);
+        t.note("task", kept(&get(&d, &format!("/tasks/{id}")).await));
         t
     })
     .await;

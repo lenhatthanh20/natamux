@@ -121,7 +121,7 @@ impl TaskBoard {
         self.built.set(self.built.get() + 1);
         let dashboard = self.dashboard.read(cx);
         let picked = dashboard.selected.as_deref() == Some(task.id.as_str());
-        let row = RowData::of(task, &dashboard.data, now_ms());
+        let row = RowData::of(task, &dashboard.data, dashboard.attention(now_ms()));
         let card = self.render_card(at, &row, picked, cx);
         // A list has no gap: the old gap_2 is padding under each card but the last.
         let last = index + 1 == column.items();

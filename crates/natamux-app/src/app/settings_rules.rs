@@ -137,6 +137,10 @@ pub fn page_summary(page: &SettingsPage) -> &'static str {
 pub enum SettingRow {
     Notify,
     NotifyAlways,
+    /// A note for a turn that background work started (T-0390).
+    NotifyBackground,
+    /// Background work with no sign of life for a while needs you (T-0390).
+    FlagBackground,
     /// The version, the updater's state and Check now (or Restart to Update).
     UpdatesVersion,
     UpdatesAuto,
@@ -152,9 +156,11 @@ pub enum SettingRow {
 }
 
 impl SettingRow {
-    pub const ALL: [SettingRow; 13] = [
+    pub const ALL: [SettingRow; 15] = [
         SettingRow::Notify,
         SettingRow::NotifyAlways,
+        SettingRow::NotifyBackground,
+        SettingRow::FlagBackground,
         SettingRow::UpdatesVersion,
         SettingRow::UpdatesAuto,
         SettingRow::CleanOnSave,
@@ -172,6 +178,8 @@ impl SettingRow {
         match self {
             SettingRow::Notify
             | SettingRow::NotifyAlways
+            | SettingRow::NotifyBackground
+            | SettingRow::FlagBackground
             | SettingRow::UpdatesVersion
             | SettingRow::UpdatesAuto
             | SettingRow::CleanOnSave => SettingsPage::General,
@@ -183,7 +191,10 @@ impl SettingRow {
     /// The group title the row sits under on its page.
     pub fn group(self) -> &'static str {
         match self {
-            SettingRow::Notify | SettingRow::NotifyAlways => "Notifications",
+            SettingRow::Notify
+            | SettingRow::NotifyAlways
+            | SettingRow::NotifyBackground
+            | SettingRow::FlagBackground => "Notifications",
             SettingRow::UpdatesVersion | SettingRow::UpdatesAuto => "Updates",
             SettingRow::CleanOnSave => "Editor",
             SettingRow::Theme
@@ -200,6 +211,8 @@ impl SettingRow {
         match self {
             SettingRow::Notify => "Notify me",
             SettingRow::NotifyAlways => "Always notify",
+            SettingRow::NotifyBackground => "Notify when a background result arrives",
+            SettingRow::FlagBackground => "Flag background work older than",
             SettingRow::UpdatesVersion => "Version",
             SettingRow::UpdatesAuto => "Check for updates automatically",
             SettingRow::CleanOnSave => "Clean on save",
@@ -218,6 +231,12 @@ impl SettingRow {
         match self {
             SettingRow::Notify => "Show a system notification when a task starts to need you.",
             SettingRow::NotifyAlways => "With Notify me on, also notify while you use the app.",
+            SettingRow::NotifyBackground => {
+                "Also notify when an agent ends a turn that its background work started."
+            }
+            SettingRow::FlagBackground => {
+                "Background work with no sign of life for this long goes to Needs you."
+            }
             SettingRow::UpdatesVersion => "The running version and the last update check.",
             SettingRow::UpdatesAuto => {
                 "Look up new versions 30 seconds after start, then every 6 hours."
@@ -241,6 +260,8 @@ impl SettingRow {
         match self {
             SettingRow::Notify => "notifications alert",
             SettingRow::NotifyAlways => "notifications alert focused active",
+            SettingRow::NotifyBackground => "notifications alert subagent loop cron result",
+            SettingRow::FlagBackground => "hung stuck subagent loop cron needs you quiet",
             SettingRow::UpdatesVersion => "update version release check now",
             SettingRow::UpdatesAuto => "update version release automatically",
             SettingRow::CleanOnSave => "editor file trailing whitespace newline line break format",

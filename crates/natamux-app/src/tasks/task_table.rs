@@ -359,7 +359,10 @@ impl TaskTable {
             range
                 .filter_map(|index| {
                     let task = self.rows.get(index)?;
-                    Some((index, RowData::of(task, &dashboard.data, now)))
+                    Some((
+                        index,
+                        RowData::of(task, &dashboard.data, dashboard.attention(now)),
+                    ))
                 })
                 .collect()
         };

@@ -11,7 +11,7 @@ use super::palette_rows::{
     MAX_ROWS, PaletteMode, PaletteRow, PaletteScope, PaletteSection, scoped, task_row,
 };
 use super::task_match::ranked_tasks;
-use crate::tasks::task_attention::is_quiet;
+use crate::tasks::task_attention::{Attention, is_quiet};
 use crate::tasks::task_changes::task_of;
 use crate::tasks::task_sort::{state_rank, task_number};
 
@@ -19,7 +19,8 @@ pub struct JumpInput<'a> {
     pub query: &'a str,
     pub tasks: &'a [Arc<Task>],
     pub recent: &'a [String],
-    pub now_ms: i64,
+    /// The clock and the limit for background work of the quiet checks.
+    pub attention: Attention,
     pub scope: Option<&'a PaletteScope>,
     /// Task id to the names of its open terminals, in order.
     pub terminals: &'a BTreeMap<String, Vec<String>>,
@@ -60,9 +61,9 @@ const WAITING_RANK: [TaskState; 4] = [
 ];
 
 /// Tasks that need the user (what asks comes first), then running ones, then the rest.
-pub fn jump_group(task: &Task, now_ms: i64) -> JumpGroup {
+pub fn jump_group(task: &Task, at: impl Into<Attention>) -> JumpGroup {
     if task.state == TaskState::Running {
-        return if is_quiet(task, now_ms) {
+        return if is_quiet(task, at) {
             JumpGroup::NeedsYou
         } else {
             JumpGroup::Running
@@ -124,7 +125,7 @@ fn jump_typed(workspaces: &[&Task], query: &str, input: &JumpInput) -> Vec<Palet
 
 /// The rows of the jump palette (Mod+J): workspaces and their terminals.
 pub fn jump_sections(input: &JumpInput) -> Vec<PaletteSection> {
-    let now_ms = input.now_ms;
+    let at = input.attention;
     // The needs-you pill counts the tasks without a workspace too, so its list shows them.
     let all_tasks = input.scope == Some(&PaletteScope::NeedsYou);
     let workspaces = scoped(
@@ -134,7 +135,7 @@ pub fn jump_sections(input: &JumpInput) -> Vec<PaletteSection> {
             .map(task_of)
             .filter(|task| all_tasks || task.workspace.is_some()),
         input.scope,
-        now_ms,
+        at,
     );
     let query = input.query.trim();
     if !query.is_empty() {
@@ -145,7 +146,7 @@ pub fn jump_sections(input: &JumpInput) -> Vec<PaletteSection> {
 
 /// The sections with nothing typed: needs you, running, recent, the rest.
 fn jump_idle(workspaces: &[&Task], input: &JumpInput) -> Vec<PaletteSection> {
-    let now_ms = input.now_ms;
+    let at = input.attention;
     let recent_rank = |task: &Task| {
         input
             .recent
@@ -163,7 +164,7 @@ fn jump_idle(workspaces: &[&Task], input: &JumpInput) -> Vec<PaletteSection> {
         workspaces
             .iter()
             .copied()
-            .filter(|task| jump_group(task, now_ms) == wanted)
+            .filter(|task| jump_group(task, at) == wanted)
             .collect()
     };
     let mut waiting = group(JumpGroup::NeedsYou);

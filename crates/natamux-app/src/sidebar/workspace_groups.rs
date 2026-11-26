@@ -8,15 +8,14 @@ use std::sync::Arc;
 use natamux_proto::tasks::task::{Task, TaskState};
 
 /// One ISO parser for the app: it takes the text by characters, so any text is safe.
-pub use crate::tasks::task_time::parse_iso_ms;
+#[cfg(test)]
+use crate::tasks::task_time::parse_iso_ms;
 
-use crate::tasks::task_attention::next_quiet_ms;
+pub use crate::tasks::task_attention::is_quiet;
+use crate::tasks::task_attention::{Attention, next_quiet_ms};
 use crate::tasks::task_changes::task_of;
 
 pub const DEFAULT_REPO_ID: &str = "default";
-
-// A running task with no news for this long counts as one that needs the user.
-const QUIET_AFTER_MS: i64 = 10 * 60 * 1000;
 
 /// A project, as far as the groups need it.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -67,13 +66,6 @@ pub fn needs_me(state: TaskState) -> bool {
         state,
         TaskState::NeedsInput | TaskState::Review | TaskState::Failed | TaskState::Blocked
     )
-}
-
-/// A running task that has said nothing for 10 minutes and waits for no background work.
-pub fn is_quiet(task: &Task, now_ms: i64) -> bool {
-    task.state == TaskState::Running
-        && task.background_since.is_none()
-        && parse_iso_ms(&task.updated_at).is_some_and(|updated| now_ms - updated >= QUIET_AFTER_MS)
 }
 
 /// The repositories, then the ones only tasks still name (removed ones). Their id is their name.
@@ -250,17 +242,18 @@ pub fn short_branch(task: &Task) -> String {
 /// the workspace that is open. The state of that workspace is the color of the dot. None: nothing.
 /// How long until the hint of a folded group changes by the clock alone: a running task in it
 /// turns quiet, and the hint shows it as one that needs the user.
-pub fn next_hint_change_ms(group: &RepoGroup, now_ms: i64) -> Option<i64> {
-    next_quiet_ms(group.open.iter().chain(&group.nested).map(task_of), now_ms)
+pub fn next_hint_change_ms(group: &RepoGroup, at: impl Into<Attention>) -> Option<i64> {
+    next_quiet_ms(group.open.iter().chain(&group.nested).map(task_of), at)
 }
 
 pub fn collapsed_hint(
     group: &RepoGroup,
     current_id: Option<&str>,
-    now_ms: i64,
+    at: impl Into<Attention>,
 ) -> Option<TaskState> {
+    let at = at.into();
     let open = || group.open.iter().chain(&group.nested);
-    if let Some(waiting) = open().find(|task| needs_me(task.state) || is_quiet(task, now_ms)) {
+    if let Some(waiting) = open().find(|task| needs_me(task.state) || is_quiet(task, at)) {
         return Some(if needs_me(waiting.state) {
             waiting.state
         } else {

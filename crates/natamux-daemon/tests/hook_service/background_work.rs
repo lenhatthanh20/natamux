@@ -144,17 +144,138 @@ fn logs_each_paused_turn_and_shows_the_newest_list_of_work() {
     let service = fx.service();
     let task = running_task(&fx, &service);
     claude(&service, &task.id, &stop_with(background()), None);
+    let both = json!({
+        "background_tasks": [{ "id": "t2", "type": "subagent", "description": "review" }],
+        "session_crons": [{ "id": "c1", "prompt": "check CI" }],
+    });
 
-    let next = claude(&service, &task.id, &stop_with(crons()), None);
+    let next = claude(&service, &task.id, &stop_with(both), None);
 
     assert_eq!(next.applied, ["agent.waiting"]);
     let kinds = fx.kinds(&task.id);
     assert_eq!(kinds[kinds.len() - 2..], ["agent.waiting", "agent.waiting"]);
     assert_eq!(fx.state(&task.id), TaskState::Running);
     assert_eq!(
-        line(&service, &task.id, "1"),
-        Some("Waiting for scheduled prompt: check CI".into())
+        fx.last_payload(&task.id)["waitingFor"],
+        json!(["subagent: review", "scheduled prompt: check CI"])
     );
+}
+
+// T-0390: a cron may wait for days. With only scheduled prompts left the turn ends as usual.
+#[test]
+fn ends_the_turn_when_only_scheduled_prompts_are_left() {
+    let fx = Fx::new();
+    let service = fx.service();
+    let task = running_task(&fx, &service);
+
+    let result = claude(&service, &task.id, &stop_with(crons()), None);
+
+    assert_eq!(result.applied, ["agent.finished"]);
+    assert_eq!(fx.state(&task.id), TaskState::Idle);
+    let payload = fx.last_payload(&task.id);
+    assert_eq!(payload["scheduled"], json!(["check CI"]));
+    assert!(payload.get("waitingFor").is_none());
+    assert!(payload.get("backgroundResult").is_none());
+}
+
+#[test]
+fn marks_the_turn_a_scheduled_prompt_started() {
+    let fx = Fx::new();
+    let service = fx.service();
+    let task = running_task(&fx, &service);
+    claude(&service, &task.id, &stop_with(crons()), None);
+
+    let fired = hook("UserPromptSubmit", json!({ "prompt": "check CI" }));
+    assert_eq!(
+        claude(&service, &task.id, &fired, None).applied,
+        ["agent.resumed"]
+    );
+    let resumed = fx.last_payload(&task.id);
+    assert!(resumed.get("promptHead").is_none());
+    let result = claude(&service, &task.id, &stop_with(crons()), None);
+
+    assert_eq!(result.applied, ["agent.finished"]);
+    assert_eq!(fx.last_payload(&task.id)["backgroundResult"], json!(true));
+    assert!(fx.task(&task.id).background_result_at.is_some());
+}
+
+// T-0390: a question waits for the user, even while background work runs on.
+#[test]
+fn a_question_with_background_work_left_waits_for_the_user() {
+    let fx = Fx::new();
+    let service = fx.service();
+    let task = running_task(&fx, &service);
+    let mut asked = background();
+    asked["last_assistant_message"] = json!("Merge the PR now?");
+
+    let result = claude(&service, &task.id, &stop_with(asked.clone()), None);
+
+    assert_eq!(result.applied, ["agent.asked"]);
+    assert_eq!(fx.state(&task.id), TaskState::NeedsInput);
+    let payload = fx.last_payload(&task.id);
+    assert_eq!(payload["message"], json!("Merge the PR now?"));
+    assert_eq!(payload["waitingFor"], json!(["Bash: pnpm test"]));
+
+    // Background work wakes the agent: its turns do not answer the question.
+    claude(&service, &task.id, &edit("src/a.ts"), None);
+    assert!(
+        claude(&service, &task.id, &stop_with(background()), None)
+            .applied
+            .is_empty()
+    );
+    assert_eq!(fx.state(&task.id), TaskState::NeedsInput);
+    // A newer question is logged, so the card shows it; the task still waits.
+    asked["last_assistant_message"] = json!("Tests pass. Merge now?");
+    assert_eq!(
+        claude(&service, &task.id, &stop_with(asked), None).applied,
+        ["agent.asked"]
+    );
+    assert_eq!(fx.state(&task.id), TaskState::NeedsInput);
+    let kinds = fx.kinds(&task.id);
+    assert_eq!(kinds.last().map(String::as_str), Some("agent.asked"));
+    // Only the user's prompt answers.
+    step(&service, &task.id, "UserPromptSubmit");
+    assert_eq!(fx.state(&task.id), TaskState::Running);
+}
+
+// T-0390: a turn that background work started, not the user, ends with news to read.
+#[test]
+fn marks_a_paused_turn_that_background_work_started() {
+    let fx = Fx::new();
+    let service = fx.service();
+    let task = running_task(&fx, &service);
+    claude(&service, &task.id, &stop_with(background()), None);
+    assert!(fx.last_payload(&task.id).get("backgroundResult").is_none());
+    assert!(fx.task(&task.id).background_result_at.is_none());
+
+    let wake = hook(
+        "UserPromptSubmit",
+        json!({ "prompt": "<task-notification>\n<status>completed</status>" }),
+    );
+    claude(&service, &task.id, &wake, None);
+    claude(&service, &task.id, &edit("src/a.ts"), None);
+    let result = claude(&service, &task.id, &stop_with(background()), None);
+
+    assert_eq!(result.applied, ["agent.waiting"]);
+    assert_eq!(fx.last_payload(&task.id)["backgroundResult"], json!(true));
+    let marked = fx.task(&task.id);
+    assert!(marked.background_result_at.is_some());
+    assert_eq!(fx.state(&task.id), TaskState::Running);
+}
+
+#[test]
+fn does_not_mark_a_turn_that_the_user_started() {
+    let fx = Fx::new();
+    let service = fx.service();
+    let task = running_task(&fx, &service);
+    claude(&service, &task.id, &stop_with(background()), None);
+
+    let prompt = hook("UserPromptSubmit", json!({ "prompt": "also fix the docs" }));
+    claude(&service, &task.id, &prompt, None);
+    claude(&service, &task.id, &stop_with(background()), None);
+
+    assert!(fx.last_payload(&task.id).get("backgroundResult").is_none());
+    assert!(fx.task(&task.id).background_result_at.is_none());
 }
 
 #[test]

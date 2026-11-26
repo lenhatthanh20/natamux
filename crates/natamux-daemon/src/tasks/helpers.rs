@@ -100,6 +100,34 @@ pub fn background_since_after(task: &Task, event: &TaskEvent, state: TaskState) 
     }
 }
 
+/// When a turn that background work started last ended (`backgroundResult`, T-0390): the app
+/// shows it as unread until the user opens the task.
+pub fn background_result_after(task: &Task, event: &TaskEvent) -> Option<String> {
+    let marked = matches!(event.kind.as_str(), "agent.waiting" | "agent.finished")
+        && event
+            .payload
+            .get("backgroundResult")
+            .and_then(Value::as_bool)
+            == Some(true);
+    if marked {
+        Some(event.at.clone())
+    } else {
+        task.background_result_at.clone()
+    }
+}
+
+/// `backgroundSince` and `backgroundResultAt` after an accepted event, in one call for the store.
+pub fn background_after(
+    task: &Task,
+    event: &TaskEvent,
+    state: TaskState,
+) -> (Option<String>, Option<String>) {
+    (
+        background_since_after(task, event, state),
+        background_result_after(task, event),
+    )
+}
+
 /// A subtask is part of its parent's work, so it is in the same project: no repo means the
 /// parent's, another one is refused. Else an agent could start work in a project it may not use.
 pub fn subtask_repo(parent: &Task, input: &mut Map<String, Value>) -> TaskResult<()> {

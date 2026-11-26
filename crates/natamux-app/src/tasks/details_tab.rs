@@ -18,8 +18,9 @@ use crate::components::detail_section::{DetailSection, field, field_fit};
 use crate::components::icons::icon_path;
 use crate::tasks::details_commands::{OnCommand, PanelCommand};
 use crate::tasks::details_rules::{
-    NO_NOTES, NO_WORKSPACE, PORTS_HINT, agent_button, details_start_branch, ports_text,
-    pull_request_label, pull_request_summary, quiet_banner, waits_for_text,
+    NO_NOTES, NO_WORKSPACE, PORTS_HINT, agent_button, background_quiet_banner,
+    details_start_branch, ports_text, pull_request_label, pull_request_summary, quiet_banner,
+    waits_for_text,
 };
 use crate::tasks::edit_rules::label_text;
 use crate::tasks::task_attention::is_quiet;
@@ -118,9 +119,17 @@ impl DetailsPanel {
                     .weight(FontWeight::NORMAL),
             )
             .child(chips)
-            .when(is_quiet(task, now), |this| {
-                this.child(banner(quiet_banner(&task.updated_at, now, 0)))
-            })
+            .when(
+                is_quiet(task, self.dashboard.read(cx).attention(now)),
+                |this| {
+                    let text = if task.background_since.is_some() {
+                        background_quiet_banner(&task.updated_at, now, 0)
+                    } else {
+                        quiet_banner(&task.updated_at, now, 0)
+                    };
+                    this.child(banner(text))
+                },
+            )
             .children(waits_for_text(waiting).map(banner))
             .child(self.action_row(task, waiting, on))
     }

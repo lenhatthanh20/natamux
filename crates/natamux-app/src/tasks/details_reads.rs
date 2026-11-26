@@ -66,6 +66,7 @@ impl DetailsPanel {
     /// Draws the panel again when a time it shows changes by the clock alone (`follow_labels`).
     pub(super) fn follow_times(&mut self, task: &Task, cx: &mut Context<Self>) {
         let now = now_ms();
+        let attention = self.dashboard.read(cx).attention(now);
         let computed = self.progress(task, cx);
         let progress: &[StageProgress] = computed.as_ref().map_or(&[], |c| c.progress.as_slice());
         let Some(shown) = self.shown.as_mut() else {
@@ -76,7 +77,7 @@ impl DetailsPanel {
             .into_iter()
             .flatten()
             .map(|stored| stored.event.at.as_str());
-        let wait = details_wait(task, times, progress, now);
+        let wait = details_wait(task, times, progress, attention);
         shown.clock.set_for(wait.map(|wait| now + wait));
         let wait = shown.clock.at.map(|at| at - now);
         follow_labels(&mut shown.clock.timer, wait, cx, |panel, cx| {

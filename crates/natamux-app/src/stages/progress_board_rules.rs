@@ -18,7 +18,7 @@ use serde_json::Value;
 use super::stage_view_rules::{LinkKind, link_kind, same_lane};
 use crate::sidebar::sidebar_tree::steps_of;
 use crate::sidebar::workspace_groups::{DEFAULT_REPO_ID, RepoRef, known_repos};
-use crate::tasks::task_attention::is_quiet;
+use crate::tasks::task_attention::{Attention, is_quiet};
 use crate::tasks::task_changes::task_of;
 use crate::tasks::task_rules::{needs_me, state_from_name};
 
@@ -50,8 +50,13 @@ fn step_position(steps: &[Step], stage: &str) -> i64 {
 
 /// Waiting for you first, then the furthest along. Equal rows keep the order of `tasks`, which the
 /// view freezes, so a row never moves under the pointer.
-pub fn sort_rows<T: Borrow<Task> + Clone>(tasks: &[T], steps: &[Step], now_ms: i64) -> Vec<T> {
-    let waits = |task: &Task| needs_me(task.state) || is_quiet(task, now_ms);
+pub fn sort_rows<T: Borrow<Task> + Clone>(
+    tasks: &[T],
+    steps: &[Step],
+    at: impl Into<Attention>,
+) -> Vec<T> {
+    let at = at.into();
+    let waits = |task: &Task| needs_me(task.state) || is_quiet(task, at);
     let mut rows = tasks.to_vec();
     rows.sort_by_key(|held| {
         let task = task_of(held);
@@ -67,8 +72,9 @@ pub fn board_sections<T: Borrow<Task> + Clone>(
     tasks: &[T],
     repos: &[RepoRef],
     pipelines: &BTreeMap<String, Vec<Step>>,
-    now_ms: i64,
+    attention: impl Into<Attention>,
 ) -> Vec<Section<T>> {
+    let attention = attention.into();
     let mut sections = Vec::new();
     for repo in known_repos(repos, tasks) {
         let own: Vec<&T> = tasks
@@ -118,7 +124,7 @@ pub fn board_sections<T: Borrow<Task> + Clone>(
             sections.push(Section {
                 key: format!("{}:{key}", repo.id),
                 title,
-                open: sort_rows(&open, &steps, now_ms),
+                open: sort_rows(&open, &steps, attention),
                 steps,
                 done,
             });
@@ -213,8 +219,8 @@ pub fn next_label(state: TaskState) -> Option<&'static str> {
 }
 
 /// The button of a task that waits for the user (a quiet task has no label, so it has none).
-pub fn next_button(task: &Task, now_ms: i64) -> Option<&'static str> {
-    let waits = needs_me(task.state) || is_quiet(task, now_ms);
+pub fn next_button(task: &Task, at: impl Into<Attention>) -> Option<&'static str> {
+    let waits = needs_me(task.state) || is_quiet(task, at);
     next_label(task.state).filter(|_| waits)
 }
 
