@@ -1,6 +1,7 @@
 //! Trust in the task's worktree. An agent loads the config of the branch it runs on, so the
-//! digest is taken there, not in the project folder. Approving one worktree adds its digest to
-//! the project's approval; a later worktree with the same content is trusted with no new step.
+//! digest is taken there, not in the project folder. In Personal mode the project's approval
+//! covers every worktree. In Strict mode approving one worktree adds its digest to the project's
+//! approval; a later worktree with the same content is trusted with no new step.
 
 use std::path::Path;
 use std::sync::Arc;
@@ -90,13 +91,14 @@ impl Repos {
         };
         let approvals = self.trust.approvals();
         let approval = approvals.get(id);
-        if let Some(reason) = current.unverifiable.clone() {
-            return TrustState::Unverifiable { reason };
-        }
+        // Personal mode trusts an approved project also where its agent config cannot be checked.
         if current.trusted(approval) {
             return TrustState::Trusted {
                 digest: current.hash,
             };
+        }
+        if let Some(reason) = current.unverifiable.clone() {
+            return TrustState::Unverifiable { reason };
         }
         TrustState::Changed {
             files: current.changed_files(approval),
@@ -139,7 +141,8 @@ impl Repos {
         } else {
             current.changed_files(approval)
         };
-        Ok(current.view(trusted, changed))
+        let covered = current.covered(approval);
+        Ok(current.view(trusted, covered, changed))
     }
 
     /// `POST /repos/:id/trust`: approves what the user saw. A hash that is no longer the current
@@ -165,9 +168,13 @@ impl Repos {
         if current.hash != hash {
             return Err(changed_hash(id));
         }
-        let fresh = current.approval();
+        let mut fresh = current.approval();
+        fresh.by_user = true;
         self.trust.change(|all| match (worktree, all.get_mut(id)) {
-            (Some(_), Some(approval)) if approval.path == fresh.path => approval.accept(hash),
+            (Some(_), Some(approval)) if approval.path == fresh.path => {
+                approval.accept(hash);
+                approval.by_user = true;
+            }
             _ => {
                 all.insert(id.to_string(), fresh);
             }
@@ -175,7 +182,7 @@ impl Repos {
         if worktree.is_none() {
             self.trust.note(id, true);
         }
-        Ok(current.view(true, Vec::new()))
+        Ok(current.view(true, true, Vec::new()))
     }
 }
 

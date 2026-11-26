@@ -1,6 +1,6 @@
-//! Start a task in a project whose commands wait for approval: the repo trust dialog opens first,
-//! and the start goes on after either answer. Not approved, the daemon runs none of the project's
-//! commands, so the task still starts safely. Also with no worktree: the agent and the stage
+//! Start a task in a project the user has not approved yet: the repo trust dialog opens first, and
+//! the start goes on after either answer. Commands that wait for approval do not run, so the task
+//! still starts safely. Also with no worktree: the agent and the stage
 //! commands then run in the project folder at once.
 
 use std::rc::Rc;

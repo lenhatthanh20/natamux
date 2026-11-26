@@ -185,7 +185,7 @@ natamux repo trust my-app --approve 3f1c…
 
 A project's commands (stage checks, command stages, path conditions, stage `args` and the setup script) run only after you approve them. See [Approve the project's commands](/docs/guides/project-settings/#approve-the-projects-commands).
 
-- Without `--approve`, it prints each command with where it comes from, the setup scripts, and the hash.
+- Without `--approve`, it prints each command with where it comes from, the setup scripts, and the hash. A project you never approved gets the line `my-app is not trusted yet: Natamux asks once per project.` In Personal mode the approval also covers later changes of the project; Strict mode asks again.
 - With `--approve <hash>`, it approves them. The daemon refuses a hash that is no longer current: the commands changed since you read them, so read them again.
 - It needs the daemon's own token. The token of a task terminal gets 403.
 

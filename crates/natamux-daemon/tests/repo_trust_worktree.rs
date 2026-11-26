@@ -1,5 +1,7 @@
 //! T-0373 Part 1 (F2): repo trust is taken in the task's worktree, over every agent config file
-//! any adapter reads, with the files Natamux writes told apart from the repo's by git.
+//! any adapter reads, with the files Natamux writes told apart from the repo's by git. Personal
+//! mode trusts every folder of an approved project (T-0389), so the tests of the exact digest
+//! run in Strict mode.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
@@ -8,7 +10,7 @@ use std::sync::Arc;
 
 use natamux_agents::hook_files::exclude_from_git;
 use natamux_agents::hook_origin::natamux_text;
-use natamux_core::security::{SecurityMode, StrictSettings, force};
+use natamux_core::security::{Forced, SecurityMode, StrictSettings, force};
 use natamux_daemon::projects::repo_trust_files::{CONFIG_DIRS, CONFIG_FILES};
 use natamux_daemon::projects::repo_trust_worktree::TrustState;
 use natamux_daemon::projects::repos::Repos;
@@ -17,6 +19,10 @@ use serde_json::json;
 
 const HOOK_A: &str = r#"{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"say a"}]}]}}"#;
 const HOOK_B: &str = r#"{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"say b"}]}]}}"#;
+
+fn strict() -> Forced {
+    force(SecurityMode::Strict(StrictSettings::default()))
+}
 
 struct Fixture {
     root: TempDir,
@@ -75,6 +81,7 @@ impl Fixture {
 
 #[test]
 fn a_branch_with_a_changed_hook_is_changed_in_its_worktree_and_back_to_a_is_trusted() {
+    let _strict = strict();
     let f = fixture();
     write(&f.repo, ".claude/settings.json", HOOK_A);
     commit(&f.repo, "hook a");
@@ -163,6 +170,7 @@ const NATAMUX_PATHS: [&str; 5] = [
 
 #[test]
 fn a_hook_file_the_repo_commits_at_a_natamux_path_counts() {
+    let _strict = strict();
     for rel in NATAMUX_PATHS {
         let f = fixture();
         f.approve_project();
@@ -178,6 +186,7 @@ fn a_hook_file_the_repo_commits_at_a_natamux_path_counts() {
 
 #[test]
 fn untracked_exact_natamux_bytes_are_exempt_and_an_extra_key_is_not() {
+    let _strict = strict();
     for rel in NATAMUX_PATHS {
         let f = fixture();
         f.approve_project();
@@ -206,7 +215,7 @@ fn an_untracked_claude_local_file_counts_in_strict_mode_only() {
     );
     assert!(f.state(&f.repo).is_trusted());
 
-    let _strict = force(SecurityMode::Strict(StrictSettings::default()));
+    let _strict = strict();
     let TrustState::Changed { files, .. } = f.state(&f.repo) else {
         panic!("{:?}", f.state(&f.repo));
     };
@@ -270,6 +279,9 @@ fn a_committed_claude_local_file_behind_a_link_counts_in_personal_mode() {
 
     write(&f.repo, "cfg/claude/settings.local.json", HOOK_B);
     assert_ne!(f.digest(&f.repo), before);
+    // The approved project stays trusted in Personal mode; the change counts in Strict mode.
+    assert!(f.state(&f.repo).is_trusted());
+    let _strict = strict();
     assert!(!f.state(&f.repo).is_trusted());
 }
 

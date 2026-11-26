@@ -13,6 +13,7 @@ use crate::app::test_views;
 fn view() -> RepoTrustView {
     RepoTrustView {
         trusted: false,
+        covered: true,
         hash: "ab12".into(),
         commands: vec![RepoCommand {
             place: "Stage test: check".into(),
@@ -38,6 +39,15 @@ fn shown<'a>(
     ran: &Rc<Cell<usize>>,
     cx: &'a mut TestAppContext,
 ) -> (Entity<RepoTrustDialog>, &'a mut VisualTestContext) {
+    shown_with(view(), repo_id, ran, cx)
+}
+
+fn shown_with<'a>(
+    view: RepoTrustView,
+    repo_id: &str,
+    ran: &Rc<Cell<usize>>,
+    cx: &'a mut TestAppContext,
+) -> (Entity<RepoTrustDialog>, &'a mut VisualTestContext) {
     test_views::init(cx);
     let count = ran.clone();
     let then: Then = Rc::new(move |_: &mut Window, _: &mut App| {
@@ -49,7 +59,7 @@ fn shown<'a>(
         repo_id,
         task: None,
         name: "Shop".into(),
-        view: view(),
+        view,
         then: Some(then),
         busy: false,
         error: None,
@@ -68,6 +78,29 @@ fn not_now_runs_what_waits_once(cx: &mut TestAppContext) {
 
     dialog.update_in(cx, |dialog, window, cx| {
         assert!(dialog.cancel(window, cx), "Esc must be Not now");
+        dialog.close(window, cx);
+    });
+
+    assert_eq!(ran.get(), 1);
+}
+
+// A project the user never approved asks also when it has nothing to list yet.
+#[gpui::test]
+fn a_project_with_nothing_to_list_still_asks_and_not_now_goes_on(cx: &mut TestAppContext) {
+    let ran = Rc::new(Cell::new(0));
+    let empty = RepoTrustView {
+        trusted: true,
+        covered: false,
+        commands: Vec::new(),
+        setup: Vec::new(),
+        agent_files: Vec::new(),
+        ..view()
+    };
+    assert!(needs_review(&empty));
+    let (dialog, cx) = shown_with(empty, "no-such-project", &ran, cx);
+
+    dialog.update_in(cx, |dialog, window, cx| {
+        assert!(dialog.cancel(window, cx));
         dialog.close(window, cx);
     });
 

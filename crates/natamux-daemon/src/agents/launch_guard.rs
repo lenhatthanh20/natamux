@@ -15,6 +15,13 @@ use natamux_proto::tasks::task::Task;
 
 use crate::agents::errors::AgentError;
 use crate::projects::repo_trust_worktree::{TrustState, TrustedOf};
+use crate::tasks::service::TaskService;
+use crate::workspaces::setup_script::WORKSPACE_WARNING_EVENT;
+
+/// What a Personal start logs in a folder that is not trusted, so the lost auto mode is never
+/// silent.
+pub const NOT_APPROVED_START: &str = "Started without auto mode: this project is not approved \
+                                      yet. Approve it once in the project settings.";
 
 /// What the gate found at D1, for the rest of the start.
 #[derive(Clone, Debug)]
@@ -103,6 +110,25 @@ impl LaunchGate {
             "The agent config changed while the agent started. {}",
             now.reason()
         )))
+    }
+
+    /// A started agent that lost its auto mode tells the task why, at each such start. The `ask`
+    /// permission mode has no auto mode to lose; Strict mode refuses the start instead.
+    pub fn log_untrusted(
+        &self,
+        tasks: &TaskService,
+        task: &Task,
+        mode_of: &(dyn Fn(Option<&str>) -> String + Send + Sync),
+    ) {
+        let auto_mode = mode_of(task.repo.as_deref()) == "auto";
+        if self.trusted() || self.strict() || !auto_mode {
+            return;
+        }
+        let payload = serde_json::json!({ "message": NOT_APPROVED_START });
+        let logged = tasks.record_event(&task.id, WORKSPACE_WARNING_EVENT, payload, "system");
+        if let Err(error) = logged {
+            eprintln!("The trust warning of {} is not logged: {error}", task.id);
+        }
     }
 
     /// Strict mode: the digest the launch script checks right before the agent runs.

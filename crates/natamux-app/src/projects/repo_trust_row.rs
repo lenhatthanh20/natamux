@@ -1,13 +1,16 @@
 //! The `Review commands` alert of the project settings page: shown only while the project's
-//! commands wait for approval. It reads the trust again when the projects change (an approval or
-//! a saved settings file sends `repos.changed`) and after its dialog closes.
+//! commands wait for approval, or the project waits for its one approval. It reads the trust
+//! again when the projects change (an approval or a saved settings file sends `repos.changed`)
+//! and after its dialog closes.
 
 use std::rc::Rc;
 
 use gpui::{Entity, Subscription};
 use ui::prelude::*;
 
-use super::rules::{NOT_APPROVED, NOT_APPROVED_TITLE, needs_review};
+use super::rules::{
+    NOT_APPROVED, NOT_APPROVED_TITLE, NOT_TRUSTED, NOT_TRUSTED_TITLE, needs_review,
+};
 use super::{Then, review};
 use crate::app::dashboard::Dashboard;
 use crate::app::dashboard_data::{Part, Seen};
@@ -19,6 +22,8 @@ pub struct RepoTrustRow {
     repo_id: String,
     repo_name: String,
     untrusted: bool,
+    /// Runs already, but was never approved: the row asks the one question, not for commands.
+    runs: bool,
     _read: Option<gpui::Task<()>>,
     _follow: Subscription,
 }
@@ -43,6 +48,7 @@ impl RepoTrustRow {
             repo_id: repo_id.to_owned(),
             repo_name: repo_name.to_owned(),
             untrusted: false,
+            runs: false,
             _read: None,
             _follow: follow,
         };
@@ -63,9 +69,12 @@ impl RepoTrustRow {
         // The project folder's own trust: no task.
         let answer = source.repo_trust(&self.repo_id, None);
         self._read = Some(cx.spawn(async move |this, cx| {
-            let untrusted = answer.await.is_ok_and(|view| needs_review(&view));
+            let view = answer.await.ok();
+            let untrusted = view.as_ref().is_some_and(needs_review);
+            let runs = view.is_some_and(|view| view.trusted);
             this.update(cx, |this, cx| {
                 this.untrusted = untrusted;
+                this.runs = runs;
                 cx.notify();
             })
             .ok();
@@ -93,11 +102,16 @@ impl RepoTrustRow {
 
 impl Render for RepoTrustRow {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        SettingsAlert::new(AlertKind::Warning, NOT_APPROVED_TITLE)
+        let (title, text, button) = if self.runs {
+            (NOT_TRUSTED_TITLE, NOT_TRUSTED, "Trust project")
+        } else {
+            (NOT_APPROVED_TITLE, NOT_APPROVED, "Review commands")
+        };
+        SettingsAlert::new(AlertKind::Warning, title)
             .icon(button_icon("shield"))
-            .muted_text(NOT_APPROVED)
+            .muted_text(text)
             .action(
-                action_button("settings-review-commands", "Review commands")
+                action_button("settings-review-commands", button)
                     .on_click(cx.listener(|this, _, window, cx| this.open(window, cx))),
             )
     }

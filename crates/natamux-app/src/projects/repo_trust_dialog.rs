@@ -1,7 +1,7 @@
 //! Repo trust: the dialog that shows every command a project runs on this machine, word for word
 //! with where it comes from, and its setup scripts. Approve sends the hash it showed; a 409 means
 //! the commands changed, so it reads and shows the new ones. Not now, Esc and the close button
-//! leave the project untrusted; the daemon then runs none of its commands. Opened for a task, it
+//! leave the project as it is: commands that wait for approval do not run. Opened for a task, it
 //! reads and approves the agent config of that task's worktree.
 
 use std::rc::Rc;
@@ -30,7 +30,7 @@ pub mod row;
 #[path = "repo_trust_rules.rs"]
 pub mod rules;
 
-use rules::{CHANGED, LEAD, changed_note, needs_review, title};
+use rules::{CHANGED, LEAD, NOTHING_YET, changed_note, needs_review, nothing_listed, title};
 
 /// What runs once the dialog closes, whichever the answer: Start a task goes on with it.
 pub type Then = Rc<dyn Fn(&mut Window, &mut App)>;
@@ -297,6 +297,13 @@ impl RepoTrustDialog {
     /// The commands, then the setup scripts, then the agent config files, in one card.
     fn commands(&self, cx: &App) -> SettingsCard {
         let mut card = SettingsCard::new(SeparatorInset::Text);
+        if nothing_listed(&self.view) {
+            let line = div()
+                .px(rems_from_px(12.0_f32))
+                .py(rems_from_px(10.0_f32))
+                .child(foot_text(NOTHING_YET));
+            card = card.child(line);
+        }
         for command in &self.view.commands {
             card = card.child(command_row(command, cx));
         }

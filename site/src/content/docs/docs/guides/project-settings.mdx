@@ -172,20 +172,20 @@ Each agent then follows its own permission settings. See [`agents`](/docs/refere
 
 ## Approve the project's commands
 
-A project can run commands on your machine: a stage `check`, a stage `command`, a path condition `when.command`, the words of a stage `args`, and the setup script (`.natamux-setup`, `.natamux-setup.ps1`). Natamux runs them only after you approve them, and again after each change. A project with none of them needs no approval.
+A project can run commands on your machine: a stage `check`, a stage `command`, a path condition `when.command`, the words of a stage `args`, and the setup script (`.natamux-setup`, `.natamux-setup.ps1`). Natamux runs them only after you approve them. You trust a project once, like a workspace in an editor: from then on Natamux runs its commands, setup scripts and agent config, also after they change, for every task of the project. [Strict mode](/docs/help/security-and-privacy/) asks again for each change. A project with none of them runs without an approval, but the app still asks once, so config that arrives later (a pull, a task branch) is trusted too.
 
-- After you add a project, a dialog lists every command word for word, with where it comes from, and the setup script. Choose **Approve** or **Not now**.
+- After you add a project, the dialog **Trust my-app?** (with your project's name) lists every command word for word, with where it comes from, the setup script and the agent config files. A project with nothing to list yet says so. Choose **Approve** or **Not now**. Natamux asks once per project: after **Not now** the question comes back at the next of these moments, and after **Approve** never again.
 - **Start a task** in a project that is not approved shows the same dialog. The task starts after either button.
-- Until you approve, the project settings show **Commands not approved** with a **Review commands** button that opens the dialog.
+- Until you approve, the project settings show **Commands not approved** with a **Review commands** button that opens the dialog. A project that runs but was never approved shows **Not trusted yet** with a **Trust project** button.
 - Approval also lets the agents trust the worktree and run in auto mode. So the repository's own agent config (`.codex`, `.cursor`, `.claude`, MCP servers) runs too.
-- A save of the settings in this screen approves the commands you saved. A changed setup script still needs the dialog.
+- A save of the settings in this screen approves the commands you saved, but not a setup script or an agent config file that changed since the last approval: that still needs the dialog. A save covers only the content it saw. Until you approve once in the dialog or the CLI, a later change asks again.
 - Projects added before this check came in were approved as they were at the first start.
 
 While a project is not approved:
 
 - A stage with a `check` or a `command` fails with **Repo commands are not approved. Review them in the project settings, then retry.** A branch whose path runs a command fails the stage before it the same way.
 - The setup script does not run. The task's log says **Setup script skipped**.
-- Agents start without auto mode and without their trust of the folder, and stage `args` are left out.
+- Agents start without auto mode and without their trust of the folder, and stage `args` are left out. With the `auto` permission mode, the task's log then says **Started without auto mode: this project is not approved yet. Approve it once in the project settings.**
 
 Stage `args` are split at spaces, and each word is quoted, so no shell sign in them runs. A quoted value with spaces becomes several words.
 
