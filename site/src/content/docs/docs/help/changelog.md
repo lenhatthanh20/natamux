@@ -7,6 +7,13 @@ sidebar:
 
 All releases are on [GitHub releases](https://github.com/lenhatthanh20/natamux/releases).
 
+## v1.1.1 (2026-11-26)
+
+- Personal mode trusts a project once, in the dialog or with `natamux repo trust --approve`; later changes and every task folder stay trusted. Strict mode still asks per worktree. See [Repo trust](/docs/help/security-and-privacy/#repo-trust).
+- A question asked while an agent's background work runs moves the task to **Needs input**. A turn that background work started marks the task unread. New settings **Notify when a background result arrives** and **Flag background work older than**. See [Waiting for background work](/docs/concepts/agents-and-hooks/#waiting-for-background-work).
+- The settings file of the machine takes `"strict": true` and `"updates": false`. See [Settings file of the machine](/docs/help/security-review/#settings-file-of-the-machine).
+- A new Windows install keeps its data in `%LOCALAPPDATA%`. The install scripts take `NATAMUX_VERSION`. See [Install a chosen version](/docs/getting-started/install/#install-a-chosen-version).
+
 ## v1.1.0 (2026-11-24)
 
 - Strict mode: turn it on in **Settings > Security** for work with strict security rules. Agents start in their ask mode, agent config is approved per worktree, and CI gets only what you allow. See [Security and privacy](/docs/help/security-and-privacy/#strict-mode) and [Strict mode settings](/docs/reference/configuration/#strict-mode-securityjson).
