@@ -1122,7 +1122,8 @@ jobs:
         id: notices
         run: |
           cargo about generate --locked --fail about.hbs -o "$RUNNER_TEMP/THIRD-PARTY-RUST.md"
-          if ! diff -u THIRD-PARTY-RUST.md "$RUNNER_TEMP/THIRD-PARTY-RUST.md"; then
+          # -B: cargo about writes one blank line of the miniz_oxide text in some runs and not in others.
+          if ! diff -u -B THIRD-PARTY-RUST.md "$RUNNER_TEMP/THIRD-PARTY-RUST.md"; then
             echo "stale=true" >> "$GITHUB_OUTPUT"
           fi
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
