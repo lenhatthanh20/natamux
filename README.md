@@ -96,7 +96,9 @@ Natamux has no account or telemetry. Task data stays in the app's user data fold
 ## Project
 
 - [Documentation](https://natamux.github.io/docs/)
-- [Contributing](docs/dev-setup.md)
+- [Contributing](CONTRIBUTING.md) (the build setup is in [docs/dev-setup.md](docs/dev-setup.md))
+- [Licensing](https://natamux.github.io/docs/help/licensing/)
+- [For a security review](https://natamux.github.io/docs/help/security-review/)
 - [Security](SECURITY.md)
 - [Code signing policy](https://natamux.github.io/docs/help/code-signing/)
 - [License](LICENSE) · MIT

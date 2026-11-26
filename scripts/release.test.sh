@@ -153,7 +153,7 @@ check "the package job of release.yml restores target only on Intel and Windows"
 check "the package job of release.yml restores cached file times" \
   'sed -n "/^  package:/,/^  release:/p" .github/workflows/release.yml | grep -q "matrix.py.*scripts/ci-changes.py mtimes"'
 check "the Windows release job uses python" \
-  'grep -q "win-x64, os: windows-latest, py: python" .github/workflows/release.yml'
+  'grep -q "win-x64, os: windows-2025, py: python" .github/workflows/release.yml'
 check "the Intel macOS release job uses python3" \
   'grep -q "mac-x64, os: macos-26-intel, cache: rust-app-mac-intel, py: python3" .github/workflows/release.yml'
 check "the package job of release.yml restores a cargo cache" \

@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use hyper::StatusCode;
-use natamux_core::security::{Egress, NetworkSettings, SecurityState, network_in};
+use natamux_core::security::{Egress, MACHINE_STRICT, NetworkSettings, SecurityState, network_in};
 use serde_json::Value;
 
 use crate::http::errors::{Answer, error_answer, internal_error, json_answer};
@@ -25,8 +25,8 @@ pub async fn get_security(state: Arc<AppState>) -> Answer {
 }
 
 /// How shells are isolated in this daemon run (a change of the setting needs a restart), and
-/// where Natamux's own calls may go.
-fn isolation_value(state: &AppState) -> (Value, Value) {
+/// where Natamux's own calls may go, and whether the machine file forces Strict mode.
+fn isolation_value(state: &AppState) -> (Value, Value, bool) {
     let isolation = state.agents.isolation();
     let abi = isolation.as_ref().and_then(|it| it.support.clone().ok());
     // The daemon's own folder: a test daemon does not install its settings for the process.
@@ -43,14 +43,19 @@ fn isolation_value(state: &AppState) -> (Value, Value) {
     (
         serde_json::to_value(isolation_body(isolation.as_ref())).unwrap_or(Value::Null),
         serde_json::to_value(network).unwrap_or(Value::Null),
+        state.security.source.machine_strict(),
     )
 }
 
-fn with_isolation(now: &SecurityState, (isolation, network): (Value, Value)) -> Value {
+fn with_isolation(
+    now: &SecurityState,
+    (isolation, network, machine): (Value, Value, bool),
+) -> Value {
     let mut body = security_body(now);
     if let Some(keys) = body.as_object_mut() {
         keys.insert("isolation".into(), isolation);
         keys.insert("network".into(), network);
+        keys.insert("machineStrict".into(), Value::Bool(machine));
     }
     body
 }
@@ -61,6 +66,10 @@ pub async fn put_security(state: Arc<AppState>, body: Option<Value>, by_agent: b
         return error_answer(StatusCode::FORBIDDEN, "forbidden", message);
     }
     let body = body.unwrap_or(Value::Null);
+    let strict_off = body.get("strict") != Some(&Value::Bool(true));
+    if strict_off && state.security.source.machine_strict() {
+        return error_answer(StatusCode::FORBIDDEN, "forbidden", MACHINE_STRICT);
+    }
     let saved = tokio::task::spawn_blocking(move || {
         let saved = state.security.save(&body);
         if let Ok(now) = &saved {

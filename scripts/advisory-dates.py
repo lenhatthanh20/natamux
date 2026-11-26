@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Checks the advisory ignores of deny.toml. Run: python3 scripts/advisory-dates.py
 
-Fails when a reason has no "Review by YYYY-MM-DD." date, a date has passed, or
-.cargo/audit.toml ignores an id that deny.toml does not.
+Fails when a reason has no "Review by YYYY-MM-DD." date, a date has passed or is more than
+90 days away, or .cargo/audit.toml ignores an id that deny.toml does not.
 """
 
 import datetime
@@ -14,6 +14,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 DENY_ENTRY = re.compile(r'\{\s*id\s*=\s*"(RUSTSEC-[\d-]+)"\s*,\s*reason\s*=\s*"([^"]*)"')
 AUDIT_ID = re.compile(r'^\s*"(RUSTSEC-[\d-]+)"\s*,?\s*(#.*)?$', re.MULTILINE)
 REVIEW = re.compile(r"Review by (\d{4}-\d{2}-\d{2})\.\s*$")
+MAX_DAYS = 90
 
 
 def check(deny_text, audit_text, today):
@@ -31,6 +32,8 @@ def check(deny_text, audit_text, today):
             continue
         if due < today:
             problems.append(f"{ident}: review date {due} has passed")
+        elif due > today + datetime.timedelta(days=MAX_DAYS):
+            problems.append(f"{ident}: review date {due} is more than {MAX_DAYS} days away")
     known = {ident for ident, _ in entries}
     for ident in AUDIT_ID.findall(audit_text):
         if ident[0] not in known:

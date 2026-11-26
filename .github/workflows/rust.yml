@@ -993,6 +993,82 @@ jobs:
           NATAMUX_BENCH: "1"
         run: cargo test --release --locked -p natamux-daemon --test daemon_bench -- --nocapture
 
+  # The Linux release binaries must not reach past loopback when they start (scripts/net-trace.py),
+  # the same two runs as release.yml. A PR or snapshot runs it when app, update or daemon start code
+  # changed; there is no Linux build of the app elsewhere in this workflow.
+  net-trace:
+    needs: changes
+    if: ${{ !endsWith(github.ref, '-check') && (needs.changes.outputs.app == 'true' || needs.changes.outputs.daemon_crates != '') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The libraries release.yml installs; mesa-vulkan-drivers gives the app a surface in Xvfb.
+      - name: Install the build and trace tools
+        run: |
+          for try in 1 2 3 4 5; do
+            sudo apt-get -o Acquire::Retries=3 update \
+              && sudo apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
+                libasound2-dev libfontconfig-dev libglib2.0-dev libssl-dev libva-dev libvulkan1 \
+                libwayland-dev libx11-xcb-dev libxkbcommon-x11-dev libzstd-dev libsqlite3-dev \
+                xvfb mesa-vulkan-drivers strace \
+              && exit 0
+            echo "apt failed (try $try), waiting $((try * 30)) s"
+            sleep $((try * 30))
+          done
+          exit 1
+      - run: rustup toolchain install
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: rust-net-trace-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-${{ github.sha }}
+          restore-keys: |
+            rust-net-trace-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-
+            rust-net-trace-${{ runner.os }}-
+      - run: python3 scripts/ci-changes.py mtimes
+      - id: build
+        run: cargo build --release --locked -p natamux-app -p natamux-daemon -p natamux-cli
+      - name: Stamp the cache
+        if: ${{ !cancelled() && env.SAVE_CACHE == 'true' && steps.build.outcome != 'skipped' }}
+        run: python3 scripts/ci-changes.py stamp
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: ${{ !cancelled() && env.SAVE_CACHE == 'true' && steps.build.outcome != 'skipped' }}
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: rust-net-trace-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-${{ github.sha }}
+      - name: Keep only the newest cache of this job
+        if: ${{ !cancelled() && env.SAVE_CACHE == 'true' && steps.build.outcome != 'skipped' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh cache list --ref refs/heads/main --key "rust-net-trace-${{ runner.os }}-" --json id,createdAt \
+            --jq 'sort_by(.createdAt) | reverse | .[1:] | .[].id' |
+            while read -r id; do gh cache delete "$id"; done
+      - name: Trace the start
+        timeout-minutes: 5
+        run: |
+          trace() {
+            strace -f -qq --seccomp-bpf -e trace=connect,sendto,sendmsg,sendmmsg -o "$1" \
+              xvfb-run -a scripts/release-smoke.sh target/release/natamux-app "$HOME/.config/Natamux"
+            python3 scripts/net-trace.py "$1"
+          }
+          trace "$RUNNER_TEMP/net.trace"
+          echo '{"autoUpdate": true}' > "$RUNNER_TEMP/update-on.json"
+          export NATAMUX_SMOKE_SETTINGS="$RUNNER_TEMP/update-on.json" NATAMUX_OFFLINE=1
+          trace "$RUNNER_TEMP/net-offline.trace"
+
   # Tools build from crates.io at pinned versions; the binary download host returned 504s.
   supply-chain:
     needs: changes
@@ -1011,7 +1087,8 @@ jobs:
             ~/.cargo/bin/cargo-deny
             ~/.cargo/bin/cargo-audit
             ~/.cargo/bin/cargo-vet
-          key: supply-chain-tools-${{ runner.os }}-cargo-deny-0.20.2-cargo-audit-0.22.2-cargo-vet-0.10.0
+            ~/.cargo/bin/cargo-about
+          key: supply-chain-tools-${{ runner.os }}-cargo-deny-0.20.2-cargo-audit-0.22.2-cargo-vet-0.10.0-cargo-about-0.8.2
       - id: install
         if: ${{ steps.tools.outputs.cache-hit != 'true' }}
         run: |
@@ -1025,6 +1102,7 @@ jobs:
           retry cargo install --locked cargo-deny --version 0.20.2
           retry cargo install --locked cargo-audit --version 0.22.2
           retry cargo install --locked cargo-vet --version 0.10.0
+          retry cargo install --locked cargo-about --version 0.8.2
       - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         with:
@@ -1032,12 +1110,31 @@ jobs:
             ~/.cargo/bin/cargo-deny
             ~/.cargo/bin/cargo-audit
             ~/.cargo/bin/cargo-vet
-          key: supply-chain-tools-${{ runner.os }}-cargo-deny-0.20.2-cargo-audit-0.22.2-cargo-vet-0.10.0
+            ~/.cargo/bin/cargo-about
+          key: supply-chain-tools-${{ runner.os }}-cargo-deny-0.20.2-cargo-audit-0.22.2-cargo-vet-0.10.0-cargo-about-0.8.2
       - run: python3 scripts/advisory-dates.test.py
       - run: python3 scripts/advisory-dates.py
       - run: cargo deny --locked check
       - run: scripts/audit.sh
       - run: cargo vet --locked
+      # The notice file must be what cargo about makes from the lock now.
+      - name: Check THIRD-PARTY-RUST.md is fresh
+        id: notices
+        run: |
+          cargo about generate --locked --fail about.hbs -o "$RUNNER_TEMP/THIRD-PARTY-RUST.md"
+          if ! diff -u THIRD-PARTY-RUST.md "$RUNNER_TEMP/THIRD-PARTY-RUST.md"; then
+            echo "stale=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: steps.notices.outputs.stale == 'true'
+        with:
+          name: third-party-rust
+          path: ${{ runner.temp }}/THIRD-PARTY-RUST.md
+      - name: Fail when the notice file is stale
+        if: steps.notices.outputs.stale == 'true'
+        run: |
+          echo "::error::THIRD-PARTY-RUST.md is stale: replace it with the third-party-rust artifact."
+          exit 1
 
   # The one required check of this workflow (ruleset of main): red when any job failed or was
   # cancelled. A job that its change does not need is skipped, which is fine.
@@ -1057,6 +1154,7 @@ jobs:
       - e2e-image
       - daemon-bench
       - supply-chain
+      - net-trace
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5

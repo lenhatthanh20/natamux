@@ -151,6 +151,9 @@ pub(super) fn curl_with(
     if crate::offline::offline() {
         return Err(crate::offline::UPDATES_OFF.into());
     }
+    if natamux_core::offline::machine_updates_off() {
+        return Err(crate::policy::UPDATES_BY_ADMIN.into());
+    }
     let host = host_of(url).unwrap_or_default();
     enforce(policy, &Target::Update { host: &host })?;
     if !release_url(url) {

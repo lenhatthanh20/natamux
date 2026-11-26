@@ -81,7 +81,7 @@ Paths are relative to the repo root. `zed:` paths are in the Zed fork at rev 69c
 - Fork changes, checked with `gh api repos/lenhatthanh20/zed/compare/v1.24.2...69c8133`:
   - Code changes are only in `crates/terminal/src/terminal.rs` and `crates/terminal_view/src/terminal_view.rs`. Both go.
   - Of the kept crates, only `crates/gpui_linux/Cargo.toml` changed: the `xim` git URL points to the owner's fork. `crates/gpui_web/examples/hello_web/Cargo.toml` changed the same way.
-  - The source of every kept crate is unmodified. The notices say so (Apache-2.0 section 4(b)).
+  - Not every kept crate is unmodified: the fork changes manifests (`gpui_linux`, `gpui_web`) and, later, more files (cut dependencies, opt-in features). `THIRD-PARTY-NOTICES.md` lists the changed files and says the fork's git history is the full change record (Apache-2.0 section 4(b)).
 
 ### 3.4 Non-Zed crates and forks
 

@@ -40,7 +40,7 @@ Install the newest version of Natamux: it has the runtime built in. To keep an o
 
 Natamux 1.0.31 and older do not add an entry to **Settings → Apps → Installed apps** (Windows 10: **Apps & features**), so you cannot see or uninstall Natamux there.
 
-Quit Natamux and run the install command again. It installs the newest version over the old one and adds the entry. Your tasks and settings stay: they are in `%APPDATA%\Natamux`.
+Quit Natamux and run the install command again. It installs the newest version over the old one and adds the entry. Your tasks and settings stay: they are in `%LOCALAPPDATA%\Natamux` (`%APPDATA%\Natamux` on an older install).
 
 ## The AppImage does not start
 
@@ -149,5 +149,5 @@ The branch is deleted only when git says it is fully merged (`git branch -d`). A
 
 | What | Where |
 |---|---|
-| Desktop app, daemon | `logs/daemon.log` in the user data folder, or **File → Show Daemon Log**. macOS: `~/Library/Application Support/Natamux`. Windows: `%APPDATA%\Natamux`. Linux: `~/.config/Natamux` |
+| Desktop app, daemon | `logs/daemon.log` in the user data folder, or **File → Show Daemon Log**. macOS: `~/Library/Application Support/Natamux`. Windows: `%LOCALAPPDATA%\Natamux` (`%APPDATA%\Natamux` on an older install). Linux: `~/.config/Natamux` |
 | A task's history | The **Activity** section in the **Details** view of the task, or `natamux events T-0001` |

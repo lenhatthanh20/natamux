@@ -29,6 +29,9 @@ pub struct SecurityView {
     /// Where Natamux's own calls may go. None from an older daemon.
     #[serde(default)]
     pub network: Option<NetworkView>,
+    /// The machine settings file forces Strict mode (`"strict": true`).
+    #[serde(default, rename = "machineStrict")]
+    pub machine_strict: bool,
 }
 
 /// `network` of `GET /security`.

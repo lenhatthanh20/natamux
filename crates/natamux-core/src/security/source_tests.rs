@@ -158,6 +158,41 @@ fn reads_again_at_most_once_per_second() {
 }
 
 #[test]
+fn the_machine_key_makes_any_state_strict_and_keeps_a_strict_one() {
+    let forced = with_machine(SecurityState::default(), true);
+    assert_eq!(forced.mode, SecurityMode::Strict(StrictSettings::default()));
+    assert_eq!(forced.warning.as_deref(), Some(MACHINE_STRICT_WARNING));
+    assert!(forced.warning.unwrap_or_default().contains("administrator"));
+    let off = evaluate(Some(OFF.as_bytes()), Some(OFF.as_bytes()));
+    assert_eq!(with_machine(off.clone(), false), off);
+    let strict = evaluate(Some(STRICT.as_bytes()), Some(STRICT.as_bytes()));
+    assert_eq!(with_machine(strict.clone(), true), strict);
+}
+
+#[test]
+fn the_machine_key_wins_over_a_user_file_that_turns_strict_off() {
+    let root = folder("machine");
+    let source = Source::open(&root);
+    source.write(OFF).unwrap();
+    let before = source.generation();
+    source.force_machine(true);
+    assert!(source.machine_strict());
+    assert!(source.generation() > before);
+    let state = source.current();
+    assert_eq!(state.mode, SecurityMode::Strict(StrictSettings::default()));
+    assert_eq!(state.warning.as_deref(), Some(MACHINE_STRICT_WARNING));
+    // A save of Strict off still reads as Strict.
+    assert!(source.write(OFF).unwrap().mode.is_strict());
+    // With no file at all too.
+    std::fs::remove_file(root.join(FILE_NAME)).unwrap();
+    source.check_now();
+    assert!(source.current().mode.is_strict());
+    source.force_machine(false);
+    assert!(!source.machine_strict());
+    assert!(!source.current().mode.is_strict());
+}
+
+#[test]
 fn evaluate_tightens_only_when_the_file_and_the_copy_differ() {
     let strict = Some(STRICT.as_bytes());
     let off = Some(OFF.as_bytes());

@@ -4,7 +4,7 @@
 use std::sync::{Arc, Mutex};
 
 use hyper::Method;
-use natamux_core::security::OUTSIDE_CHANGE_WARNING;
+use natamux_core::security::{MACHINE_STRICT_WARNING, OUTSIDE_CHANGE_WARNING};
 use serde_json::{Value, json};
 
 use crate::server::{TOKEN, TestDaemon, daemon, eventually, start_daemon, test_root};
@@ -182,4 +182,37 @@ async fn the_body_tells_the_egress_and_that_children_are_not_confined() {
     assert_eq!(body["network"]["updater"], false);
     assert_eq!(body["network"]["credentials"], "strip");
     assert!(file_text(&d).unwrap_or_default().contains("allowlist"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_machine_key_keeps_strict_on_and_a_save_cannot_turn_it_off() {
+    let d = daemon("security-machine", true).await;
+    // Only this daemon's Source: other tests in this process are not changed.
+    d.daemon.state.security.source.force_machine(true);
+    let (status, body) = d.call(Method::GET, "/security", Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(body["strict"], true);
+    assert_eq!(body["machineStrict"], true);
+    assert_eq!(body["warning"], MACHINE_STRICT_WARNING);
+
+    let off = json!({ "strict": false });
+    let (status, answer) = d.send(Method::PUT, "/security", Some(TOKEN), &off).await;
+    assert_eq!(status, 403, "{answer}");
+    assert!(
+        answer.to_string().contains("set by your administrator"),
+        "{answer}"
+    );
+    assert_eq!(file_text(&d), None, "nothing is written");
+    let (_, body) = d.call(Method::GET, "/security", Some(TOKEN)).await;
+    assert_eq!(body["strict"], true);
+    assert_eq!(body["machineStrict"], true);
+
+    // Strict keys can still be saved.
+    let tighter = json!({ "strict": true, "ciPush": "forbid" });
+    let (status, body) = d
+        .send(Method::PUT, "/security", Some(TOKEN), &tighter)
+        .await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(body["keys"]["ciPush"]["value"], "forbid");
+    assert_eq!(body["machineStrict"], true);
 }

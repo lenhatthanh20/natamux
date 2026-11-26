@@ -28,7 +28,7 @@ env:
 
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Validate release ref
@@ -76,8 +76,8 @@ jobs:
         include:
           - { name: mac-arm64, os: macos-26, py: python3 }
           - { name: mac-x64, os: macos-26-intel, cache: rust-app-mac-intel, py: python3 }
-          - { name: linux-x64, os: ubuntu-latest, py: python3 }
-          - { name: win-x64, os: windows-latest, py: python }
+          - { name: linux-x64, os: ubuntu-24.04, py: python3 }
+          - { name: win-x64, os: windows-2025, py: python }
     runs-on: ${{ matrix.os }}
     timeout-minutes: 120
     permissions:
@@ -101,18 +101,42 @@ jobs:
           test "$version" = "${TAG#v}"
       - run: rustup toolchain install
       # Intel and Windows reuse compiled output from main on the same runner type. Other release
-      # runners keep only downloads because their SDK or build profile differs from main.
+      # runners keep only downloads because their SDK or build profile differs from main. A
+      # publishing run restores no target folder: it builds clean.
       - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            ${{ (matrix.name == 'mac-x64' || matrix.name == 'win-x64') && 'target' || '' }}
+            ${{ (github.event_name != 'push' && !inputs.publish && (matrix.name == 'mac-x64' || matrix.name == 'win-x64')) && 'target' || '' }}
           key: ${{ matrix.cache || format('rust-app-{0}', runner.os) }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-${{ github.sha }}
           restore-keys: ${{ matrix.cache || format('rust-app-{0}', runner.os) }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-
       - name: Restore file times for cached Rust builds
-        if: matrix.name == 'mac-x64' || matrix.name == 'win-x64'
+        if: github.event_name != 'push' && !inputs.publish && (matrix.name == 'mac-x64' || matrix.name == 'win-x64')
         run: ${{ matrix.py }} scripts/ci-changes.py mtimes
+      # The advisory gate: the same tools and checks as advisories.yml, before anything is built.
+      # One platform is enough: every package job feeds the release job.
+      - id: tools
+        if: runner.os == 'Linux'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/bin/cargo-deny
+            ~/.cargo/bin/cargo-audit
+            ~/.cargo/bin/cargo-vet
+            ~/.cargo/bin/cargo-about
+          key: supply-chain-tools-${{ runner.os }}-cargo-deny-0.20.2-cargo-audit-0.22.2-cargo-vet-0.10.0-cargo-about-0.8.2
+      - if: runner.os == 'Linux' && steps.tools.outputs.cache-hit != 'true'
+        run: |
+          cargo install --locked cargo-deny --version 0.20.2
+          cargo install --locked cargo-audit --version 0.22.2
+      - name: Advisories gate
+        if: runner.os == 'Linux'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 scripts/advisory-dates.py
+          scripts/audit.sh
       # The apt packages come from this cache: a run downloads only what it has not seen.
       - name: Make the apt cache writable
         if: runner.os == 'Linux'
@@ -179,11 +203,21 @@ jobs:
             # The same start, with every address the app and its daemon reach written down: a
             # release build must not reach past loopback when it starts (scripts/net-trace.py).
             command -v strace >/dev/null || sudo apt-get install --yes --no-install-recommends strace
-            strace -f -qq --seccomp-bpf -e trace=connect,sendto,sendmsg -o "$RUNNER_TEMP/net.trace" \
-              xvfb-run -a scripts/release-smoke.sh target/release/natamux-app "$HOME/.config/Natamux"
-            python3 scripts/net-trace.py "$RUNNER_TEMP/net.trace"
+            trace() {
+              strace -f -qq --seccomp-bpf -e trace=connect,sendto,sendmsg,sendmmsg -o "$1" \
+                xvfb-run -a scripts/release-smoke.sh target/release/natamux-app "$HOME/.config/Natamux"
+              python3 scripts/net-trace.py "$1"
+            }
+            trace "$RUNNER_TEMP/net.trace"
+            # Again with the update check on in settings.json and NATAMUX_OFFLINE=1: still no
+            # address past loopback.
+            echo '{"autoUpdate": true}' > "$RUNNER_TEMP/update-on.json"
+            export NATAMUX_SMOKE_SETTINGS="$RUNNER_TEMP/update-on.json" NATAMUX_OFFLINE=1
+            trace "$RUNNER_TEMP/net-offline.trace"
+            unset NATAMUX_SMOKE_SETTINGS NATAMUX_OFFLINE
+            rm -f "$HOME/.config/Natamux/settings.json"
           elif [ "$RUNNER_OS" = Windows ]; then
-            scripts/release-smoke.sh target/release/natamux-app.exe "$(cygpath -u "$APPDATA")/Natamux"
+            scripts/release-smoke.sh target/release/natamux-app.exe "$(cygpath -u "$LOCALAPPDATA")/Natamux"
           else
             scripts/release-smoke.sh target/release/natamux-app "$HOME/Library/Application Support/Natamux"
           fi
@@ -283,7 +317,7 @@ jobs:
           done
           ${{ matrix.py }} scripts/windows-crt-check.py "$RUNNER_TEMP"/unpacked/{natamux-app,natamux-daemon,natamux,nmx}.exe
           scripts/release-smoke.sh "$RUNNER_TEMP/unpacked/natamux-app.exe" \
-            "$(cygpath -u "$APPDATA")/Natamux"
+            "$(cygpath -u "$LOCALAPPDATA")/Natamux"
       # Run the real installer and uninstaller: Settings > Apps lists only apps with an
       # Uninstall key (T-0365).
       - name: Check the Windows install and uninstall
@@ -326,13 +360,30 @@ jobs:
           if ($run.ExitCode -ne 0) { throw "The uninstaller stopped with exit code $($run.ExitCode)." }
           if (Test-Path $key) { throw 'The Uninstall key is still there after uninstall.' }
           if (Test-Path (Join-Path $dir 'natamux-app.exe')) { throw 'natamux-app.exe is still there after uninstall.' }
+      # What built this release, so a later reader can tell which compiler and packages it used.
+      # It sits in dist, so SHA256SUMS.txt, the attestation and the release carry it.
+      - name: Write the build record
+        run: |
+          mkdir -p dist
+          {
+            rustc -vV
+            cargo -V
+            echo "ImageOS=${ImageOS:-}"
+            echo "ImageVersion=${ImageVersion:-}"
+            if [ "$RUNNER_OS" = Linux ]; then
+              dpkg-query -W libasound2-dev libfontconfig-dev libglib2.0-dev libssl-dev libva-dev \
+                libvulkan1 libwayland-dev libx11-xcb-dev libxkbcommon-x11-dev libzstd-dev \
+                libsqlite3-dev xvfb squashfs-tools dpkg-dev mesa-vulkan-drivers
+            fi
+          } > "dist/Natamux-${{ matrix.name }}.buildenv.txt"
+          test -s "dist/Natamux-${{ matrix.name }}.buildenv.txt"
       # The third-party crates of this build, for people who must list what they install.
       - name: Write the SBOM
         run: |
           version=$(sed -n 's/^version = "\([^"]*\)"$/\1/p' crates/natamux-app/Cargo.toml | head -n 1)
           target=$(rustc -vV | sed -n 's/^host: //p')
           cargo metadata --locked --format-version 1 --filter-platform "$target" |
-            ${{ matrix.py }} scripts/sbom.py "$version" "$target" > "dist/Natamux-${{ matrix.name }}.cdx.json"
+            ${{ matrix.py }} scripts/sbom.py "$version" "$target" --rustc "$(rustc -V)" > "dist/Natamux-${{ matrix.name }}.cdx.json"
           test -s "dist/Natamux-${{ matrix.name }}.cdx.json"
       - name: Keep startup logs on failure
         if: failure()
@@ -372,7 +423,7 @@ jobs:
 
   release:
     needs: package
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
@@ -390,10 +441,11 @@ jobs:
           for file in Natamux-mac-arm64.dmg Natamux-mac-x64.dmg Natamux-win-x64.exe \
             Natamux-linux-x86_64.AppImage Natamux-linux-amd64.deb Natamux-linux-x64.tar.gz \
             Natamux-mac-arm64.cdx.json Natamux-mac-x64.cdx.json Natamux-win-x64.cdx.json \
-            Natamux-linux-x64.cdx.json; do
+            Natamux-linux-x64.cdx.json Natamux-mac-arm64.buildenv.txt Natamux-mac-x64.buildenv.txt \
+            Natamux-win-x64.buildenv.txt Natamux-linux-x64.buildenv.txt; do
             test -s "artifacts/$file" || { echo "missing $file" >&2; exit 1; }
           done
-          test "$(find artifacts -maxdepth 1 -type f -name 'Natamux-*' | wc -l)" -eq 10
+          test "$(find artifacts -maxdepth 1 -type f -name 'Natamux-*' | wc -l)" -eq 14
           cd artifacts
           sha256sum Natamux-* > SHA256SUMS.txt
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

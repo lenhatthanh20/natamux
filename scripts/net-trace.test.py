@@ -21,13 +21,17 @@ DNS = '4243 connect(12, {sa_family=AF_INET, sin_port=htons(53), sin_addr=inet_ad
 SENDMSG = ('4243 sendmsg(12, {msg_name={sa_family=AF_INET, sin_port=htons(123), sin_addr=inet_addr("10.0.0.7")}, '
            'msg_namelen=16, msg_iov=[{iov_base="x", iov_len=1}], msg_iovlen=1, msg_controllen=0, msg_flags=0}, 0) = 1')
 
+SENDMMSG = ('4243 sendmmsg(12, [{msg_hdr={msg_name={sa_family=AF_INET, sin_port=htons(123), '
+            'sin_addr=inet_addr("10.0.0.8")}, msg_namelen=16, msg_iov=[{iov_base="x", iov_len=1}], '
+            'msg_iovlen=1, msg_controllen=0, msg_flags=0}, msg_len=1}], 1, 0) = 1')
+
 
 class NetTraceTest(unittest.TestCase):
     def test_loopback_unix_and_netlink_pass(self):
         self.assertEqual(net_trace.check([LOCAL, LOCAL6, MAPPED, UNIX, NETLINK]), ([], 3))
 
     def test_another_address_fails(self):
-        for line, address in ((REMOTE, "140.82.112.3"), (REMOTE6, "2606:50c0:8000::154"), (SENDMSG, "10.0.0.7")):
+        for line, address in ((REMOTE, "140.82.112.3"), (REMOTE6, "2606:50c0:8000::154"), (SENDMSG, "10.0.0.7"), (SENDMMSG, "10.0.0.8")):
             problems, _ = net_trace.check([LOCAL, line])
             self.assertEqual(len(problems), 1, line)
             self.assertIn(address, problems[0])

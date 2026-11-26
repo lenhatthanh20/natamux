@@ -34,7 +34,7 @@ fn strip() -> NetworkSettings {
 
 #[test]
 fn strip_removes_the_credentials_and_keeps_the_model_keys() {
-    let out = scrub_with(&strip(), &daemon_env(), Path::new("/data/gh-none"));
+    let out = scrub_with(&strip(), false, &daemon_env(), Path::new("/data/gh-none"));
     for gone in [
         "GH_TOKEN",
         "GITHUB_TOKEN",
@@ -61,7 +61,7 @@ fn strip_removes_the_credentials_and_keeps_the_model_keys() {
 fn inherit_and_no_proxy_is_todays_env() {
     let settings = NetworkSettings::defaults(false);
     assert_eq!(
-        scrub_with(&settings, &daemon_env(), Path::new("/x")),
+        scrub_with(&settings, false, &daemon_env(), Path::new("/x")),
         daemon_env()
     );
 }
@@ -73,12 +73,38 @@ fn a_proxy_is_set_and_no_proxy_is_replaced_by_loopback_and_the_list() {
         no_proxy: vec![".corp".into()],
         ..NetworkSettings::defaults(false)
     };
-    let out = scrub_with(&settings, &daemon_env(), Path::new("/x"));
+    let out = scrub_with(&settings, false, &daemon_env(), Path::new("/x"));
     assert_eq!(out["HTTPS_PROXY"], "http://proxy.corp:3128");
     assert_eq!(out["all_proxy"], "http://proxy.corp:3128");
     assert_eq!(out["NO_PROXY"], "127.0.0.1,localhost,::1,.corp");
     assert_eq!(out["no_proxy"], out["NO_PROXY"]);
     assert_eq!(out["GH_TOKEN"], "FAKE-TOKEN-MARK");
+}
+
+#[test]
+fn strict_mode_adds_the_opt_outs_and_keeps_a_value_the_user_set() {
+    let settings = NetworkSettings::defaults(false);
+    let out = scrub_with(&settings, true, &daemon_env(), Path::new("/x"));
+    assert_eq!(out["DO_NOT_TRACK"], "1");
+    assert_eq!(out["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"], "1");
+
+    let mut set = daemon_env();
+    set.insert("DO_NOT_TRACK".into(), "0".into());
+    let out = scrub_with(&settings, true, &set, Path::new("/x"));
+    assert_eq!(out["DO_NOT_TRACK"], "0");
+    assert_eq!(out["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"], "1");
+}
+
+#[test]
+fn personal_mode_adds_no_opt_out_and_keeps_a_value_the_user_set() {
+    let settings = NetworkSettings::defaults(false);
+    let out = scrub_with(&settings, false, &daemon_env(), Path::new("/x"));
+    assert!(!out.contains_key("DO_NOT_TRACK"));
+    assert!(!out.contains_key("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"));
+
+    let mut set = daemon_env();
+    set.insert("DO_NOT_TRACK".into(), "1".into());
+    assert_eq!(scrub_with(&settings, false, &set, Path::new("/x")), set);
 }
 
 #[test]

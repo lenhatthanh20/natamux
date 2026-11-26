@@ -13,13 +13,16 @@ This page summarizes [SECURITY.md](https://github.com/lenhatthanh20/natamux/blob
 - Your data stays on your machine:
   - Tasks, history and stage files: `data/` of the desktop app's user data folder. Only a daemon started by hand in a repository uses `.natamux/` there.
   - Worktrees: `data/worktrees/`, or the folder you set.
-  - Desktop app token, update and offline settings (`settings.json`), downloaded updates and logs: its user data folder (`~/Library/Application Support/Natamux` on macOS, `%APPDATA%\Natamux` on Windows, `~/.config/Natamux` on Linux).
+  - Desktop app token, update and offline settings (`settings.json`), downloaded updates and logs: its user data folder (`~/Library/Application Support/Natamux` on macOS, `%LOCALAPPDATA%\Natamux` on Windows, or `%APPDATA%\Natamux` on an older install, `~/.config/Natamux` on Linux).
 - Data leaves your machine when you or an agent you start makes it happen, and for the automatic items below:
   - Coding agents send your prompts and code to their own companies, under their terms. Natamux does not see or change that.
   - GitHub actions (push, pull request, issue import) use your own `git` and `gh` login, with `gh auth git-credential` as the credential helper for github.com. Some run by themselves: `git fetch` when a workspace is made, `git ls-remote` when the New workspace dialog lists remote branches, `git pull --ff-only` before a stage that follows a merged subtask, and `gh issue create` when `tracker.createIssue` is `on-spec-approved` or `on-pr`.
   - While a dashboard or the app is connected and a task has an open or draft pull request or a pushed branch, the daemon runs `gh api graphql` every 60 seconds (checks pending, or a pushed branch without a pull request) or every 5 minutes, and `gh pr list` and `gh pr view` when an agent stops.
   - For a task with **Check on CI** ticked (off by default), each CI round force-pushes a snapshot commit to `natamux-ci/<branch>` on `origin`: the last commit plus changes to tracked files. Untracked files are never sent. The push goes to one approved URL and is refused when `origin` has more than one push URL. When the task ends or is deleted, Natamux deletes the `natamux-ci/` branch of every branch a round pushed. Strict mode can send only the last commit, ask a person to approve the exact tree, or forbid CI pushes.
   - When you tick **Check for Updates Automatically** (off by default), the desktop app starts the system `curl` to ask `https://github.com/lenhatthanh20/natamux/releases/...` for the latest release about 30 seconds after it starts and every 6 hours, and downloads a new version from GitHub. The request carries no data about you or your tasks; GitHub sees your IP address and the app version. Untick it to stop the timed checks. See [Updates](/docs/guides/desktop-app/#updates).
+  - **Draft commit message** (a click) runs the task's agent once with the task title, the list of changed files and up to 60,000 characters of the uncommitted diff. It never runs in a repo that is not trusted.
+  - The install scripts connect once per install to `github.com` (and `install.ps1` to `api.github.com`, unless `NATAMUX_VERSION` is set).
+  - Natamux installs no crash handler, so a crash dump follows the policy of the operating system.
 
 Every connection, and how to turn them off with offline mode, is in [For a security review](/docs/help/security-review/).
 
@@ -39,7 +42,7 @@ For work with strict security rules, turn on **Settings > Security > Strict mode
 
 ## The daemon
 
-- It listens on `127.0.0.1` (loopback) by default. `NATAMUX_HOST` is not checked: any address works, including `0.0.0.0`. The Docker image sets `0.0.0.0` inside its container, and `compose.prod.yaml` publishes the port on `${NATAMUX_BIND:-127.0.0.1}`, which is loopback unless you change it.
+- It listens on `127.0.0.1` (loopback) by default. The daemon refuses to start when `NATAMUX_HOST` is not loopback, unless `NATAMUX_ALLOW_REMOTE_BIND` is exactly `1`. The Docker image sets both inside its container, and `compose.prod.yaml` publishes the port on `${NATAMUX_BIND:-127.0.0.1}`, which is loopback unless you change it.
 - Every API request needs a token in an `Authorization: Bearer` header. `GET /health` needs no token, and a terminal WebSocket uses a one-time ticket.
 - Without `NATAMUX_TOKEN`, the daemon makes a random token for each run and prints it once.
 - The token travels in a header, never a cookie, so other websites cannot use your session. `/events` also accepts the token as `?token=` in the address; a reverse proxy can log it. Terminals open with a one-time ticket that expires after 30 seconds.
@@ -60,7 +63,7 @@ For work with strict security rules, turn on **Settings > Security > Strict mode
 
 - The app folder and the daemon data folder are private to your user (mode `0700`).
 - The desktop app keeps its token in its user data folder, readable only by your user (mode `0600`).
-- The scripts that start agents are written with mode `0600`.
+- The scripts that start agents are written with mode `0600`. This does not hide the first prompt: it is also on the agent's command line, which other local accounts on a shared Linux host can read in `/proc` unless `/proc` is mounted with `hidepid=2`.
 - Task files, event logs, saved screens, attachments, the SQLite index and the logs are written with mode `0600`. At start the daemon tightens wider files an older version left in the top two levels of the data folder. Worktrees keep their modes.
 - Deleting a task removes every file Natamux kept for it in the data folder (task file, events, usage, shells, screens, attachments, launch and stage-command scripts) and its index rows, with SQLite `secure_delete` on. If Natamux stops in the middle, the next start finishes the delete.
 - Logs and git errors never show the user name and password of a URL, secret URL query values (`token`, `access_token`, `key`, `password`, `secret`, `sig`), or words that start with `ghp_`, `github_pat_`, `gho_` or `sk-`. Other secrets in free text are not found.

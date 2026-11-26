@@ -1,7 +1,8 @@
 //! The offline switch: with it on, Natamux's own code and the programs it starts by itself make
 //! no connection beyond loopback. Off by default. It is on when `NATAMUX_OFFLINE` is `1`, or when
 //! the settings file of the machine says `"offline": true`. Only an administrator can write that
-//! file, so a company can turn the switch on for every user.
+//! file, so a company can turn the switch on for every user. The same file can also force Strict
+//! mode (`"strict": true`) and turn updates off (`"updates": false`).
 
 use std::ffi::OsString;
 use std::path::PathBuf;
@@ -20,35 +21,69 @@ pub fn is_on(value: Option<&str>) -> bool {
     value == Some("1")
 }
 
-/// The `offline` key of a settings file: only `true` turns it on.
-pub fn setting(text: &str) -> bool {
+/// A key of a settings file: only a JSON boolean counts, anything else is not set.
+fn key(text: &str, name: &str) -> Option<bool> {
     serde_json::from_str::<Value>(text)
         .ok()
-        .and_then(|value| value.get("offline").and_then(Value::as_bool))
-        == Some(true)
+        .and_then(|value| value.get(name).and_then(Value::as_bool))
 }
 
-/// The settings file of the machine. `os` is `std::env::consts::OS`.
-// shortcut: Windows takes the folder from `ProgramData`, which a user can change for one process;
-// ask the system for the folder if that has to be closed.
-pub fn machine_file_for(os: &str, program_data: Option<OsString>) -> Option<PathBuf> {
+/// The `offline` key of a settings file: only `true` turns it on.
+pub fn setting(text: &str) -> bool {
+    key(text, "offline") == Some(true)
+}
+
+/// The `strict` key of the machine file: only `true` forces Strict mode.
+pub fn strict_setting(text: &str) -> bool {
+    key(text, "strict") == Some(true)
+}
+
+/// The `updates` key of the machine file: only `false` turns updates off.
+pub fn updates_off_setting(text: &str) -> bool {
+    key(text, "updates") == Some(false)
+}
+
+/// The settings files of the machine. `os` is `std::env::consts::OS`.
+pub fn machine_files_for(os: &str, program_data: Option<OsString>) -> Vec<PathBuf> {
     match os {
-        "macos" => Some(PathBuf::from(
+        "macos" => vec![PathBuf::from(
             "/Library/Application Support/Natamux/settings.json",
-        )),
-        "windows" => Some(
-            PathBuf::from(program_data.filter(|value| !value.is_empty())?)
+        )],
+        "windows" => {
+            // A user can change `ProgramData` for one process, so the fixed path is always read.
+            let fixed = PathBuf::from("C:\\ProgramData")
                 .join("Natamux")
-                .join("settings.json"),
-        ),
-        _ => Some(PathBuf::from("/etc/natamux/settings.json")),
+                .join("settings.json");
+            let named = program_data
+                .filter(|value| !value.is_empty())
+                .map(|folder| PathBuf::from(folder).join("Natamux").join("settings.json"))
+                .filter(|named| *named != fixed);
+            std::iter::once(fixed).chain(named).collect()
+        }
+        _ => vec![PathBuf::from("/etc/natamux/settings.json")],
     }
 }
 
+/// True when any machine file turns the key on.
+fn machine_any(on: fn(&str) -> bool) -> bool {
+    machine_files_for(std::env::consts::OS, std::env::var_os("ProgramData"))
+        .into_iter()
+        .filter_map(|file| std::fs::read_to_string(file).ok())
+        .any(|text| on(&text))
+}
+
 fn machine_setting() -> bool {
-    machine_file_for(std::env::consts::OS, std::env::var_os("ProgramData"))
-        .and_then(|file| std::fs::read_to_string(file).ok())
-        .is_some_and(|text| setting(&text))
+    machine_any(setting)
+}
+
+/// The machine file forces Strict mode. Read on each call, so no restart is needed.
+pub fn machine_strict() -> bool {
+    machine_any(strict_setting)
+}
+
+/// The machine file turns updates off. Read on each call.
+pub fn machine_updates_off() -> bool {
+    machine_any(updates_off_setting)
 }
 
 fn from_system() -> bool {
@@ -70,7 +105,7 @@ pub fn force(on: bool) {
 mod tests {
     use std::path::PathBuf;
 
-    use super::{is_on, machine_file_for, setting};
+    use super::{is_on, machine_files_for, setting, strict_setting, updates_off_setting};
 
     #[test]
     fn only_the_exact_value_one_turns_it_on() {
@@ -94,26 +129,55 @@ mod tests {
     }
 
     #[test]
+    fn strict_is_on_only_for_true_and_updates_off_only_for_false() {
+        assert!(strict_setting("{\"offline\":false,\"strict\":true}"));
+        assert!(!strict_setting("{}"));
+        assert!(!strict_setting("{\"strict\":false}"));
+        assert!(!strict_setting("{\"strict\":1}"));
+        assert!(!strict_setting("{\"strict\":\"true\"}"));
+        assert!(!strict_setting("{\"strict\":true"));
+        assert!(updates_off_setting("{\"updates\":false}"));
+        assert!(!updates_off_setting("{}"));
+        assert!(!updates_off_setting("{\"updates\":true}"));
+        assert!(!updates_off_setting("{\"updates\":0}"));
+        assert!(!updates_off_setting("{\"updates\":\"false\"}"));
+        assert!(!updates_off_setting("not json"));
+    }
+
+    #[test]
     fn the_machine_file_is_in_a_folder_only_an_administrator_writes() {
         assert_eq!(
-            machine_file_for("macos", None),
-            Some(PathBuf::from(
+            machine_files_for("macos", None),
+            [PathBuf::from(
                 "/Library/Application Support/Natamux/settings.json"
-            ))
+            )]
         );
         assert_eq!(
-            machine_file_for("linux", None),
-            Some(PathBuf::from("/etc/natamux/settings.json"))
+            machine_files_for("linux", None),
+            [PathBuf::from("/etc/natamux/settings.json")]
         );
+    }
+
+    #[test]
+    fn windows_always_reads_the_fixed_program_data_file() {
+        let fixed = PathBuf::from("C:\\ProgramData")
+            .join("Natamux")
+            .join("settings.json");
+        let only = std::slice::from_ref(&fixed);
         assert_eq!(
-            machine_file_for("windows", Some("C:\\ProgramData".into())),
-            Some(
-                PathBuf::from("C:\\ProgramData")
+            machine_files_for("windows", Some("C:\\ProgramData".into())),
+            only
+        );
+        assert_eq!(machine_files_for("windows", None), only);
+        assert_eq!(machine_files_for("windows", Some("".into())), only);
+        assert_eq!(
+            machine_files_for("windows", Some("D:\\Other".into())),
+            [
+                fixed,
+                PathBuf::from("D:\\Other")
                     .join("Natamux")
-                    .join("settings.json")
-            )
+                    .join("settings.json"),
+            ]
         );
-        assert_eq!(machine_file_for("windows", None), None);
-        assert_eq!(machine_file_for("windows", Some("".into())), None);
     }
 }

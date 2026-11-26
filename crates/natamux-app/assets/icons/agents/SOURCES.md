@@ -2,6 +2,8 @@
 
 `<name>.svg` is drawn on dark themes. `<name>_light.svg` is the dark-fill version for light themes.
 
+Trademarks: the names and logos of agents and their companies are trademarks of their owners. Natamux shows them only to name the agent. It has no affiliation with them and no endorsement from them. The licence of a file covers the drawing, not the trademark.
+
 - claude.svg, codex.svg, gemini-ai.svg: lobe-icons, MIT (see LICENSE-lobe-icons). https://github.com/lobehub/lobe-icons
 - copilot.svg, copilot_light.svg, cursor.svg, cursor_light.svg: material-icon-theme, MIT (see LICENSE-material-icon-theme). https://github.com/material-extensions/vscode-material-icon-theme
 - opencode.svg, opencode_light.svg: lobe-icons `opencode.svg`, MIT. https://github.com/lobehub/lobe-icons/blob/master/packages/static-svg/icons/opencode.svg

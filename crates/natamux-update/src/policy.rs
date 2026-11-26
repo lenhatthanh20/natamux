@@ -1,11 +1,14 @@
 //! The `network` settings for updates: the daemon's `security.json`, read again on each check,
-//! so a change applies without a restart. Machine offline mode is `loopback`.
+//! so a change applies without a restart. Machine offline mode is `loopback`, and the machine key
+//! `"updates": false` turns updates off.
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use natamux_core::egress::{Target, check};
 use natamux_core::security::{Egress, NetworkSettings, Source, network_in};
+
+pub const UPDATES_BY_ADMIN: &str = "Updates are turned off by your administrator";
 
 static DATA_DIR: Mutex<Option<PathBuf>> = Mutex::new(None);
 
@@ -28,10 +31,21 @@ pub fn policy() -> NetworkSettings {
     if crate::offline::offline() {
         settings.egress = Egress::Loopback;
     }
+    if natamux_core::offline::machine_updates_off() {
+        settings.updater = false;
+    }
     settings
 }
 
 /// Why updates are off by the settings now, if they are.
 pub fn updates_off() -> Option<String> {
-    check(&policy(), &Target::Update { host: "github.com" }).err()
+    updates_off_with(natamux_core::offline::machine_updates_off(), &policy())
+}
+
+/// Why updates are off, given the machine key `"updates": false` and the settings.
+pub fn updates_off_with(machine_off: bool, settings: &NetworkSettings) -> Option<String> {
+    if machine_off {
+        return Some(UPDATES_BY_ADMIN.into());
+    }
+    check(settings, &Target::Update { host: "github.com" }).err()
 }

@@ -38,6 +38,14 @@ class Check(unittest.TestCase):
         d = deny(("RUSTSEC-2026-0001", "x. Review by 2026-10-28."))
         self.assertIn("has passed", mod.check(d, "", TODAY)[0])
 
+    def test_90_days_away_passes_and_91_fails(self):
+        for days, fails in ((90, False), (91, True)):
+            due = TODAY + datetime.timedelta(days=days)
+            problems = mod.check(deny(("RUSTSEC-2026-0001", f"x. Review by {due}.")), "", TODAY)
+            self.assertEqual(bool(problems), fails, days)
+            if fails:
+                self.assertIn("more than 90 days", problems[0])
+
     def test_fails_without_date(self):
         d = deny(("RUSTSEC-2026-0001", "no fix exists"))
         self.assertIn("no 'Review by", mod.check(d, "", TODAY)[0])

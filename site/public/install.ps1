@@ -1,5 +1,6 @@
 # Installs or updates the Natamux desktop app on Windows.
 # Usage, in PowerShell: irm https://natamux.github.io/install.ps1 | iex
+# A fixed version: $env:NATAMUX_VERSION = 'v1.1.0' first, then the same command.
 # macOS, Debian and Ubuntu: curl -fsSL https://natamux.github.io/install.sh | sh
 # Source: https://github.com/lenhatthanh20/natamux/blob/main/site/public/install.ps1
 
@@ -55,8 +56,9 @@ function Install-Natamux {
   if (Get-Process natamux-app -ErrorAction SilentlyContinue) { throw 'Quit Natamux, then run the command again.' }
 
   # One tag for every file, so a release published during the run cannot mix two versions.
-  $tag = (Invoke-RestMethod 'https://api.github.com/repos/lenhatthanh20/natamux/releases/latest').tag_name
-  if ($tag -notmatch '^v\d+\.\d+\.\d+$') { throw "Unexpected release tag '$tag'." }
+  if ($env:NATAMUX_VERSION) { $tag = $env:NATAMUX_VERSION }
+  else { $tag = (Invoke-RestMethod 'https://api.github.com/repos/lenhatthanh20/natamux/releases/latest').tag_name }
+  if ($tag -cnotmatch '^v\d+\.\d+\.\d+$') { throw "Unexpected release tag '$tag'. NATAMUX_VERSION must look like v1.1.0." }
   $base = "$repo/releases/download/$tag"
   $tmp = Join-Path ([IO.Path]::GetTempPath()) "natamux-install-$([guid]::NewGuid())"
   New-Item -ItemType Directory -Path $tmp | Out-Null

@@ -160,13 +160,36 @@ pub fn app_folder() -> Option<PathBuf> {
     let base = if cfg!(target_os = "macos") {
         PathBuf::from(std::env::var_os("HOME")?).join("Library/Application Support")
     } else if cfg!(windows) {
-        PathBuf::from(std::env::var_os("APPDATA")?)
+        return windows_folder(|name| std::env::var_os(name), Path::exists);
     } else {
         std::env::var_os("XDG_CONFIG_HOME")
             .map(PathBuf::from)
             .or_else(|| Some(PathBuf::from(std::env::var_os("HOME")?).join(".config")))?
     };
     Some(base.join("Natamux"))
+}
+
+/// The app folder on Windows: `%LOCALAPPDATA%\Natamux`, so a roaming profile never copies tokens
+/// and worktrees to a server. An install that has `%APPDATA%\Natamux` and no daemon `data` in the
+/// local folder keeps the old one, because worktrees and tasks store absolute paths that a move
+/// would break.
+pub fn windows_folder(
+    var: impl Fn(&str) -> Option<std::ffi::OsString>,
+    exists: impl Fn(&Path) -> bool,
+) -> Option<PathBuf> {
+    let folder = |name: &str| {
+        var(name)
+            .filter(|value| !value.is_empty())
+            .map(|value| PathBuf::from(value).join("Natamux"))
+    };
+    match (folder("LOCALAPPDATA"), folder("APPDATA")) {
+        // The local folder may already hold `Logs` (Save Perf Report), so look for its data.
+        (Some(local), Some(roaming)) if !exists(&local.join("data")) && exists(&roaming) => {
+            Some(roaming)
+        }
+        (Some(local), _) => Some(local),
+        (None, roaming) => roaming,
+    }
 }
 
 fn app_daemon_url() -> Option<String> {
@@ -376,6 +399,55 @@ mod tests {
             result,
             Err(ClientError::BadUrl("https://example.com".into()))
         );
+    }
+
+    fn windows_env(name: &str) -> Option<std::ffi::OsString> {
+        match name {
+            "LOCALAPPDATA" => Some("C:\\Users\\an\\AppData\\Local".into()),
+            "APPDATA" => Some("C:\\Users\\an\\AppData\\Roaming".into()),
+            _ => None,
+        }
+    }
+
+    #[test]
+    fn a_new_windows_install_uses_the_local_folder() {
+        let local = PathBuf::from("C:\\Users\\an\\AppData\\Local").join("Natamux");
+        assert_eq!(windows_folder(windows_env, |_| false), Some(local.clone()));
+        // Both folders there: the local one wins.
+        assert_eq!(windows_folder(windows_env, |_| true), Some(local.clone()));
+        let only_local = |path: &Path| path.starts_with(&local);
+        assert_eq!(windows_folder(windows_env, only_local), Some(local.clone()));
+    }
+
+    #[test]
+    fn an_old_windows_install_keeps_its_roaming_folder() {
+        let roaming = PathBuf::from("C:\\Users\\an\\AppData\\Roaming").join("Natamux");
+        let only_roaming = |path: &Path| path == roaming;
+        assert_eq!(
+            windows_folder(windows_env, only_roaming),
+            Some(roaming.clone())
+        );
+        // A perf report made the local Logs folder, but the data is still in the old one.
+        let logs = PathBuf::from("C:\\Users\\an\\AppData\\Local")
+            .join("Natamux")
+            .join("Logs");
+        let roaming_and_logs = |path: &Path| path == roaming || logs.starts_with(path);
+        assert_eq!(
+            windows_folder(windows_env, roaming_and_logs),
+            Some(roaming.clone())
+        );
+    }
+
+    #[test]
+    fn windows_without_a_local_folder_variable_falls_back_to_the_roaming_one() {
+        let roaming_only = |name: &str| windows_env(name).filter(|_| name == "APPDATA");
+        assert_eq!(
+            windows_folder(roaming_only, |_| false),
+            Some(PathBuf::from("C:\\Users\\an\\AppData\\Roaming").join("Natamux"))
+        );
+        assert_eq!(windows_folder(|_| None, |_| true), None);
+        let blank = |_: &str| Some(std::ffi::OsString::new());
+        assert_eq!(windows_folder(blank, |_| true), None);
     }
 
     #[test]

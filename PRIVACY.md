@@ -6,11 +6,15 @@ Natamux runs on your machine. It has no account, no server of its own, and no te
 
 Nothing. Natamux sends no usage data, crash reports or analytics anywhere. Its own code reaches the internet in these ways, all listed below: the update check of the desktop app (only when you turn it on), your `gh` for pull request status, and your `git` and `gh` for GitHub work. Offline mode turns them off.
 
+Natamux installs no crash handler and sends no crash dump. If a program crashes, the operating system's own policy decides whether a dump is written and whether it is sent (for example Windows Error Reporting or the macOS crash reporter). Your IT team sets that policy.
+
+The install scripts (`install.sh` for macOS, Debian and Ubuntu, `install.ps1` for Windows) connect once per install, to `github.com` for the release files, and for `install.ps1` to `api.github.com` for the newest tag (not when `NATAMUX_VERSION` is set). GitHub redirects the downloads to its file hosts. They send no data about you or your machine beyond what any download sends.
+
 ## What stays on your machine
 
 - Tasks, their history and stage files: in `data/` of the desktop app's user data folder, as Markdown and JSON files, plus a local SQLite index. Only a daemon you start by hand in a repository uses `.natamux/` there.
 - Worktrees: in `data/worktrees/`, or the folder you set.
-- The daemon token, the update setting, the offline setting, downloaded updates and the logs of the desktop app: in its user data folder (`~/Library/Application Support/Natamux` on macOS, `%APPDATA%\Natamux` on Windows, `~/.config/Natamux` on Linux). `settings.json` there holds the update setting and the offline setting.
+- The daemon token, the update setting, the offline setting, downloaded updates and the logs of the desktop app: in its user data folder (`~/Library/Application Support/Natamux` on macOS, `%LOCALAPPDATA%\Natamux` on Windows, `~/.config/Natamux` on Linux). `settings.json` there holds the update setting and the offline setting. On Windows, an older install that has `%APPDATA%\Natamux` and no `%LOCALAPPDATA%\Natamux\data` keeps using the old folder. To move it, quit Natamux, move the folder to `%LOCALAPPDATA%\Natamux`, and run `git worktree repair` in each project.
 - App preferences (theme, layout): in `view.json` in the desktop app's user data folder.
 - With isolation on (Linux): `data/sandbox/<task>/` holds the task's launch scripts, a git config with your git name and email, and the private `tmp` folder of its terminals. It goes with the task. `data/sandbox/no-hooks/` is an empty folder for the daemon's own git.
 
@@ -37,12 +41,27 @@ The `data` key of `security.json` (saved through `PUT /security`):
 When you or an agent you start makes it happen, and for the automatic items below:
 
 - **Coding agents.** Every coding agent you start (for example Claude Code, Codex, Gemini CLI, Copilot CLI and Cursor) sends your prompts and code to its own company, under those companies' terms. Natamux starts them; it does not see or change what they send.
+- **Draft commit message.** The **Draft commit message** button (a click, never automatic) runs the task's agent once with the task title, the list of changed files and up to 60,000 characters of the uncommitted diff. That text goes to the agent's company like any other prompt. It never runs in a repo that is not trusted.
 - **GitHub.** Pushing a branch, opening a pull request, importing issues, or a GitHub issue as task context (`gh issue view`) uses your own `git` and `gh` login to talk to GitHub. These commands and pushes use `gh auth git-credential` as the credential helper for github.com. Some run by themselves: `git fetch` of the base branch when a workspace is made, `git ls-remote` when the New workspace dialog lists remote branches, `git pull --ff-only` before a stage that follows a merged subtask, and `gh issue create` when `tracker.createIssue` is `on-spec-approved` or `on-pr` (default `manual`).
 - **CI check.** Only for a task with **Check on CI** ticked (off by default) on a stage with `"ci": true`. Each CI round runs `git push --force` of a snapshot commit to `natamux-ci/<branch>` on `origin`. The snapshot holds the last commit plus changes to tracked files, also uncommitted ones, never untracked files. Natamux polls `gh run list` every 15 seconds for up to 30 minutes, and when the task ends or is deleted it deletes the `natamux-ci/` branch of every branch a round pushed. You do not click for each round.
 - **Pull request status.** While a dashboard or the app is connected and a task has an open or draft pull request or a pushed branch, the daemon runs `gh api graphql` every 60 seconds while checks are pending or a pushed branch has no pull request, and every 5 minutes otherwise. It also runs `gh pr list` and `gh pr view` when an agent stops. It sends what `gh` sends for that: your GitHub login and the names of the repository and the branch.
 - **Agents after a restart.** When the daemon starts, it starts again the agents of tasks in running, idle, needs-input or review state.
 - **Links.** Links in the dashboard open in your browser.
 - **Update check (desktop app).** Off by default. When you tick **Check for Updates Automatically** (app menu on macOS, **Help** menu on Linux and Windows, or **Settings → General → Updates**), the app checks about 30 seconds after it starts, and every 6 hours. The app starts the system `curl` (found through `PATH`; it reads the proxy variables, or the proxy of the network settings, but not `~/.curlrc`) with a HEAD request to `https://github.com/lenhatthanh20/natamux/releases/...` and follows redirects to GitHub's file hosts. The request has no data about you, your repositories or your tasks. GitHub sees your IP address and the app's version. When a newer release exists, the app also fetches `SHA256SUMS.txt`, `SHA256SUMS.txt.minisig`, then the file. Untick it to turn the timed checks off. **Check for Updates…** checks once, when you choose it.
+
+## Agent opt-out in Strict mode
+
+When Strict mode is on (the global mode, not a repo's own setting), every program Natamux starts for a task gets these two variables: terminals and agents, stage checks and the commit-message agent.
+
+| Variable | Value |
+|---|---|
+| `DO_NOT_TRACK` | `1` |
+| `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` | `1` |
+
+- A variable you already set, even to an empty value, is kept.
+- In Personal mode nothing is added.
+- Nothing else is set. No variable is set for other agents, because none was confirmed in their own documentation.
+- This asks the agents to send less. What an agent sends, and what the network lets through, is still the agent's and the network's job.
 
 ## Privacy policies of other services
 
@@ -61,7 +80,25 @@ For other agents, see the agent's own website.
 
 ## Offline mode
 
-Off by default. It is on when `NATAMUX_OFFLINE` is exactly `1`, or `"offline": true` is in `settings.json` of the desktop app's user data folder, or in the settings file of the machine (`/Library/Application Support/Natamux/settings.json` on macOS, `/etc/natamux/settings.json` on Linux, `%ProgramData%\Natamux\settings.json` on Windows), which an administrator can set for every user. It is read once at start: restart to change it. Your own `settings.json` reaches the daemon only through the app that starts it; the machine file and the variable are read by every program. Natamux then makes no update check (the manual one is refused too), runs no `gh`, runs no `git fetch`, `pull`, `push`, `ls-remote` or `clone`, runs no pull request watcher, and does not resume the CI gate. Its git also fetches no missing object of a partial clone and downloads no LFS file. A CI stage started offline ends with an error and waits for you. It does not limit the coding agents or what you type in a terminal. Egress `loopback` in the network settings (below) does the same, and is read at each call. The full list is in [For a security review](https://natamux.github.io/docs/help/security-review/).
+Off by default. It is on when `NATAMUX_OFFLINE` is exactly `1`, or `"offline": true` is in `settings.json` of the desktop app's user data folder, or in the settings file of the machine, which an administrator can set for every user. It is read once at start: restart to change it. Your own `settings.json` reaches the daemon only through the app that starts it; the machine file and the variable are read by every program. Natamux then makes no update check (the manual one is refused too), runs no `gh`, runs no `git fetch`, `pull`, `push`, `ls-remote` or `clone`, runs no pull request watcher, and does not resume the CI gate. Its git also fetches no missing object of a partial clone and downloads no LFS file. A CI stage started offline ends with an error and waits for you. It does not limit the coding agents or what you type in a terminal. Egress `loopback` in the network settings (below) does the same, and is read at each call.
+
+### Settings file of the machine
+
+An administrator can set three keys for every user in the settings file of the machine. Only the exact JSON value counts: any other value, or a file that does not parse, means the key is not set.
+
+| Key | Value | Effect |
+|---|---|---|
+| `offline` | `true` | Offline mode, as above. Read once at start |
+| `strict` | `true` | Strict mode for every user. `security.json` cannot turn it off. Read about once per second, no restart. See [SECURITY.md](SECURITY.md#strict-mode) |
+| `updates` | `false` | No update check and no download, timed or manual. `git` and `gh` still work. The reason shown is "Updates are turned off by your administrator". Read at each check |
+
+| System | Path |
+|---|---|
+| macOS | `/Library/Application Support/Natamux/settings.json` |
+| Linux | `/etc/natamux/settings.json` |
+| Windows | `C:\ProgramData\Natamux\settings.json`, and `%ProgramData%\Natamux\settings.json` when that variable names another folder |
+
+On Windows a key is on when either file turns it on, so a user who changes the `ProgramData` variable for one process cannot turn a key off. The full list is in [For a security review](https://natamux.github.io/docs/help/security-review/).
 
 ## Network settings
 

@@ -1,10 +1,16 @@
 #!/usr/bin/env bash
 # Verify a packaged app starts its sibling daemon and the daemon answers /health.
+# Optional: NATAMUX_SMOKE_SETTINGS=<file> is copied to <app-data-folder>/settings.json before the
+# app starts, so a run can use other user settings (for example the update check on).
 set -euo pipefail
 
 app=${1:?usage: scripts/release-smoke.sh <app-binary> <app-data-folder>}
 folder=${2:?missing app data folder}
 rm -f "$folder/daemon-port"
+if [ -n "${NATAMUX_SMOKE_SETTINGS:-}" ]; then
+  mkdir -p "$folder"
+  cp "$NATAMUX_SMOKE_SETTINGS" "$folder/settings.json"
+fi
 "$app" --smoke --hold 12 &
 pid=$!
 for _ in $(seq 1 200); do

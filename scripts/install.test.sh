@@ -41,6 +41,12 @@ check "valid_tag rejects extra text" '! valid_tag "v1.0.11 x"'
 check "valid_tag rejects a second line" "! valid_tag \"\$(printf 'v1.0.11\nv1.0.12')\""
 check "valid_tag rejects an empty tag" '! valid_tag ""'
 
+check "wanted_tag takes NATAMUX_VERSION" '[ "$(NATAMUX_VERSION=v1.1.0 wanted_tag)" = v1.1.0 ]'
+check "wanted_tag refuses a bad NATAMUX_VERSION" '! (NATAMUX_VERSION=1.1 wanted_tag) 2>/dev/null'
+check "wanted_tag refuses a pre-release NATAMUX_VERSION" '! (NATAMUX_VERSION=v1.1.0-beta.1 wanted_tag) 2>/dev/null'
+check "wanted_tag names the variable in its error" '(NATAMUX_VERSION=x wanted_tag) 2>&1 | grep -q NATAMUX_VERSION'
+check "install.ps1 reads NATAMUX_VERSION with the tag rule" 'grep -q "NATAMUX_VERSION" "$ps1" && grep -q "cnotmatch .\^v" "$ps1"'
+
 sums=crates/natamux-update/tests/fixtures/minisign/SHA256SUMS.txt
 check "sum_for finds the line of a file" \
   '[ "$(sum_for Natamux-win-x64.exe "$sums")" = 1e6e7727b0190c0bb0bcc8a7460595cf535a3d6bf886c2c3250555b271aeff85 ]'

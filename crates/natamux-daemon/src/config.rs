@@ -77,6 +77,15 @@ fn allowed_hosts(env: &Env, host: &str) -> Vec<String> {
     hosts
 }
 
+/// A bind host only this machine can reach: the loopback names, or a loopback address.
+fn is_loopback(host: &str) -> bool {
+    let host = host.to_ascii_lowercase();
+    DEFAULT_ALLOWED_HOSTS.contains(&host.as_str())
+        || host
+            .parse::<std::net::IpAddr>()
+            .is_ok_and(|ip| ip.is_loopback())
+}
+
 fn value<'a>(env: &'a Env, name: &str) -> Option<&'a str> {
     env.get(name)
         .map(|value| value.trim())
@@ -101,6 +110,13 @@ pub fn load_config(env: &Env, cwd: &Path) -> Result<Config, String> {
     let host = value(env, "NATAMUX_HOST")
         .unwrap_or(LOOPBACK_HOST)
         .to_string();
+    let remote_allowed = env.get("NATAMUX_ALLOW_REMOTE_BIND").map(String::as_str) == Some("1");
+    if !is_loopback(&host) && !remote_allowed {
+        return Err(format!(
+            "NATAMUX_HOST \"{host}\" is not a loopback address; set NATAMUX_ALLOW_REMOTE_BIND=1 to \
+             bind it"
+        ));
+    }
     Ok(Config {
         allowed_hosts: allowed_hosts(env, &host),
         // Only a container sets NATAMUX_HOST, and only with its port published to loopback.
@@ -178,6 +194,7 @@ mod tests {
         let set = env(&[
             ("NATAMUX_PORT", " 8080 "),
             ("NATAMUX_HOST", "0.0.0.0"),
+            ("NATAMUX_ALLOW_REMOTE_BIND", "1"),
             ("NATAMUX_DATA_DIR", "/data"),
             ("NATAMUX_TOKEN", "secret"),
         ]);
@@ -201,12 +218,16 @@ mod tests {
         assert_eq!(
             hosts(&[
                 ("NATAMUX_HOST", "0.0.0.0"),
+                ("NATAMUX_ALLOW_REMOTE_BIND", "1"),
                 ("NATAMUX_ALLOWED_HOSTS", " Daemon, web ,,localhost"),
             ]),
             ["127.0.0.1", "localhost", "::1", "daemon", "web"]
         );
         assert_eq!(
-            hosts(&[("NATAMUX_HOST", "10.0.0.5")]),
+            hosts(&[
+                ("NATAMUX_HOST", "10.0.0.5"),
+                ("NATAMUX_ALLOW_REMOTE_BIND", "1"),
+            ]),
             ["127.0.0.1", "localhost", "::1", "10.0.0.5"]
         );
     }
@@ -262,6 +283,31 @@ mod tests {
                 error,
                 Some(format!("NATAMUX_PORT must be a port number, got \"{bad}\""))
             );
+        }
+    }
+
+    #[test]
+    fn refuses_a_host_that_is_not_loopback_unless_remote_bind_is_allowed() {
+        let load = |pairs: &[(&str, &str)]| load_config(&env(pairs), Path::new("/"));
+        for host in ["0.0.0.0", "10.0.0.5", "::", "example.com"] {
+            let error = load(&[("NATAMUX_HOST", host)]).err().unwrap_or_default();
+            assert!(error.contains("NATAMUX_HOST"), "{host}: {error}");
+            assert!(
+                error.contains("NATAMUX_ALLOW_REMOTE_BIND=1"),
+                "{host}: {error}"
+            );
+            for not_one in ["0", "true", "yes", ""] {
+                let pairs = [
+                    ("NATAMUX_HOST", host),
+                    ("NATAMUX_ALLOW_REMOTE_BIND", not_one),
+                ];
+                assert!(load(&pairs).is_err(), "{host} {not_one}");
+            }
+            let allowed = [("NATAMUX_HOST", host), ("NATAMUX_ALLOW_REMOTE_BIND", "1")];
+            assert_eq!(load(&allowed).unwrap().host, host);
+        }
+        for host in ["127.0.0.1", "localhost", "LocalHost", "::1", "127.0.0.2"] {
+            assert_eq!(load(&[("NATAMUX_HOST", host)]).unwrap().host, host);
         }
     }
 
