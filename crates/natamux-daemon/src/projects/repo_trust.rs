@@ -1,6 +1,8 @@
-//! Repo trust (S-02, S-03, S-11): the settings and the setup script of a project run commands on
-//! this machine. They run only after the user approved them, and again after each change.
-//! `<data>/repo-trust.json` keeps the approved hash of each project by id.
+//! Repo trust (S-02, S-03, S-11): the settings, the setup script and the agent config of a project
+//! run commands on this machine. They run only after the user approved the project. In Personal
+//! mode one approval covers later changes too, like a trusted workspace of an editor; Strict mode
+//! asks again after each change. `<data>/repo-trust.json` keeps the approved hash of each project
+//! by id.
 
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
@@ -44,6 +46,10 @@ pub(crate) struct Approval {
     /// The hash of each file approved with `hash`, to name the ones that changed since.
     #[serde(default)]
     files: BTreeMap<String, String>,
+    /// The user approved the project in the dialog or the CLI. A settings save and the first
+    /// start write records too, but nobody was asked then.
+    #[serde(default)]
+    pub(crate) by_user: bool,
 }
 
 impl Approval {
@@ -55,6 +61,13 @@ impl Approval {
         self.extra.push(digest.to_string());
         let over = self.extra.len().saturating_sub(MAX_EXTRA);
         self.extra.drain(..over);
+    }
+
+    /// Personal mode: this approval also covers what changes later.
+    pub(crate) fn covers_changes(&self) -> bool {
+        // A record of an older version: agent files got into a record only through an approval.
+        let agents_approved = !self.agents.is_empty() && self.agents != files_hash(&[]);
+        self.by_user || agents_approved
     }
 }
 
@@ -156,20 +169,30 @@ pub(crate) struct Current {
     setup: Files,
     agents: Files,
     pub(crate) hash: String,
-    /// Why the agent config cannot be checked: then nothing is approved.
+    /// Why the agent config cannot be checked: then nothing can be approved.
     pub(crate) unverifiable: Option<String>,
+    /// The folder is in Strict mode: only the exact approved content is trusted.
+    strict: bool,
 }
 
 impl Current {
+    /// Strict mode: only a digest the user approved. Personal mode: also every folder of a
+    /// project the user approved once, whatever changed since.
     pub(crate) fn trusted(&self, approval: Option<&Approval>) -> bool {
-        if self.unverifiable.is_some() {
-            return false;
-        }
         let nothing = self.commands.is_empty() && self.setup.is_empty() && self.agents.is_empty();
-        let approved = |it: &Approval| {
-            it.path == self.path && (it.hash == self.hash || it.extra.contains(&self.hash))
-        };
-        nothing || approval.is_some_and(approved)
+        let recorded = approval.filter(|it| it.path == self.path);
+        let exact = |it: &Approval| it.hash == self.hash || it.extra.contains(&self.hash);
+        if self.unverifiable.is_none() && (nothing || recorded.is_some_and(exact)) {
+            return true;
+        }
+        !self.strict && self.covered(approval)
+    }
+
+    /// The user approved this project, so Personal mode asks nothing more. Strict mode has no
+    /// such question: always true there.
+    pub(crate) fn covered(&self, approval: Option<&Approval>) -> bool {
+        let recorded = approval.filter(|it| it.path == self.path);
+        self.strict || recorded.is_some_and(Approval::covers_changes)
     }
 
     pub(crate) fn approval(&self) -> Approval {
@@ -183,6 +206,7 @@ impl Current {
             files: files
                 .map(|(file, bytes)| (file.clone(), file_hash(bytes)))
                 .collect(),
+            by_user: false,
         }
     }
 
@@ -211,9 +235,10 @@ impl Current {
         changed
     }
 
-    pub(crate) fn view(self, trusted: bool, changed: Vec<String>) -> RepoTrustView {
+    pub(crate) fn view(self, trusted: bool, covered: bool, changed: Vec<String>) -> RepoTrustView {
         RepoTrustView {
             trusted,
+            covered,
             hash: self.hash,
             commands: self.commands,
             setup: shown(self.setup),
@@ -239,7 +264,8 @@ impl Repos {
         let folder = folder.unwrap_or(&project);
         let setup = setup_files(folder);
         // The folder's own `.natamux.json` may make it Strict.
-        let (agents, unverifiable) = match config_sources(folder, mode_in(folder).is_strict()) {
+        let folder_strict = mode_in(folder).is_strict();
+        let (agents, unverifiable) = match config_sources(folder, folder_strict) {
             Ok(files) => (files, None),
             Err(reason) => (Vec::new(), Some(reason)),
         };
@@ -251,6 +277,8 @@ impl Repos {
             agents,
             hash,
             unverifiable,
+            // A task branch cannot leave Strict by dropping the key from its own file.
+            strict: folder_strict || mode_in(&project).is_strict(),
         })
     }
 
@@ -265,11 +293,13 @@ impl Repos {
         let setup = setup_files(Path::new(&repo.path));
         // Agent config that cannot be checked is never approved by a save.
         let folder = Path::new(&repo.path);
-        let Ok(agents) = config_sources(folder, mode_in(folder).is_strict()) else {
+        let strict = mode_in(folder).is_strict();
+        let Ok(agents) = config_sources(folder, strict) else {
             return Ok(());
         };
+        // A record of another path (a project removed and added again) is no "before".
         let before = self.trust.approvals().get(id).cloned();
-        let before = before.as_ref();
+        let before = before.as_ref().filter(|it| it.path == repo.path);
         if unseen(&setup, before.map(|it| it.setup.as_str()))
             || unseen(&agents, before.map(|it| it.agents.as_str()))
         {
@@ -282,8 +312,11 @@ impl Repos {
             setup,
             agents,
             unverifiable: None,
+            strict,
         };
-        let approval = current.approval();
+        let mut approval = current.approval();
+        // A save writes a new record: the project stays one the user approved.
+        approval.by_user = before.is_some_and(Approval::covers_changes);
         self.trust.change(|all| {
             all.insert(id.to_string(), approval);
         })?;

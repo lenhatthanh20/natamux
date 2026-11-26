@@ -408,7 +408,7 @@ Strict mode is not part of `.natamux.json`: it is a setting of the app, kept in 
 | `ciPush` | `approved-commit` (default), `approved-snapshot` or `forbid` | What **Check on CI** may push: the last commit only, a tree a person approves, or nothing. |
 | `agentAutoMode` | `forbid` | Agents never start in auto mode. |
 | `terminalInputTrace` | `off` | `NATAMUX_INPUT_TRACE` is ignored. |
-| `repoTrust.scope` | `worktree` | Agent config is approved per worktree and checked right before the agent runs. |
+| `repoTrust.scope` | `worktree` | Agent config and setup scripts are approved per worktree content, each change asks again, and the digest is checked right before the agent runs. |
 | `repoTrust.bypassHookTrust` | `false` | Codex hook trust is bypassed only for an approved digest. |
 | `agents.permissionMode` | `ask` | Each agent starts in its ask mode. |
 | `agents.requireAskGuarantee` | `true` | An agent without an ask mode does not start. |

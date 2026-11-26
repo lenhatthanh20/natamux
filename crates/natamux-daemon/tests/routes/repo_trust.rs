@@ -77,10 +77,23 @@ async fn shows_the_commands_and_approves_only_the_hash_that_was_shown() {
     let (_, listed) = d.get("/repos").await;
     assert_eq!(listed["repos"][0]["trusted"], true);
 
+    // Personal mode: the approval covers later changes; the old hash is still refused.
     write_settings(&d, &CHECKED.replace("pnpm test", "pnpm test2")).await;
-    assert_eq!(trust(&d).await["trusted"], false);
+    let after = trust(&d).await;
+    assert_eq!(after["trusted"], true);
+    assert_eq!(after["covered"], true);
+    assert_eq!(after["changed"], Value::Null);
     let (old, _) = approve(&d, &shown["hash"]).await;
     assert_eq!(old, 409);
+
+    d.make_task("A").await;
+    let worktree = d.give_workspace("T-0001");
+    std::fs::write(worktree.join(".mcp.json"), "{}\n").unwrap();
+    let (status, in_task) = d.get(TASK_TRUST).await;
+    assert_eq!(status, 200, "{in_task}");
+    assert_eq!(in_task["trusted"], true);
+    assert_eq!(in_task["covered"], true);
+    assert_eq!(in_task["changed"], Value::Null);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -135,12 +148,15 @@ async fn runs_the_setup_script_once_its_project_is_approved() {
     );
 }
 
-/// T-0001 with a worktree that holds an MCP server config: not approved yet.
+/// T-0001 with a worktree that holds an MCP server config: not approved yet. Its own
+/// `.natamux.json` makes it Strict, where only the approved digest is trusted.
 async fn task_with_config(name: &str) -> (TestDaemon, std::path::PathBuf) {
     let d = bare(name).await;
     d.make_task("A").await;
     let worktree = d.give_workspace("T-0001");
     std::fs::write(worktree.join(".mcp.json"), "{}\n").unwrap();
+    let strict = r#"{"security":{"strict":true}}"#;
+    std::fs::write(worktree.join(".natamux.json"), strict).unwrap();
     (d, worktree)
 }
 

@@ -7,6 +7,7 @@ use super::*;
 fn view(trusted: bool, commands: usize, scripts: usize) -> RepoTrustView {
     RepoTrustView {
         trusted,
+        covered: true,
         hash: "ab12".into(),
         commands: (0..commands)
             .map(|index| RepoCommand {
@@ -63,7 +64,29 @@ fn the_name_comes_from_the_project_list_or_falls_back_to_the_id() {
 
 #[test]
 fn the_title_names_the_project() {
-    assert_eq!(title("My Shop"), "Approve the commands of My Shop?");
+    assert_eq!(title("My Shop"), "Trust My Shop?");
+}
+
+// T-0389: one question per project, also with nothing to list, so config that arrives later
+// never starts an agent without auto mode silently.
+#[test]
+fn a_project_the_user_never_approved_is_reviewed_also_with_nothing_to_list() {
+    let never = |trusted, commands| RepoTrustView {
+        covered: false,
+        ..view(trusted, commands, 0)
+    };
+    assert!(needs_review(&never(true, 0)));
+    assert!(needs_review(&never(true, 2)));
+    assert!(nothing_listed(&never(true, 0)));
+    assert!(!nothing_listed(&never(true, 2)));
+    assert!(!needs_review(&view(true, 2, 0)));
+}
+
+#[test]
+fn a_view_of_an_older_daemon_without_covered_asks_nothing_more() {
+    let text = r#"{"trusted":true,"hash":"ab","commands":[]}"#;
+    let view: RepoTrustView = serde_json::from_str(text).unwrap();
+    assert!(!needs_review(&view));
 }
 
 #[test]

@@ -164,6 +164,7 @@ impl Data {
         #[cfg_attr(not(test), allow(unused_mut))]
         let mut view = RepoTrustView {
             trusted: !self.projects.untrusted.contains(repo_id),
+            covered: !self.projects.untrusted.contains(repo_id),
             hash: format!("fake-{repo_id}"),
             commands: vec![
                 command("Stage implement: check", "cargo xtask ci"),

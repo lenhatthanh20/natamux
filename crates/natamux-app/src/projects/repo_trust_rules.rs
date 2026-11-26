@@ -5,7 +5,8 @@ use natamux_proto::projects::repo::Repo;
 use natamux_proto::projects::repo_trust::RepoTrustView;
 
 /// Over the commands: why the dialog asks.
-pub const LEAD: &str = "Natamux runs these on this machine for the tasks of this project.";
+pub const LEAD: &str = "Natamux runs these on this machine for the tasks of this project, and \
+                        keeps running them after they change. Strict mode asks again.";
 
 /// After a 409: the commands changed after the dialog read them, so it shows the new ones.
 pub const CHANGED: &str =
@@ -18,19 +19,35 @@ pub const NOT_APPROVED: &str = "The commands of this project are not approved: s
                                 command stages and the setup script do not run, and agents start \
                                 without auto mode.";
 
+/// The alert of the project settings page for a project that runs, but was never approved.
+pub const NOT_TRUSTED_TITLE: &str = "Not trusted yet";
+
+pub const NOT_TRUSTED: &str = "Natamux asks once: trust this project, so its agents keep auto \
+                               mode when its config changes later.";
+
+/// The dialog of a project with nothing to list yet.
+pub const NOTHING_YET: &str = "This project has no commands, setup script or agent config yet. \
+                               Config that arrives later is trusted too.";
+
 pub fn title(name: &str) -> String {
-    format!("Approve the commands of {name}?")
+    format!("Trust {name}?")
 }
 
-/// The dialog opens only when there is something to approve; the daemon approves a project with
-/// no commands on its own.
+/// The dialog opens when there is something to approve, and once per project the user never
+/// approved, also with nothing to list: config that arrives later must not start an agent
+/// without auto mode silently.
 pub fn needs_review(view: &RepoTrustView) -> bool {
     let something = !view.commands.is_empty()
         || !view.setup.is_empty()
         || !view.agent_files.is_empty()
         || !view.changed.is_empty()
         || view.unverifiable.is_some();
-    !view.trusted && something
+    (!view.trusted && something) || !view.covered
+}
+
+/// Nothing to list: the dialog says so instead of an empty card.
+pub fn nothing_listed(view: &RepoTrustView) -> bool {
+    view.commands.is_empty() && view.setup.is_empty() && view.agent_files.is_empty()
 }
 
 /// Over the commands: what changed since the last approval, or why nothing can be approved.

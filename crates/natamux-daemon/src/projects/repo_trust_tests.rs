@@ -3,6 +3,7 @@ use std::sync::atomic::{AtomicI64, AtomicUsize, Ordering};
 use std::time::{Duration, SystemTime};
 
 use natamux_agents::hook_files::{WorkspaceHooks, exclude_from_git, workspace_file};
+use natamux_core::security::{Forced, SecurityMode, StrictSettings, force};
 use natamux_git::test_support::{TempDir, run_git};
 use natamux_proto::projects::repo_trust::SetupScript;
 use serde_json::json;
@@ -15,6 +16,11 @@ use crate::projects::settings_parse::SETTINGS_FILE;
 use crate::workspaces::setup_script::SETUP_SCRIPT;
 
 const CHECKED: &str = r#"{"stages":[{"id":"context","kind":"context","gate":"manual"},{"id":"test","kind":"agent","gate":"auto","check":"pnpm test"}]}"#;
+
+/// Strict mode on this thread: only the exact approved content is trusted.
+fn strict() -> Forced {
+    force(SecurityMode::Strict(StrictSettings::default()))
+}
 
 struct Setup {
     base: TempDir,
@@ -129,6 +135,7 @@ fn trusts_the_commands_only_after_the_approval_of_the_hash_that_was_shown() {
 
 #[test]
 fn a_changed_byte_in_the_settings_needs_a_new_approval_and_the_old_hash_is_refused() {
+    let _strict = strict();
     let s = setup();
     s.settings(CHECKED);
     let old = s.view().hash;
@@ -146,6 +153,7 @@ fn a_changed_byte_in_the_settings_needs_a_new_approval_and_the_old_hash_is_refus
 
 #[test]
 fn a_changed_byte_in_a_setup_script_needs_a_new_approval() {
+    let _strict = strict();
     let s = setup();
     write(s.folder().join(SETUP_SCRIPT), "pnpm install\n").unwrap();
     let shown = s.view();
@@ -167,6 +175,7 @@ fn a_changed_byte_in_a_setup_script_needs_a_new_approval() {
 
 #[test]
 fn runs_the_setup_script_of_a_worktree_only_when_it_is_the_approved_one() {
+    let _strict = strict();
     let s = setup();
     write(s.folder().join(SETUP_SCRIPT), "pnpm install\n").unwrap();
     s.repos.approve("default", &s.view().hash).unwrap();
@@ -198,7 +207,8 @@ fn approves_every_project_as_it_is_at_the_first_start_without_a_trust_file() {
 
     assert!(repos.is_trusted(Some("default")));
     assert!(repos.is_trusted(Some("other")));
-    // The next start has the file: a change made since is not approved on its own.
+    // The next start has the file: a change made since is not approved on its own. Nobody was
+    // asked at the first start, so Personal mode does not cover it either.
     write(base.path().join("other").join(SETUP_SCRIPT), "make all\n").unwrap();
     let again = Repos::with_options(options(&data)).unwrap();
     assert!(!again.is_trusted(Some("other")));
@@ -302,6 +312,7 @@ fn a_repo_with_only_an_agent_config_file_is_trusted_only_after_its_approval() {
 
 #[test]
 fn a_changed_byte_in_an_agent_config_file_needs_a_new_approval() {
+    let _strict = strict();
     let s = setup();
     write(s.folder().join(".mcp.json"), "{}\n").unwrap();
     s.repos.approve("default", &s.view().hash).unwrap();
@@ -388,4 +399,106 @@ fn reads_an_approval_stored_before_agent_files_counted() {
     let approval: Approval = serde_json::from_str(text).unwrap();
     assert_eq!(approval.agents, "");
     assert!(approval.extra.is_empty());
+}
+
+// The owner's bug (T-0389): a worktree whose agent config differed from the project folder
+// started its agent without auto mode. Personal mode trusts a project once, like an editor.
+#[test]
+fn personal_mode_trusts_every_folder_of_an_approved_project_after_any_change() {
+    let s = setup();
+    s.settings(CHECKED);
+    write(s.folder().join(SETUP_SCRIPT), "pnpm install\n").unwrap();
+    write(s.folder().join(".mcp.json"), "{}\n").unwrap();
+    s.repos.approve("default", &s.view().hash).unwrap();
+    let worktree = s.base.path().join("worktree");
+    create_dir_all(worktree.join(".claude/skills/x")).unwrap();
+    write(worktree.join(".claude/skills/x/SKILL.md"), "do more\n").unwrap();
+    write(worktree.join(SETUP_SCRIPT), "make\n").unwrap();
+
+    s.settings(&CHECKED.replace("pnpm test", "pnpm test!"));
+    write(s.folder().join(".mcp.json"), "{ }\n").unwrap();
+
+    assert!(s.repos.is_trusted_in(None, &worktree));
+    assert!(s.repos.is_trusted(None));
+    let view = s.view();
+    assert!(view.trusted);
+    assert!(view.changed.is_empty());
+    let _strict = strict();
+    assert!(!s.repos.is_trusted_in(None, &worktree));
+    assert!(!s.repos.is_trusted(None));
+}
+
+// A settings save writes a record without asking anyone: it must not trust what comes later.
+#[test]
+fn a_settings_save_alone_does_not_cover_later_agent_config_but_an_approval_does() {
+    let s = setup();
+    let body: Value = serde_json::from_str(CHECKED).unwrap();
+    s.repos.approve_saved("default", &body).unwrap();
+    s.settings(CHECKED);
+    assert!(s.repos.is_trusted(None));
+    assert!(!s.view().covered);
+
+    write(s.folder().join(".mcp.json"), "{}\n").unwrap();
+    assert!(!s.repos.is_trusted(None));
+
+    s.repos.approve("default", &s.view().hash).unwrap();
+    assert!(s.view().covered);
+    write(s.folder().join(".mcp.json"), "{ }\n").unwrap();
+    assert!(s.repos.is_trusted(None));
+}
+
+// A save writes a new record. The approval has no agent file here, so only the kept mark makes
+// the project stay approved.
+#[test]
+fn a_save_after_an_approval_keeps_the_project_approved() {
+    let s = setup();
+    let body: Value = serde_json::from_str(CHECKED).unwrap();
+    s.settings(CHECKED);
+    s.repos.approve("default", &s.view().hash).unwrap();
+
+    s.repos.approve_saved("default", &body).unwrap();
+    write(s.folder().join(".mcp.json"), "{}\n").unwrap();
+
+    assert!(s.repos.is_trusted(None));
+    assert!(s.view().covered);
+}
+
+// Approving in a task's worktree is the user's approval of the project too.
+#[test]
+fn an_approval_in_a_worktree_covers_the_project() {
+    let s = setup();
+    let body: Value = serde_json::from_str(CHECKED).unwrap();
+    s.repos.approve_saved("default", &body).unwrap();
+    s.settings(CHECKED);
+    let worktree = s.base.path().join("worktree");
+    create_dir_all(&worktree).unwrap();
+    write(worktree.join(".mcp.json"), "{}\n").unwrap();
+    let shown = s.repos.trust_view_in("default", Some(&worktree)).unwrap();
+    assert!(!shown.trusted && !shown.covered);
+
+    s.repos
+        .approve_in("default", Some(&worktree), &shown.hash)
+        .unwrap();
+
+    assert!(s.view().covered);
+    assert!(s.repos.is_trusted_in(None, &worktree));
+}
+
+#[test]
+fn an_unverifiable_folder_is_trusted_only_for_an_approved_project_in_personal_mode() {
+    let s = setup();
+    let big = "x".repeat(1024 * 1024 + 1);
+    write(s.folder().join(".mcp.json"), &big).unwrap();
+    let view = s.view();
+    assert!(!view.trusted && view.unverifiable.is_some());
+    assert!(s.repos.approve("default", &view.hash).is_err());
+
+    write(s.folder().join(".mcp.json"), "{}\n").unwrap();
+    s.repos.approve("default", &s.view().hash).unwrap();
+    let worktree = s.base.path().join("worktree");
+    create_dir_all(&worktree).unwrap();
+    write(worktree.join(".mcp.json"), &big).unwrap();
+    assert!(s.repos.is_trusted_in(None, &worktree));
+    let _strict = strict();
+    assert!(!s.repos.is_trusted_in(None, &worktree));
 }

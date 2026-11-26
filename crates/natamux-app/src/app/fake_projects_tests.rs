@@ -134,10 +134,11 @@ fn import_makes_a_draft_task_and_skips_imported_issues() {
 #[test]
 fn seeded_projects_are_approved_and_an_added_one_waits() {
     let fake = FakeDaemon::default();
-    assert!(fake.repo_trust("natamux", None).unwrap().trusted);
+    let seeded = fake.repo_trust("natamux", None).unwrap();
+    assert!(seeded.trusted && seeded.covered);
     let repo = fake.add_repo(&add("/srv/app", None, None)).unwrap();
     let view = fake.repo_trust(&repo.id, None).unwrap();
-    assert!(!view.trusted);
+    assert!(!view.trusted && !view.covered);
     assert_eq!(view.hash, "fake-app");
     assert!(!view.commands.is_empty());
     assert_eq!(view.setup[0].file, ".natamux-setup");
@@ -150,7 +151,7 @@ fn approving_the_shown_hash_trusts_and_sends_repos_changed() {
     let mut feed = watch(&fake);
     let hash = fake.repo_trust(&repo.id, None).unwrap().hash;
     assert!(fake.approve_repo(&repo.id, &hash, None).unwrap().trusted);
-    assert!(fake.repo_trust(&repo.id, None).unwrap().trusted);
+    assert!(fake.repo_trust(&repo.id, None).unwrap().covered);
     assert!(matches!(
         feed.try_recv().unwrap(),
         natamux_client::DashboardEvent::Repos { .. }

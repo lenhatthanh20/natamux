@@ -110,6 +110,9 @@ fn indented(text: &str) -> String {
         .collect::<String>()
 }
 
+const COVERS: &str =
+    "The approval also covers later changes of this project. Strict mode asks again.";
+
 /// The list as the user reads it before an approval. `task`: read in that task's worktree.
 fn describe(repo: &str, task: Option<&str>, view: &RepoTrustView) -> String {
     let state = if view.trusted {
@@ -118,6 +121,11 @@ fn describe(repo: &str, task: Option<&str>, view: &RepoTrustView) -> String {
         "not approved"
     };
     let mut text = format!("Commands of {repo}: {state}\nHash: {}\n", view.hash);
+    if !view.covered {
+        text.push_str(&format!(
+            "{repo} is not trusted yet: Natamux asks once per project.\n"
+        ));
+    }
     if !view.changed.is_empty() {
         let changed = visible_text(&view.changed.join(", "));
         text.push_str(&format!("Changed since the last approval: {changed}\n"));
@@ -144,10 +152,10 @@ fn describe(repo: &str, task: Option<&str>, view: &RepoTrustView) -> String {
         ));
         text.push_str(&indented(&each.text));
     }
-    if !view.trusted && view.unverifiable.is_none() {
+    if !(view.trusted && view.covered) && view.unverifiable.is_none() {
         let task = task.map_or_else(String::new, |task| format!(" --task {task}"));
         text.push_str(&format!(
-            "\nApprove them: natamux repo trust {repo}{task} --approve {}\n",
+            "\n{COVERS}\nApprove them: natamux repo trust {repo}{task} --approve {}\n",
             view.hash
         ));
     }
@@ -199,6 +207,7 @@ mod tests {
     fn lists_each_command_with_its_place_and_the_line_that_approves_them() {
         let view = RepoTrustView {
             trusted: false,
+            covered: false,
             hash: "ab12".into(),
             commands: vec![RepoCommand {
                 place: "Stage test: check".into(),
@@ -218,10 +227,12 @@ mod tests {
         assert_eq!(
             describe("my-app", None, &view),
             "Commands of my-app: not approved\nHash: ab12\n\
+             my-app is not trusted yet: Natamux asks once per project.\n\
              \nStage test: check\n    pnpm test\n\
              \nSetup script .natamux-setup\n    pnpm install\n    cp .env.example .env\n\
              \nAgent config file .mcp.json\n    {}\n\
-             \nApprove them: natamux repo trust my-app --approve ab12\n"
+             \nThe approval also covers later changes of this project. Strict mode asks again.\n\
+             Approve them: natamux repo trust my-app --approve ab12\n"
         );
     }
 
@@ -230,6 +241,7 @@ mod tests {
     fn shows_control_characters_as_visible_text() {
         let view = RepoTrustView {
             trusted: true,
+            covered: true,
             hash: "ab12".into(),
             commands: vec![RepoCommand {
                 place: "Stage \u{1b}[2Ktest: check".into(),

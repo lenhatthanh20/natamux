@@ -279,6 +279,7 @@ impl AgentRunner {
             .terminals
             .run(task_id, &line, shell, DEFAULT_SIZE)?;
         self.watch.launched(&task, shell, gate.state.digest());
+        gate.log_untrusted(tasks, &task, &*self.options.permission_mode_of);
         if let Some(text) = pasted {
             self.pasted.hold(task_id, shell, &text);
         }
@@ -295,16 +296,14 @@ impl AgentRunner {
             });
         }
         let restored_in = own.restored.then_some(shell);
+        let kept = session.filter(|session| !session.is_empty() && *session != LAST_SESSION);
         Ok(tasks.record_agent_launch(
             task_id,
             agent,
             Some(&program),
             own.stage.as_deref(),
             restored_in,
-            (
-                shell,
-                session.filter(|session| !session.is_empty() && *session != LAST_SESSION),
-            ),
+            (shell, kept),
         )?)
     }
 

@@ -1,5 +1,5 @@
-//! Repo trust: the commands a project runs on this machine, which the user approves once and again
-//! after each change (`GET /repos/:id/trust`, `POST /repos/:id/trust`).
+//! Repo trust: the commands a project runs on this machine, which the user approves once; Strict
+//! mode asks again after each change (`GET /repos/:id/trust`, `POST /repos/:id/trust`).
 
 use serde::{Deserialize, Serialize};
 
@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 pub const UNTRUSTED_REASON: &str =
     "Repo commands are not approved. Review them in the project settings, then retry.";
 
-/// What a blocked launch says when the agent config of the task's worktree is not the approved
+/// What a Strict launch says when it refuses a worktree whose agent config is not the approved
 /// one.
 pub const CONFIG_CHANGED_REASON: &str =
     "The agent config in this worktree changed since it was approved. Review it, then retry.";
@@ -37,6 +37,10 @@ pub struct SetupScript {
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub struct RepoTrustView {
     pub trusted: bool,
+    /// The user approved the project, so Personal mode asks nothing more; always true in Strict
+    /// mode. An older daemon does not send it: then nothing is asked.
+    #[serde(default = "covered_default")]
+    pub covered: bool,
     pub hash: String,
     pub commands: Vec<RepoCommand>,
     /// `.natamux-setup` and `.natamux-setup.ps1`, the ones that exist.
@@ -52,6 +56,10 @@ pub struct RepoTrustView {
     /// Such a folder can never be approved.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub unverifiable: Option<String>,
+}
+
+fn covered_default() -> bool {
+    true
 }
 
 /// The body of `POST /repos/:id/trust`.
@@ -70,6 +78,7 @@ mod tests {
     fn names_the_place_of_a_command_where_on_the_wire() {
         let view = RepoTrustView {
             trusted: false,
+            covered: false,
             hash: "ab".into(),
             commands: vec![RepoCommand {
                 place: "Stage test: check".into(),
@@ -86,7 +95,7 @@ mod tests {
         let text = serde_json::to_string(&view).unwrap();
         assert_eq!(
             text,
-            r#"{"trusted":false,"hash":"ab","commands":[{"where":"Stage test: check","text":"pnpm test"}],"setup":[],"agentFiles":[{"file":".mcp.json","text":"{}"}]}"#
+            r#"{"trusted":false,"covered":false,"hash":"ab","commands":[{"where":"Stage test: check","text":"pnpm test"}],"setup":[],"agentFiles":[{"file":".mcp.json","text":"{}"}]}"#
         );
         assert_eq!(serde_json::from_str::<RepoTrustView>(&text).unwrap(), view);
     }
@@ -104,5 +113,6 @@ mod tests {
         let text = r#"{"trusted":true,"hash":"ab","commands":[],"setup":[]}"#;
         let view: RepoTrustView = serde_json::from_str(text).unwrap();
         assert!(view.agent_files.is_empty());
+        assert!(view.covered);
     }
 }
