@@ -14,6 +14,7 @@ use natamux_proto::stages::capabilities::stage_name_of_id;
 use natamux_proto::tasks::task::{Task, TaskState};
 
 use crate::app::view_rules::is_unseen;
+use crate::app::view_rules::seen_results::is_result_unseen;
 use crate::tasks::task_changes::task_of;
 use crate::tasks::task_rules::needs_me;
 
@@ -24,6 +25,8 @@ pub struct Seen {
     pub state: TaskState,
     pub waits: BTreeSet<String>,
     pub idle: BTreeSet<String>,
+    /// The task's last background result (`backgroundResultAt`, T-0390).
+    pub result: Option<String>,
 }
 
 /// Each task at the last look.
@@ -97,6 +100,7 @@ fn seen_of(task: &Task) -> Seen {
         state: task.state,
         waits: waiting_stages(task),
         idle: idle_stages(task),
+        result: task.background_result_at.clone(),
     }
 }
 
@@ -136,6 +140,17 @@ pub fn notification_for(task: &Task, repos: &[Repo]) -> Notification {
 
 /// The note of one stage of the task, in the state of its lane.
 fn notification_at(task: &Task, state: TaskState, stage: &str, repos: &[Repo]) -> Notification {
+    note_of(task, state, stage, false, repos)
+}
+
+/// The note of a stage; `result` names a background result instead of the state.
+fn note_of(
+    task: &Task,
+    state: TaskState,
+    stage: &str,
+    result: bool,
+    repos: &[Repo],
+) -> Notification {
     let stage = if stage.is_empty() {
         None
     } else {
@@ -151,7 +166,11 @@ fn notification_at(task: &Task, state: TaskState, stage: &str, repos: &[Repo]) -
     };
     // The body is two lines: a line break in a name would push the place onto more.
     let place = place.replace(['\r', '\n'], " ");
-    let what = what_happened(state, stage.as_deref());
+    let what = match (result, stage.as_deref()) {
+        (true, Some(stage)) => format!("New background result at {stage}"),
+        (true, None) => "New background result".into(),
+        (false, stage) => what_happened(state, stage),
+    };
     Notification {
         title: task.title.clone(),
         body: format!("{what}\n{place}"),
@@ -195,10 +214,26 @@ fn newly_idle(before: &Seen, task: &Task) -> Vec<(String, TaskState)> {
     idle
 }
 
+/// A new background result since the last look (T-0390).
+fn new_result(before: &Seen, task: &Task) -> bool {
+    task.background_result_at.is_some() && task.background_result_at != before.result
+}
+
 /// What rings after a new task list: the stages that started to wait (a task that waits already
 /// rings again when another of its terminals starts to wait), the stages whose agent ended its
 /// turn, then the tasks that became done.
 pub fn rings<T: Borrow<Task>>(previous: &States, tasks: &[T], repos: &[Repo]) -> Vec<Ring> {
+    rings_with(previous, tasks, repos, false)
+}
+
+/// `rings`, where a turn that background work started rings only when `results` is on: a loop
+/// may end such a turn every few minutes. The user's own turn ends ring as before.
+pub fn rings_with<T: Borrow<Task>>(
+    previous: &States,
+    tasks: &[T],
+    repos: &[Repo],
+    results: bool,
+) -> Vec<Ring> {
     let started: HashSet<&str> = tasks_that_started_waiting(previous, tasks)
         .iter()
         .map(|task| task.id.as_str())
@@ -218,7 +253,17 @@ pub fn rings<T: Borrow<Task>>(previous: &States, tasks: &[T], repos: &[Repo]) ->
         if new.is_empty() && started.contains(task.id.as_str()) {
             new.push((task.stage.clone(), task.state));
         }
-        new.extend(newly_idle(before, task));
+        let result = new_result(before, task);
+        if !result {
+            new.extend(newly_idle(before, task));
+        }
+        if result && results {
+            ring.push(Ring {
+                task_id: task.id.clone(),
+                note: note_of(task, task.state, &task.stage, true, repos),
+                stage: (!task.stage.is_empty()).then(|| task.stage.clone()),
+            });
+        }
         for (stage, state) in new {
             ring.push(Ring {
                 task_id: task.id.clone(),
@@ -280,6 +325,23 @@ pub fn unread_turn_ends<T: Borrow<Task>>(tasks: &[T], seen: &[(String, TaskState
         .iter()
         .map(task_of)
         .filter(|task| task.state == TaskState::Idle && is_unseen(seen, &task.id, task.state))
+        .count()
+}
+
+/// Tasks with news the user has not looked at: an idle task whose turn end is unseen, or a
+/// background result not read yet (T-0390). Each task counts once.
+pub fn unread_count<T: Borrow<Task>>(
+    tasks: &[T],
+    seen: &[(String, TaskState)],
+    results: &[(String, String)],
+) -> usize {
+    tasks
+        .iter()
+        .map(task_of)
+        .filter(|task| {
+            (task.state == TaskState::Idle && is_unseen(seen, &task.id, task.state))
+                || is_result_unseen(results, task)
+        })
         .count()
 }
 

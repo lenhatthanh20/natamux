@@ -13,7 +13,7 @@ use super::dashboard::Dashboard;
 use super::dock_badge::set_dock_badge;
 use super::notify_rules::{
     NeedsYouAnnouncer, Notification, Ring, States, badge_label, look_at_one, note_tag, plays_sound,
-    rings, states_by_id, tag_target, unread_turn_ends, with_terminal,
+    rings_with, states_by_id, tag_target, unread_count, with_terminal,
 };
 use crate::tasks::task_attention::{needs_me_count, needs_me_refs};
 use crate::tasks::task_rules::needs_me;
@@ -45,9 +45,10 @@ impl Notifier {
             let (on, loaded) = (board.view().notify, board.data.loaded);
             let always = board.view().notify_always;
             let now = super::clock::now_ms();
-            let waiting = needs_me_refs(tasks, now);
+            let waiting = needs_me_refs(tasks, board.attention(now));
             self.announcer.update(&waiting, loaded);
-            let unread = unread_turn_ends(tasks, &board.view().seen);
+            let view = board.view();
+            let unread = unread_count(tasks, &view.seen, &view.seen_results);
             self.set_badge(badge_label(waiting.len() + unread));
             let one = changed.as_deref().and_then(|id| board.data.task(id));
             // With one changed task, `before` holds only that task as it was.
@@ -61,9 +62,10 @@ impl Notifier {
             if !on || (window.is_window_active() && !always) {
                 return;
             }
+            let results = view.notify_background_results;
             match one {
-                Some(task) => rings(&before, std::slice::from_ref(task), repos),
-                None => rings(&before, tasks, repos),
+                Some(task) => rings_with(&before, std::slice::from_ref(task), repos, results),
+                None => rings_with(&before, tasks, repos, results),
             }
         };
         for each in &ring {
@@ -78,8 +80,9 @@ impl Notifier {
     pub fn after_open(&mut self, dashboard: &Entity<Dashboard>, cx: &App) {
         let board = dashboard.read(cx);
         let now = super::clock::now_ms();
-        let waiting = needs_me_count(&board.data.tasks, now);
-        let unread = unread_turn_ends(&board.data.tasks, &board.view().seen);
+        let waiting = needs_me_count(&board.data.tasks, board.attention(now));
+        let view = board.view();
+        let unread = unread_count(&board.data.tasks, &view.seen, &view.seen_results);
         self.set_badge(badge_label(waiting + unread));
     }
 

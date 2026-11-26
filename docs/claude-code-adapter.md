@@ -35,6 +35,8 @@ Facts below come from the Claude Code docs (`code.claude.com/docs/en/hooks` and 
 | `Stop` whose `last_assistant_message` ends on a question | needs input from a hook | `agent.resumed`, `agent.asked` | needs input, for the answer |
 | `Stop` with no background work | running | `agent.finished` | idle; the app still rings "Finished its turn" |
 | `Stop` with background work | running | `agent.waiting` | running |
+| `Stop` with only scheduled prompts left | running | `agent.finished` (payload `scheduled`) | idle; the cron is kept |
+| `Stop` on a question, background work or not | running | `agent.asked` (with `waitingFor`) | needs input; the work runs on |
 | `Stop` with no question | needs input from a hook | `agent.resumed`, `agent.finished` (or `agent.waiting`) | idle (or running): a denied permission leaves no tool hook, so the turn end ends the wait |
 | `Stop` (any) | needs input for an answer | none | needs input: a turn end does not answer a question |
 | `StopFailure` | running | `agent.failed` | failed |
@@ -81,7 +83,14 @@ A paused agent starts again on its session: with no prompt on a visible attach, 
 
 **Resume while the agent still runs.** The agent waits at its prompt, so a click on **Resume** types `Go on with the stage you are working on.` to it, but only when the last thing it did in that stage was to end its turn (`Stop`). Only the agent's own events count: a start of the agent after a restart, a CI result or an edit of the task in between do not. An agent that asked (`PermissionRequest`) gets nothing, since the Enter would answer its menu. A double click types the prompt once: the second `agent.resumed` is not accepted.
 
-**Background work.** A `Stop` is "with background work" when `background_tasks` has an entry whose `status` is not `completed`, `failed`, `killed` or `stopped`, or `session_crons` has an entry. The agent then only paused: the work wakes it again, for example when `pnpm test` in a background shell ends. So the task stays running, the `agent.waiting` event lists the work (at most 5 entries of 200 characters, in `payload.waitingFor`), and the task's one-line summary says "Waiting for Bash: pnpm test and 1 more". The task keeps `backgroundSince` until the agent shows up again or the task leaves running; until then it is never "quiet". Entries that cannot be read are skipped, so a `Stop` with only bad entries ends the turn as before. The `Stop` after `natamux done` is dropped as always, with or without background work.
+**Background work.** A `Stop` is "with background work" when `background_tasks` has an entry whose `status` is not `completed`, `failed`, `killed` or `stopped`, or (with such a task) `session_crons` has an entry; scheduled prompts alone end the turn (see T-0390 below). The agent then only paused: the work wakes it again, for example when `pnpm test` in a background shell ends. So the task stays running, the `agent.waiting` event lists the work (at most 5 entries of 200 characters, in `payload.waitingFor`), and the task's one-line summary says "Waiting for Bash: pnpm test and 1 more". The task keeps `backgroundSince` until the agent shows up again or the task leaves running; until then it is never "quiet". Entries that cannot be read are skipped, so a `Stop` with only bad entries ends the turn as before. The `Stop` after `natamux done` is dropped as always, with or without background work.
+
+**Background work since T-0390.** #116 kept every turn end with background work quiet. Four cases hid things, so:
+
+- A question wins. A `Stop` whose last message is a question gives `agent.asked` (with `waitingFor`), even with work left: the task needs input and rings. Turns that the work starts later do not answer it; only the user's prompt does. A new question in such a turn logs `agent.asked` again (not accepted: the state stays needs input, as with a second `natamux ask`). `wait_reason` takes the newest `agent.asked` of the current wait, accepted or not, so the sidebar row and the details show the newest question.
+- Scheduled prompts alone do not hold the turn. With no running task left, a `Stop` with `session_crons` ends the turn: `agent.finished` with `payload.scheduled` (the prompts, else their schedule), and the event's detail in the activity list says "Finished its turn · next: <first scheduled prompt>". The cron is kept. The hook service reports such a turn end as paused to the idle pause, so it never ends the shell and the cron with it. After a daemon restart the agent is relaunched and its session crons are gone.
+- A turn that background work started, not the user, is a "background turn". `UserPromptSubmit` reads `prompt`: one that starts with `<task-notification>` is a wake by background work; one that equals a scheduled prompt of the last turn end is a cron firing (the daemon compares the first 200 characters and drops them before it logs anything). Any other prompt is the user's. The hook service keeps, per shell and in memory only, whether the user sent a prompt since the last turn end. A turn end that leaves work again (`agent.waiting`, or `agent.finished` with `scheduled`) after a background turn gets `payload.backgroundResult: true`, and the task gets `backgroundResultAt`. The app shows the task as unread until it is opened, and rings only with "Notify when a background result arrives" on. After a daemon restart no turn is marked until the next turn end.
+- Hung work. With "Flag background work older than" set (`flagBackgroundAfterMinutes` in `view.json`), a running task that waits for background work turns quiet once it has had no update for that long, and is listed in Needs you. Its sidebar row says "Waiting for <first entry> since <HH:MM>" (the entry from the agent's line, the time of the last update; a blurred project shows "background work" instead of the entry); the details banner says "Background work with no sign of life for 2h. It may hang." Off by default. The app passes the setting with the clock to every quiet check (`Attention`).
 
 ## Which task a hook belongs to
 
@@ -136,12 +145,32 @@ What Natamux does about it: every hook of a running task, even one that changes 
 - **A proxy can block the hooks.** With a proxy set on the machine, both hooks failed with "proxy refused the connection". Claude Code sends an `http` hook through the proxy, and the docs do not say that loopback is exempt for hooks. `export NO_PROXY="localhost,127.0.0.1"` and `export no_proxy="$NO_PROXY"` before starting `claude` fixed it. Many company machines have a proxy, so a user may need this. A `command` hook that runs `curl --noproxy "*"` is the other way round it. Natamux now adds `127.0.0.1,localhost,::1` to `NO_PROXY` and `no_proxy` in every task terminal and keeps the hosts already there (`no-proxy.ts`). A shell profile that sets these variables again must keep `127.0.0.1` in them.
 - **`--settings` adds to the other hooks, it does not replace them.** Claude Code reported "Ran 2 stop hooks" although these settings define one. The second came from the user's own settings. This is evidence from one session, not a statement in the docs.
 
+## Seen in a session transcript (T-0390)
+
+Checked on 2026-11-26 in the transcript of a Claude Code 2.1.322 session of 2026-11-10 (a Natamux task terminal, hooks on). A real session was not run for this task: the owner's Mac runs no extra agent sessions for checks.
+
+- A background shell that ends while the agent is idle wakes it with a user turn. The prompt is the notification itself, and `UserPromptSubmit` fires for it (its hook context was attached 132 ms later):
+
+  ```
+  <task-notification>
+  <task-id>brq24mb42</task-id>
+  <tool-use-id>toolu_…</tool-use-id>
+  <output-file>…/tasks/brq24mb42.output</output-file>
+  <status>completed</status>
+  <summary>Background command "Start Docker site for …" completed (exit code 0)</summary>
+  </task-notification>
+  ```
+
+  So a background turn is told by its prompt (`wake: background`), not by a missing prompt. The test `marks_a_prompt_that_background_work_sent` keeps this shape.
+- A finished background agent comes back the same way (seen in this task's own session: a queued `<task-notification>` with `<status>completed</status>`).
+
 ## Not verified
 
 - The permission path (`PermissionRequest`, and `Notification` with `permission_prompt`). In the test, Claude Code did not ask for permission to create a file, so those hooks never fired. The tester's guess is that the session ran in an auto permission mode (not checked). Skipped on purpose; it is covered only by tests with made-up input.
 - How fast a permission prompt moves the task to "needs input".
 - How Claude Code behaves when the daemon answers slowly. The hooks use a 5 second timeout.
 - `Stop` with background work. Built from the docs only. Still to check with a real session: the `status` values of `background_tasks`, which hook comes first when a background shell ends, and whether a scheduled wakeup shows in `session_crons`.
+- The prompt of a cron that fires (T-0390). Natamux takes it to be the cron's `prompt`; when it is not, the turn counts as the user's and is not marked. When a wake sends no `UserPromptSubmit` at all, the "no prompt since the last turn end" rule still marks the turn.
 - Every other hook event (`SubagentStop`, `TaskCompleted`, `WorktreeCreate` and more). They could give finer states later.
 - A session that Claude Desktop or the VS Code extension runs: the docs say `permission_prompt` is timed differently there.
 - Finding the task by the working directory (no `NATAMUX_TASK_ID`). The session in the test ran outside the workspace, so only the header path was tried.

@@ -296,6 +296,29 @@ fn has_no_detail_for_other_events_or_for_a_list_it_cannot_read() {
     );
 }
 
+// T-0390: a question asked while background work runs, and a turn end with a scheduled prompt.
+#[test]
+fn shows_the_work_of_a_question_and_the_next_scheduled_prompt() {
+    let asked = stored(
+        1,
+        "agent.asked",
+        "agent",
+        true,
+        json!({"message": "Merge?", "waitingFor": ["Bash: pnpm test"]}),
+    );
+    let finished = stored(
+        2,
+        "agent.finished",
+        "agent",
+        true,
+        json!({"scheduled": ["check CI", "nightly"]}),
+    );
+    let lines = group(&[asked, finished]);
+    let details: Vec<Option<String>> = lines.iter().map(|line| line.detail.clone()).collect();
+    assert!(details.contains(&Some("Bash: pnpm test".to_owned())));
+    assert!(details.contains(&Some("Finished its turn \u{b7} next: check CI".to_owned())));
+}
+
 #[test]
 fn lists_1000_events_newest_first_in_order() {
     let events: Vec<StoredEvent> = (0..1000)

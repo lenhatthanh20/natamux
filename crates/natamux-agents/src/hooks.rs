@@ -23,6 +23,17 @@ pub use copilot::COPILOT_EVENT_FIELD;
 
 pub const SUMMARY_LENGTH: usize = 80;
 
+/// Keys of a hook's details about background work (T-0390). `WAKE_KEY` = `BACKGROUND`: a prompt
+/// that background work sent, not the user. `PROMPT_HEAD_KEY`: the start of the user's prompt,
+/// only to match a scheduled prompt; the daemon drops it before it logs anything.
+/// `SCHEDULED_KEY`: the scheduled prompts left at a turn end. `BACKGROUND_RESULT_KEY`: the turn
+/// that ends was started by background work.
+pub const WAKE_KEY: &str = "wake";
+pub const BACKGROUND: &str = "background";
+pub const PROMPT_HEAD_KEY: &str = "promptHead";
+pub const SCHEDULED_KEY: &str = "scheduled";
+pub const BACKGROUND_RESULT_KEY: &str = "backgroundResult";
+
 /// What an agent tells Natamux, whatever the agent calls it. `TurnPaused`: the turn ended, but the
 /// agent's background work will wake it again. `TurnAsked`: the turn ended on a question to the
 /// user.
@@ -227,6 +238,11 @@ pub fn plan_signal_events(
             planned("agent.resumed", payload),
             planned("agent.asked", payload),
         ],
+        // A turn that background work woke asked again: the newest question is the one to show.
+        // The state stays (T-0390); only the user's prompt answers.
+        Signal::TurnAsked if state == TaskState::NeedsInput && wait == Wait::Answer => {
+            vec![planned("agent.asked", payload)]
+        }
         Signal::Asking | Signal::TurnAsked => Vec::new(),
         Signal::TurnEnded => end_turn(state, wait, "agent.finished", payload),
         Signal::TurnPaused => end_turn(state, wait, "agent.waiting", payload),

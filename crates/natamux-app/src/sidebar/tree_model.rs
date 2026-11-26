@@ -16,7 +16,7 @@ use crate::sidebar::tree_entries::{Entry, TreeSource, tree_entries};
 use crate::sidebar::workspace_groups::{
     DEFAULT_REPO_ID, RepoGroup, RepoRef, WorkspaceGroups, next_hint_change_ms, workspace_groups_of,
 };
-use crate::tasks::task_attention::{filter_task_refs, next_row_change_ms};
+use crate::tasks::task_attention::{Attention, filter_task_refs, next_row_change_ms};
 use crate::tasks::task_changes::task_of;
 
 /// What the tree reads from the dashboard and the saved view.
@@ -263,7 +263,8 @@ impl TreeModel {
 
     /// The wait until a label of the tree changes by the clock alone: the age or the quiet mark of
     /// a task row, or the hint of a folded group. None with nothing to follow.
-    pub fn next_label_change_ms(&self, now_ms: i64) -> Option<i64> {
+    pub fn next_label_change_ms(&self, at: impl Into<Attention>) -> Option<i64> {
+        let at = at.into();
         let rows = self.lines.iter().flat_map(|line| match line {
             Line::Task { task, look, .. } => {
                 let inside: &[Arc<Task>] = match look {
@@ -283,11 +284,8 @@ impl TreeModel {
             .iter()
             .zip(&self.infos)
             .filter(|(_, info)| !info.open)
-            .filter_map(|(group, _)| next_hint_change_ms(group, now_ms));
-        next_row_change_ms(rows, now_ms)
-            .into_iter()
-            .chain(folded)
-            .min()
+            .filter_map(|(group, _)| next_hint_change_ms(group, at));
+        next_row_change_ms(rows, at).into_iter().chain(folded).min()
     }
 
     fn make_entries(

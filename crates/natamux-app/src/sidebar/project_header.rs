@@ -156,7 +156,7 @@ impl WorkspaceTree {
         let index = project_color_index(&repo.id);
         let collapsed = !info.open;
         let hint = collapsed
-            .then(|| collapsed_hint(repo_group, snap.current.as_deref(), snap.now_ms))
+            .then(|| collapsed_hint(repo_group, snap.current.as_deref(), snap.attention))
             .flatten();
         let key = format!("repo:{}", repo.id);
         let menu_repo = repo.id.clone();

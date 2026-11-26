@@ -22,6 +22,9 @@ use crate::components::colors::TileColor;
 use crate::components::settings_card::{SeparatorInset, SettingsCard, SettingsGroup, SettingsRow};
 use crate::components::settings_tile::{SettingsTile, TileSize};
 
+/// The choices of "Flag background work older than", in minutes; 0 is off.
+const FLAG_MINUTES: [u32; 5] = [0, 30, 60, 120, 240];
+const FLAG_LABELS: [&str; 5] = ["Off", "30 min", "1 h", "2 h", "4 h"];
 const UPDATES_FOOT: &str = "Natamux applies app settings at once. Nothing to save.";
 const PROJECT_HELP: &str = "Stages, agents, Git and issues";
 
@@ -66,6 +69,12 @@ impl SettingsView {
                 .lead(row_tile("bell", TileColor::Red))
                 .control(self.notify_switch(cx)),
             SettingRow::NotifyAlways => Self::plain_row(row).control(self.notify_always_switch(cx)),
+            SettingRow::NotifyBackground => {
+                Self::plain_row(row).control(self.notify_background_switch(cx))
+            }
+            SettingRow::FlagBackground => {
+                Self::plain_row(row).control(self.flag_background_control(cx))
+            }
             SettingRow::UpdatesVersion => self.version_row(),
             SettingRow::UpdatesAuto => Self::plain_row(row).control(self.updates_switch(cx)),
             SettingRow::CleanOnSave => Self::plain_row(row).control(self.clean_switch(cx)),
@@ -170,6 +179,41 @@ impl SettingsView {
             on,
             Dashboard::toggle_notify_always,
         )
+    }
+
+    fn notify_background_switch(&self, cx: &mut Context<Self>) -> AnyElement {
+        let on = self.dashboard.read(cx).view().notify_background_results;
+        self.view_switch(
+            "settings-notify-background",
+            &self.notify_background_focus,
+            on,
+            Dashboard::toggle_notify_background_results,
+        )
+    }
+
+    /// Off, or the minutes after which background work with no sign of life needs you.
+    fn flag_background_control(&self, cx: &App) -> AnyElement {
+        let minutes = self.dashboard.read(cx).view().flag_background_after_minutes;
+        let selected = FLAG_MINUTES
+            .iter()
+            .position(|choice| *choice == minutes)
+            .unwrap_or(0);
+        let dashboard = self.dashboard.clone();
+        segment(
+            "settings-flag-background",
+            &self.flag_background_focus,
+            FLAG_LABELS,
+            selected,
+            move |index, _, cx| {
+                let Some(minutes) = FLAG_MINUTES.get(index).copied() else {
+                    return;
+                };
+                dashboard.update(cx, |dashboard, cx| {
+                    dashboard.set_flag_background_after_minutes(minutes, cx)
+                })
+            },
+        )
+        .into_any_element()
     }
 
     fn clean_switch(&self, cx: &mut Context<Self>) -> AnyElement {

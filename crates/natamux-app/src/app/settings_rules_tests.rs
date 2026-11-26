@@ -54,6 +54,8 @@ fn rows_sit_on_their_pages() {
     for row in [
         SettingRow::Notify,
         SettingRow::NotifyAlways,
+        SettingRow::NotifyBackground,
+        SettingRow::FlagBackground,
         SettingRow::UpdatesVersion,
         SettingRow::UpdatesAuto,
         SettingRow::CleanOnSave,
@@ -206,7 +208,12 @@ fn app_pages_draw_their_rows_in_groups() {
         vec![
             (
                 "Notifications",
-                vec![SettingRow::Notify, SettingRow::NotifyAlways]
+                vec![
+                    SettingRow::Notify,
+                    SettingRow::NotifyAlways,
+                    SettingRow::NotifyBackground,
+                    SettingRow::FlagBackground,
+                ]
             ),
             (
                 "Updates",

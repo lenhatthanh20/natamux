@@ -199,13 +199,23 @@ pub fn wait_reason(events: Option<&[StoredEvent]>) -> WaitReason {
     let Some(events) = events else {
         return WaitReason::Asked { question: None };
     };
-    for stored in events.iter().rev().filter(|stored| stored.accepted) {
+    // A newer question while the task already waits for an answer is logged but not accepted
+    // (T-0390). It is the one to show once the question that started this wait is found.
+    let mut newer: Option<&TaskEvent> = None;
+    for stored in events.iter().rev() {
         let event = &stored.event;
+        if !stored.accepted {
+            if event.kind == "agent.asked" && newer.is_none() {
+                newer = Some(event);
+            }
+            continue;
+        }
         match event.kind.as_str() {
             "agent.asked" => {
-                return WaitReason::Asked {
-                    question: event.question(),
-                };
+                let question = newer
+                    .and_then(TaskEvent::question)
+                    .or_else(|| event.question());
+                return WaitReason::Asked { question };
             }
             "agent.failed" | "stage.failed" => {
                 return WaitReason::Failed {
@@ -325,6 +335,36 @@ mod tests {
         assert_eq!(
             wait_reason(Some(&silent)),
             WaitReason::Failed { reason: None }
+        );
+    }
+
+    // T-0390: background work woke the agent and it asked again while the task waited.
+    #[test]
+    fn a_newer_question_of_the_same_wait_is_the_one_shown() {
+        let events = [
+            stored(true, "agent.asked", r#"{"message":"Merge?"}"#),
+            stored(
+                false,
+                "agent.asked",
+                r#"{"message":"Tests pass. Merge now?"}"#,
+            ),
+        ];
+        assert_eq!(
+            wait_reason(Some(&events)),
+            WaitReason::Asked {
+                question: Some("Tests pass. Merge now?".into())
+            }
+        );
+        let older_wait = [
+            stored(false, "agent.asked", r#"{"message":"Lost?"}"#),
+            stored(true, "agent.resumed", r#"{}"#),
+            stored(true, "agent.asked", r#"{"message":"Which?"}"#),
+        ];
+        assert_eq!(
+            wait_reason(Some(&older_wait)),
+            WaitReason::Asked {
+                question: Some("Which?".into())
+            }
         );
     }
 

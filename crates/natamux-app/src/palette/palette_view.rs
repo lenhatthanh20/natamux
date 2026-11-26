@@ -49,7 +49,7 @@ impl EventEmitter<PaletteEvent> for PaletteView {}
 /// Everything read from the dashboard when the palette opens.
 struct Snapshot {
     tasks: Vec<Arc<Task>>,
-    now_ms: i64,
+    attention: crate::tasks::task_attention::Attention,
     recent: Vec<String>,
     repos: Vec<RepoItem>,
     commands: Vec<PaletteCommand>,
@@ -90,7 +90,7 @@ fn take_snapshot(dashboard: &Dashboard) -> Snapshot {
         .collect();
     Snapshot {
         tasks: dashboard.data.tasks.clone(),
-        now_ms: now_ms(),
+        attention: dashboard.attention(now_ms()),
         recent: dashboard.view().recent.clone(),
         repos: dashboard
             .data
@@ -200,7 +200,7 @@ impl PaletteView {
                 query: &query,
                 tasks: &snapshot.tasks,
                 recent: &snapshot.recent,
-                now_ms: snapshot.now_ms,
+                attention: snapshot.attention,
                 scope,
                 terminals: &snapshot.terminals,
             }),
@@ -210,7 +210,7 @@ impl PaletteView {
                 commands: &snapshot.commands,
                 repos: &snapshot.repos,
                 recent: &snapshot.recent,
-                now_ms: snapshot.now_ms,
+                attention: snapshot.attention,
                 scope,
             }),
         };
@@ -401,7 +401,7 @@ impl PaletteView {
             .child(div().flex_1().min_w_0().h_full().child(row_body(
                 row,
                 index,
-                self.snapshot.now_ms,
+                self.snapshot.attention.now_ms,
                 cx,
             )))
     }

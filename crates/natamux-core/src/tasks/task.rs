@@ -105,7 +105,7 @@ fn head_fields(
     );
 }
 
-/// The fields from `dependsOn` to `backgroundSince`.
+/// The fields from `dependsOn` to `backgroundResultAt`.
 fn stage_fields(
     map: &Map<String, Value>,
     path: &[Value],
@@ -166,6 +166,15 @@ fn stage_fields(
             nullable(get(key), |v| {
                 string(Some(v), &at(path, key), &[Rule::Datetime], issues).map(Value::from)
             }),
+        );
+    }
+    // Only when set (T-0390), so the files of tasks without it keep their shape.
+    let result = get("backgroundResultAt").filter(|v| !v.is_null());
+    if let Some(v) = result {
+        let key = "backgroundResultAt";
+        put(
+            key,
+            string(Some(v), &at(path, key), &[Rule::Datetime], issues).map(Value::from),
         );
     }
 }

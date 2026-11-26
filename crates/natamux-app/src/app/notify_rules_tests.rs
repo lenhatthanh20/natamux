@@ -432,3 +432,60 @@ fn a_look_at_one_changed_task_rings_as_a_look_at_the_whole_list() {
     }
     assert_eq!(rang, 5);
 }
+
+// T-0390: a turn that background work started.
+fn with_result(task: Task, at: &str) -> Task {
+    Task {
+        background_result_at: Some(at.into()),
+        ..task
+    }
+}
+
+#[test]
+fn rings_a_background_result_only_when_asked_to() {
+    let before = states_by_id(&[at_stage("T-0001", TaskState::Running, "implement")]);
+    let now = [with_result(
+        at_stage("T-0001", TaskState::Running, "implement"),
+        "2026-11-26T09:00:00.000Z",
+    )];
+
+    assert!(rings_with(&before, &now, &repos(), false).is_empty());
+    let ring = rings_with(&before, &now, &repos(), true);
+    assert_eq!(ring.len(), 1);
+    assert_eq!(ring[0].stage.as_deref(), Some("implement"));
+    assert!(ring[0].note.body.starts_with("New background result at "));
+    assert!(rings_with(&states_by_id(&now), &now, &repos(), true).is_empty());
+}
+
+#[test]
+fn a_turn_end_of_a_loop_rings_only_as_a_background_result() {
+    let before = states_by_id(&[at_stage("T-0001", TaskState::Running, "implement")]);
+    let idle = at_stage("T-0001", TaskState::Idle, "implement");
+    let looped = [with_result(idle.clone(), "2026-11-26T09:00:00.000Z")];
+
+    assert!(rings_with(&before, &looped, &repos(), false).is_empty());
+    assert_eq!(rings_with(&before, &looped, &repos(), true).len(), 1);
+    // A turn end the user started still rings as before.
+    assert_eq!(rings_with(&before, &[idle], &repos(), false).len(), 1);
+}
+
+#[test]
+fn counts_each_task_with_news_once() {
+    let at = "2026-11-26T09:00:00.000Z";
+    let tasks = [
+        with_result(task("T-0001", TaskState::Idle), at),
+        with_result(task("T-0002", TaskState::Running), at),
+        task("T-0003", TaskState::Running),
+    ];
+    let seen = vec![
+        ("T-0001".to_owned(), TaskState::Running),
+        ("T-0002".to_owned(), TaskState::Running),
+        ("T-0003".to_owned(), TaskState::Running),
+    ];
+    let results: Vec<(String, String)> = ["T-0001", "T-0002", "T-0003"]
+        .iter()
+        .map(|id| (id.to_string(), String::new()))
+        .collect();
+
+    assert_eq!(unread_count(&tasks, &seen, &results), 2);
+}

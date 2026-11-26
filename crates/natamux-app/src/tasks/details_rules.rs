@@ -8,7 +8,7 @@ use natamux_proto::stages::progress::StageProgress;
 use natamux_proto::tasks::task::{Task, TaskState};
 use natamux_proto::terminals::list::{TerminalLane, TerminalList};
 
-use super::task_attention::next_row_change_ms;
+use super::task_attention::{Attention, next_row_change_ms};
 use super::task_rules::{AgentAction, TaskAction};
 use super::task_time::{AgeStyle, format_age, format_exact, next_age_change_ms};
 use crate::stages::overview_rules::next_progress_change_ms;
@@ -44,13 +44,15 @@ pub fn details_wait<'a>(
     task: &'a Task,
     event_times: impl IntoIterator<Item = &'a str>,
     progress: &[StageProgress],
-    now_ms: i64,
+    attention: impl Into<Attention>,
 ) -> Option<i64> {
+    let attention = attention.into();
+    let now_ms = attention.now_ms;
     let ages = event_times
         .into_iter()
         .chain([task.created_at.as_str()])
         .filter_map(|at| next_age_change_ms(at, now_ms));
-    ages.chain(next_row_change_ms([task], now_ms))
+    ages.chain(next_row_change_ms([task], attention))
         .chain(next_progress_change_ms(task, progress, now_ms))
         .min()
 }
@@ -59,6 +61,13 @@ pub fn details_wait<'a>(
 pub fn quiet_banner(updated_at: &str, now_ms: i64, offset_minutes: i32) -> String {
     let age = format_age(updated_at, now_ms, AgeStyle::Short, offset_minutes);
     format!("No sign of life for {age}. The agent may be stuck.")
+}
+
+/// "Background work with no sign of life for 2h. It may hang." The caller shows it when a task
+/// that waits for background work `is_quiet` (T-0390).
+pub fn background_quiet_banner(updated_at: &str, now_ms: i64, offset_minutes: i32) -> String {
+    let age = format_age(updated_at, now_ms, AgeStyle::Short, offset_minutes);
+    format!("Background work with no sign of life for {age}. It may hang.")
 }
 
 /// Nothing when the task waits for no one.

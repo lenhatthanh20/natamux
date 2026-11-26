@@ -18,9 +18,9 @@ use super::dashboard_data::{BulkRuns, DashboardData, Part};
 use super::settings_rules::{SettingsFocus, SettingsPage};
 use super::sign_in::StartProblem;
 use super::source::{Rows, Source};
+use super::view_rules::seen_results::note_result;
 use super::view_rules::{
-    ShellRequest, WorkspaceTab, request_on_open, seen_after_list, toggle_pin, with_recent,
-    with_seen,
+    ShellRequest, WorkspaceTab, request_on_open, toggle_pin, with_recent, with_seen,
 };
 use super::view_state::{Layout, ViewState};
 use crate::components::toast_rules::{ToastTone, Toasts, toast_duration};
@@ -233,12 +233,7 @@ impl Dashboard {
         if gone(&self.open_task) {
             self.back(cx);
         }
-        let open = self.open_task.as_deref().filter(|_| self.window_active);
-        let seen = seen_after_list(&self.view.seen, &self.data.tasks, open);
-        if seen != self.view.seen {
-            self.view.seen = seen;
-            self.save_view_after(saves::Wait::Later, cx);
-        }
+        self.mark_seen_after_list(cx);
         self.read_events(cx);
         cx.emit(DashboardChange::Tasks(one));
     }
@@ -342,6 +337,7 @@ impl Dashboard {
         self.view.folds = opened_folds(&self.view.folds, self.open_task.as_deref(), &task);
         self.open_task = Some(task.id.clone());
         self.view.seen = with_seen(&self.view.seen, &[(&task.id, task.state)], true);
+        note_result(&mut self.view.seen_results, &task, true);
         self.view.recent = with_recent(&self.view.recent, &task.id);
         self.save_view(cx);
         cx.emit(DashboardChange::Opened(Box::new(task)));

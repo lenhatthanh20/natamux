@@ -12,6 +12,7 @@ use super::workspace_row::{age_label, right_slot, title_label};
 use super::workspace_tree::{Snapshot, WorkspaceTree};
 use crate::agents::agent_choices::agent_label;
 use crate::app::view_rules::is_unseen;
+use crate::app::view_rules::seen_results::is_result_unseen;
 use crate::components::agent_badge::AgentIcon;
 use crate::components::colors::state_colors;
 use crate::components::glyph::StateGlyph;
@@ -199,12 +200,13 @@ impl WorkspaceTree {
             return self.rename_field(rename.editor.clone(), cx);
         }
         let blurred = is_blurred(task, snap);
-        let unseen = is_unseen(&snap.seen, &task.id, task.state);
+        let unseen = is_unseen(&snap.seen, &task.id, task.state)
+            || is_result_unseen(&snap.seen_results, task);
         let glyph = StateGlyph::new(
             SharedString::from(format!("glyph-{}", task.id)),
             Some(task_glyph_state(task, model.rows_of(&task.id))),
         )
-        .quiet(is_quiet(task, snap.now_ms));
+        .quiet(is_quiet(task, snap.attention));
         let glyph = match lane_summary(task) {
             Some(tip) => glyph.tip(tip),
             None => glyph,
