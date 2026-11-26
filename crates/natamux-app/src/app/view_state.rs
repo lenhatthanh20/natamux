@@ -18,6 +18,11 @@ use crate::git::change_tree::FileViewMode;
 use crate::sidebar::sidebar_tree::{Folds, with_fold};
 use crate::terminals::pane_rules::{PaneLayout, parse_pane_layout};
 
+#[path = "view_parts.rs"]
+mod parts;
+use parts::flag;
+pub use parts::{DiffFlags, Layout};
+
 pub const FILE_NAME: &str = "view.json";
 /// The sidebar (`sidebarWidth`); the default is `SIDEBAR_WIDTH`.
 pub const SIDEBAR_MIN: f32 = 280.0;
@@ -33,79 +38,6 @@ pub const FILES_MAX: u32 = 420;
 /// Folded sections of the details panel kept at most (`natamux.section.<id>`).
 const MAX_SECTIONS: usize = 50;
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum Layout {
-    #[default]
-    Table,
-    Board,
-    Progress,
-}
-
-impl Layout {
-    pub fn name(self) -> &'static str {
-        match self {
-            Layout::Table => "table",
-            Layout::Board => "board",
-            Layout::Progress => "progress",
-        }
-    }
-}
-
-/// The switches of the diff, with the defaults of the web.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct DiffFlags {
-    pub side_by_side: bool,
-    pub collapse_unchanged: bool,
-    pub ignore_whitespace: bool,
-    pub show_moves: bool,
-    pub wrap_prose: bool,
-    pub wrap_code: bool,
-    /// Zed's `show_whitespaces: "all"` in every editor (T-0316).
-    pub show_whitespace: bool,
-}
-
-impl Default for DiffFlags {
-    fn default() -> Self {
-        DiffFlags {
-            side_by_side: true,
-            collapse_unchanged: true,
-            ignore_whitespace: true,
-            show_moves: false,
-            wrap_prose: true,
-            wrap_code: false,
-            show_whitespace: false,
-        }
-    }
-}
-
-impl DiffFlags {
-    fn parse(value: Option<&Value>) -> Self {
-        let default = DiffFlags::default();
-        let get = |name: &str, fallback: bool| flag(value.and_then(|map| map.get(name)), fallback);
-        DiffFlags {
-            side_by_side: get("sideBySide", default.side_by_side),
-            collapse_unchanged: get("collapseUnchanged", default.collapse_unchanged),
-            ignore_whitespace: get("ignoreWhitespace", default.ignore_whitespace),
-            show_moves: get("showMoves", default.show_moves),
-            wrap_prose: get("wrapProse", default.wrap_prose),
-            wrap_code: get("wrapCode", default.wrap_code),
-            show_whitespace: get("showWhitespace", default.show_whitespace),
-        }
-    }
-
-    fn to_json(self) -> Value {
-        json!({
-            "sideBySide": self.side_by_side,
-            "collapseUnchanged": self.collapse_unchanged,
-            "ignoreWhitespace": self.ignore_whitespace,
-            "showMoves": self.show_moves,
-            "wrapProse": self.wrap_prose,
-            "wrapCode": self.wrap_code,
-            "showWhitespace": self.show_whitespace,
-        })
-    }
-}
-
 #[derive(Clone, Debug, PartialEq)]
 pub struct ViewState {
     pub folds: Folds,
@@ -119,6 +51,8 @@ pub struct ViewState {
     /// The sidebar shows each task's id before its title (off until switched on, T-0240).
     pub sidebar_ids: bool,
     pub seen: Entries<TaskState>,
+    /// The background result of each task the user has seen (`view_rules::seen_results`).
+    pub seen_results: Entries<String>,
     /// Repo id to the branch its last workspace started from.
     pub last_base: Vec<(String, String)>,
     /// The tasks of the Agents grid, in order. None: the default list (`agentPanes`).
@@ -135,6 +69,11 @@ pub struct ViewState {
     pub notify: bool,
     /// Notifications also while the window is in front; off, the open window is enough.
     pub notify_always: bool,
+    /// A note when a turn that background work started ends (off by default, T-0390).
+    pub notify_background_results: bool,
+    /// A task that waits for background work with no sign of life for this many minutes needs
+    /// the user (`tasks/task_quiet.rs`); 0 is off.
+    pub flag_background_after_minutes: u32,
     /// The last workspace tab of each task (`tabByTask`): terminal, changes, history or docs.
     pub tabs: Entries<WorkspaceTab>,
     /// Tasks whose terminals show one at a time, full size, until the user restores them.
@@ -177,6 +116,7 @@ impl Default for ViewState {
             show_finished: false,
             sidebar_ids: false,
             seen: Vec::new(),
+            seen_results: Vec::new(),
             last_base: Vec::new(),
             agent_panes: None,
             pane_layout: PaneLayout::default(),
@@ -186,6 +126,8 @@ impl Default for ViewState {
             details_open: true,
             notify: true,
             notify_always: false,
+            notify_background_results: false,
+            flag_background_after_minutes: 0,
             tabs: Vec::new(),
             maximized: Vec::new(),
             terminals: Vec::new(),
@@ -282,6 +224,10 @@ impl ViewState {
             show_finished: flag(map.get("showFinished"), default.show_finished),
             sidebar_ids: flag(map.get("sidebarIds"), default.sidebar_ids),
             seen: seen_of(pairs("seen")),
+            seen_results: pairs("seenResults")
+                .into_iter()
+                .filter_map(|(id, at)| Some((id, at.as_str()?.to_owned())))
+                .collect(),
             last_base: pairs("lastBase")
                 .into_iter()
                 .filter_map(|(repo, base)| Some((repo, base.as_str()?.to_owned())))
@@ -310,6 +256,15 @@ impl ViewState {
             details_open: flag(map.get("detailsOpen"), default.details_open),
             notify: flag(map.get("notify"), default.notify),
             notify_always: flag(map.get("notifyAlways"), default.notify_always),
+            notify_background_results: flag(
+                map.get("notifyBackgroundResults"),
+                default.notify_background_results,
+            ),
+            flag_background_after_minutes: map
+                .get("flagBackgroundAfterMinutes")
+                .and_then(Value::as_u64)
+                .and_then(|minutes| u32::try_from(minutes).ok())
+                .unwrap_or(default.flag_background_after_minutes),
             tabs: tabs_of(pairs("tabs")),
             maximized: strings(map.get("maximized"))
                 .iter()
@@ -373,6 +328,11 @@ impl ViewState {
             "showFinished": self.show_finished,
             "sidebarIds": self.sidebar_ids,
             "seen": seen,
+            "seenResults": self
+                .seen_results
+                .iter()
+                .map(|(id, at)| (id.clone(), Value::from(at.as_str())))
+                .collect::<Map<String, Value>>(),
             "lastBase": last_base,
             "agentPanes": self.agent_panes,
             "paneLayout": self.pane_layout.as_str(),
@@ -386,6 +346,8 @@ impl ViewState {
             "detailsOpen": self.details_open,
             "notify": self.notify,
             "notifyAlways": self.notify_always,
+            "notifyBackgroundResults": self.notify_background_results,
+            "flagBackgroundAfterMinutes": self.flag_background_after_minutes,
             "tabs": self
                 .tabs
                 .iter()
@@ -412,97 +374,6 @@ impl ViewState {
             "cleanOnSave": self.clean_on_save,
         });
         format!("{value:#}\n")
-    }
-
-    /// The branch a workspace of this repo started from the last time (`lastBase`).
-    pub fn last_base(&self, repo: &str) -> Option<&str> {
-        self.last_base
-            .iter()
-            .find(|(each, _)| each == repo)
-            .map(|(_, base)| base.as_str())
-    }
-
-    /// `rememberBase`: the newest choice is the last entry.
-    pub fn remember_base(&mut self, repo: &str, base: &str) {
-        self.last_base.retain(|(each, _)| each != repo);
-        self.last_base.push((repo.to_owned(), base.to_owned()));
-    }
-
-    pub fn toggle_blurred(&mut self, repo: &str) {
-        if self.blurred.iter().any(|each| each == repo) {
-            self.blurred.retain(|each| each != repo);
-        } else {
-            self.blurred.push(repo.to_owned());
-        }
-    }
-
-    pub fn set_sidebar_width(&mut self, width: f32) {
-        self.sidebar_width = width.clamp(SIDEBAR_MIN, SIDEBAR_MAX);
-    }
-
-    pub fn set_details_width(&mut self, width: f32) {
-        self.details_width = width.clamp(DETAILS_MIN, DETAILS_MAX);
-    }
-
-    /// `showProgress`: the details dock open on Progress.
-    pub fn show_progress(&mut self) {
-        self.details_view = Some(DetailsView::Progress);
-        self.details_open = true;
-    }
-
-    /// `showFiles`: the details dock open on Files.
-    pub fn show_files(&mut self) {
-        self.details_view = Some(DetailsView::Files);
-        self.details_open = true;
-    }
-
-    /// `rememberTab`: Editor needs an open file, so it is not kept.
-    pub fn remember_tab(&mut self, task_id: &str, tab: WorkspaceTab) {
-        if WorkspaceTab::parse(tab.name()).is_some() {
-            self.tabs = with_tab(&self.tabs, task_id, tab);
-        }
-    }
-
-    pub fn tab_of(&self, task_id: &str) -> Option<WorkspaceTab> {
-        self.tabs
-            .iter()
-            .find(|(id, _)| id == task_id)
-            .map(|(_, tab)| *tab)
-    }
-
-    pub fn is_maximized(&self, task_id: &str) -> bool {
-        self.maximized.iter().any(|id| id == task_id)
-    }
-
-    pub fn set_maximized(&mut self, task_id: &str, on: bool) {
-        self.maximized = with_maximized(&self.maximized, task_id, on);
-    }
-
-    pub fn remember_terminal(&mut self, task_id: &str, name: &str) {
-        self.terminals = with_terminal(&self.terminals, task_id, name);
-    }
-
-    pub fn terminal_of(&self, task_id: &str) -> Option<&str> {
-        self.terminals
-            .iter()
-            .find(|(id, _)| id == task_id)
-            .map(|(_, name)| name.as_str())
-    }
-
-    pub fn set_files_width(&mut self, width: u32) {
-        self.files_width = width.clamp(FILES_MIN, FILES_MAX);
-    }
-
-    /// Whether a section of the details panel is open; `default` until the user folds it.
-    pub fn section_open(&self, id: &str, default: bool) -> bool {
-        self.sections
-            .iter()
-            .find(|(each, _)| each == id)
-            .map_or(default, |(_, open)| *open)
-    }
-
-    pub fn set_section(&mut self, id: &str, open: bool) {
-        self.sections = with_section(&self.sections, id, open);
     }
 }
 
@@ -531,10 +402,6 @@ fn text_or(value: Option<&Value>, fallback: &str) -> String {
 fn zoom_level_of(value: Option<&Value>) -> i32 {
     // `as` saturates, so a huge number still lands on a limit.
     clamp_zoom_level(value.and_then(Value::as_f64).unwrap_or(0.).round() as i32)
-}
-
-fn flag(value: Option<&Value>, fallback: bool) -> bool {
-    value.and_then(Value::as_bool).unwrap_or(fallback)
 }
 
 /// A missing or broken file is the default view: it never stops the app, and the next save
@@ -584,6 +451,13 @@ pub fn folder_for(
     }
 }
 
+#[path = "view_state_edits.rs"]
+mod edits;
+
 #[cfg(test)]
 #[path = "view_state_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "view_state_background_tests.rs"]
+mod background_tests;

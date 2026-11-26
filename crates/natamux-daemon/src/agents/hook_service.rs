@@ -15,10 +15,11 @@ use serde_json::{Map, Value, json};
 use super::errors::HookError;
 use super::hook_activity::{Activities, changes_files, is_before_tool};
 use super::hook_paths::{is_inside_parts, parts_of};
+pub use super::hook_stages::{Lane, NoStages, StageLookup};
+use super::hook_turns::Turns;
 use super::hook_usage::{TurnStage, UsageStages};
 use super::hook_waits::wait_at_end;
 use crate::shared::event_bus::{DaemonMessage, EventBus};
-use crate::stages::runner::StageRunner;
 use crate::tasks::errors::TaskError;
 use crate::tasks::records::ActivityOptions;
 use crate::tasks::service::TaskService;
@@ -36,49 +37,6 @@ impl HookResult {
             task_id: None,
             applied: Vec::new(),
         }
-    }
-}
-
-/// The stage a terminal works on, and the state of its lane.
-pub type Lane = (String, TaskState);
-
-/// What the hook service needs to know about stages: which stage a terminal works on (None for
-/// none), and whether a turn end in a terminal follows a report (see `StageRun`).
-pub trait StageLookup: Send + Sync {
-    fn lane_for(&self, task: &Task, terminal: Option<&str>) -> Result<Option<Lane>, String>;
-    fn take_report(&self, task_id: &str, terminal: &str) -> bool;
-    /// The stage reported from this terminal whose turn end has not come yet, without taking it.
-    fn report_of(&self, _task_id: &str, _terminal: &str) -> Option<String> {
-        None
-    }
-}
-
-impl StageLookup for StageRunner {
-    fn lane_for(&self, task: &Task, terminal: Option<&str>) -> Result<Option<Lane>, String> {
-        self.run
-            .lane_for(task, terminal)
-            .map_err(|error| error.to_string())
-    }
-
-    fn take_report(&self, task_id: &str, terminal: &str) -> bool {
-        self.run.take_report(task_id, terminal)
-    }
-
-    fn report_of(&self, task_id: &str, terminal: &str) -> Option<String> {
-        self.run.report_of(task_id, terminal)
-    }
-}
-
-/// No stages: the task's own stage and state, and no report.
-pub struct NoStages;
-
-impl StageLookup for NoStages {
-    fn lane_for(&self, task: &Task, _terminal: Option<&str>) -> Result<Option<Lane>, String> {
-        Ok(Some((task.stage.clone(), task.state)))
-    }
-
-    fn take_report(&self, _task_id: &str, _terminal: &str) -> bool {
-        false
     }
 }
 
@@ -133,6 +91,8 @@ struct State {
     hidden_shells: HashSet<String>,
     /// The stage and session file of each shell's last hook, for its usage.
     usage: UsageStages,
+    /// Which turns background work started (T-0390).
+    turns: Turns,
 }
 
 pub struct HookService {
@@ -296,7 +256,7 @@ impl HookService {
     ) -> Result<HookResult, HookError> {
         let adapter =
             find_adapter(agent_id).ok_or_else(|| HookError::UnknownAgent(agent_id.to_string()))?;
-        let Some(hook) = adapter
+        let Some(mut hook) = adapter
             .normalize(raw, &self.options.home)
             .map_err(HookError::Invalid)?
         else {
@@ -342,6 +302,7 @@ impl HookService {
             return Ok(HookResult::none());
         }
         let shell = terminal.unwrap_or(MAIN_TERMINAL);
+        let pause_signal = self.state().turns.note(&task.id, shell, &mut hook);
         let noted = self.state().activities.note(&task.id, shell, &hook);
         self.publish_activity(&task.id, noted);
         let session = hook.details.get("sessionId").and_then(Value::as_str);
@@ -357,7 +318,7 @@ impl HookService {
             changed(&task.id);
         }
         if let Some(seen) = &self.options.signal_seen {
-            seen(&task.id, shell, hook.signal);
+            seen(&task.id, shell, pause_signal);
         }
         self.after_noted(&task, &hook, adapter.id(), terminal, shell)
     }
@@ -504,6 +465,7 @@ impl HookService {
     /// read, such as a turn cut off when the task finished, so its file is read once more. The
     /// next agent in this shell starts with no stage and no file.
     pub fn shell_ended(&self, task_id: &str, terminal: &str) {
+        self.state().turns.forget(task_id, terminal);
         let (stage, file) = self.state().usage.take(&format!("{task_id}/{terminal}"));
         if let (Some((agent, transcript)), Some(seen)) = (file, &self.options.usage_seen) {
             seen(task_id, stage.as_deref(), &agent, &transcript);

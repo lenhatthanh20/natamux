@@ -26,6 +26,7 @@ use crate::sidebar::sidebar_text::{
 };
 use crate::sidebar::sidebar_tree::{RowTier, SubtaskCount, row_tier};
 use crate::sidebar::workspace_groups::DEFAULT_REPO_ID;
+use crate::tasks::task_attention::{is_stale_background, stale_reason};
 use crate::tasks::task_time::{AgeStyle, format_age, format_exact};
 
 impl WorkspaceTree {
@@ -339,6 +340,11 @@ impl Snapshot {
         }
         if let Some(label) = texts.label {
             self.labels.insert(id.clone(), label);
+        }
+        if is_stale_background(task, self.attention) {
+            let line = activity.and_then(latest_line);
+            let reason = stale_reason(line, &task.updated_at, OFFSET_MINUTES);
+            self.labels.insert(id.clone(), reason);
         }
         if let Some(activity) = activity {
             let per_terminal = activity

@@ -11,7 +11,7 @@ use natamux_proto::tasks::task::Task;
 use super::fuzzy::{Range, fuzzy_match};
 use super::task_match::ranked_tasks;
 use crate::sidebar::workspace_groups::DEFAULT_REPO_ID;
-use crate::tasks::task_attention::is_quiet;
+use crate::tasks::task_attention::{Attention, is_quiet};
 use crate::tasks::task_changes::task_of;
 use crate::tasks::task_rules::needs_me;
 use crate::tasks::task_sort::task_number;
@@ -136,7 +136,8 @@ pub struct AllInput<'a> {
     pub repos: &'a [RepoItem],
     /// Ids of the workspaces that were opened, newest first.
     pub recent: &'a [String],
-    pub now_ms: i64,
+    /// The clock and the limit for background work of the quiet checks.
+    pub attention: Attention,
     pub scope: Option<&'a PaletteScope>,
 }
 
@@ -152,13 +153,13 @@ pub(super) fn sorted_by_score<T>(mut items: Vec<(T, f64)>) -> Vec<T> {
 pub(super) fn scoped<'a>(
     tasks: impl Iterator<Item = &'a Task>,
     scope: Option<&PaletteScope>,
-    now_ms: i64,
+    at: Attention,
 ) -> Vec<&'a Task> {
     match scope {
         None => tasks.collect(),
         Some(PaletteScope::Repo(repo)) => tasks.filter(|task| repo_of(task) == repo).collect(),
         Some(PaletteScope::NeedsYou) => tasks
-            .filter(|task| needs_me(task.state) || is_quiet(task, now_ms))
+            .filter(|task| needs_me(task.state) || is_quiet(task, at))
             .collect(),
     }
 }
@@ -219,7 +220,7 @@ fn commands_only(commands: &[PaletteCommand], query: &str) -> Vec<PaletteSection
 fn tasks_by_id(input: &AllInput, query: &str) -> Vec<PaletteSection> {
     let needle = query.to_lowercase();
     let tasks = input.tasks.iter().map(task_of);
-    let mut found: Vec<&Task> = scoped(tasks, input.scope, input.now_ms)
+    let mut found: Vec<&Task> = scoped(tasks, input.scope, input.attention)
         .into_iter()
         .filter(|task| task.id.to_lowercase().contains(&needle))
         .collect();
@@ -235,9 +236,9 @@ fn tasks_by_id(input: &AllInput, query: &str) -> Vec<PaletteSection> {
 fn empty_query(input: &AllInput) -> Vec<PaletteSection> {
     // Same order as `needs_me_tasks`, but on references: only the five shown are cloned.
     let tasks = input.tasks.iter().map(task_of);
-    let mut waiting: Vec<&Task> = scoped(tasks, input.scope, input.now_ms)
+    let mut waiting: Vec<&Task> = scoped(tasks, input.scope, input.attention)
         .into_iter()
-        .filter(|task| needs_me(task.state) || is_quiet(task, input.now_ms))
+        .filter(|task| needs_me(task.state) || is_quiet(task, input.attention))
         .collect();
     waiting.sort_by(|a, b| {
         a.updated_at
@@ -293,7 +294,11 @@ fn empty_query(input: &AllInput) -> Vec<PaletteSection> {
 }
 
 fn typed(input: &AllInput, raw: &str) -> Vec<PaletteSection> {
-    let in_scope = scoped(input.tasks.iter().map(task_of), input.scope, input.now_ms);
+    let in_scope = scoped(
+        input.tasks.iter().map(task_of),
+        input.scope,
+        input.attention,
+    );
     let task_matches = ranked_tasks(&in_scope, raw);
     let task_top = task_matches.first().map(|(_, found)| found.score);
     let task_rows: Vec<PaletteRow> = task_matches

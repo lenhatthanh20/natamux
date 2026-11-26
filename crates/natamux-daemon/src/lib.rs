@@ -12,6 +12,8 @@ pub mod agents {
     pub mod hook_config_watch;
     mod hook_paths;
     pub mod hook_service;
+    mod hook_stages;
+    mod hook_turns;
     mod hook_usage;
     mod hook_waits;
     pub mod idle_pause;

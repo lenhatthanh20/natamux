@@ -10,6 +10,8 @@ use gpui::{
     Subscription, list,
 };
 use natamux_proto::tasks::task::Task;
+
+use crate::tasks::task_attention::Attention;
 use ui::{IconButton, ListItem, ListItemSpacing, Tooltip, prelude::*};
 
 use super::jump_rows::{JumpInput, jump_sections};
@@ -50,6 +52,7 @@ impl EventEmitter<PaletteEvent> for PaletteView {}
 struct Snapshot {
     tasks: Vec<Arc<Task>>,
     now_ms: i64,
+    attention: Attention,
     recent: Vec<String>,
     repos: Vec<RepoItem>,
     commands: Vec<PaletteCommand>,
@@ -78,6 +81,7 @@ fn terminal_names(names: &[String]) -> Vec<String> {
 }
 
 fn take_snapshot(dashboard: &Dashboard) -> Snapshot {
+    let now = now_ms();
     let state = command_state(dashboard);
     let commands = all_commands()
         .filter(|command| !command.hidden && is_bound(command) && command.when.holds(&state))
@@ -90,7 +94,8 @@ fn take_snapshot(dashboard: &Dashboard) -> Snapshot {
         .collect();
     Snapshot {
         tasks: dashboard.data.tasks.clone(),
-        now_ms: now_ms(),
+        now_ms: now,
+        attention: dashboard.attention(now),
         recent: dashboard.view().recent.clone(),
         repos: dashboard
             .data
@@ -200,7 +205,7 @@ impl PaletteView {
                 query: &query,
                 tasks: &snapshot.tasks,
                 recent: &snapshot.recent,
-                now_ms: snapshot.now_ms,
+                attention: snapshot.attention,
                 scope,
                 terminals: &snapshot.terminals,
             }),
@@ -210,7 +215,7 @@ impl PaletteView {
                 commands: &snapshot.commands,
                 repos: &snapshot.repos,
                 recent: &snapshot.recent,
-                now_ms: snapshot.now_ms,
+                attention: snapshot.attention,
                 scope,
             }),
         };

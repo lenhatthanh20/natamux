@@ -93,6 +93,19 @@ fn reads_whether_the_task_is_left_to_a_person_and_a_bad_value_as_not() {
     }
 }
 
+// T-0390: kept when set, left out when not, refused when it is no time.
+#[test]
+fn reads_when_a_turn_of_background_work_last_ended() {
+    let at = "2026-11-26T09:00:00.000Z";
+    let task = ok(json!({ "backgroundResultAt": at }));
+    assert_eq!(task.background_result_at.as_deref(), Some(at));
+    let none = ok(json!({ "backgroundResultAt": null }));
+    assert_eq!(none.background_result_at, None);
+    let saved = serde_json::to_value(&none).unwrap();
+    assert!(saved.get("backgroundResultAt").is_none());
+    assert!(parse(json!({ "backgroundResultAt": "soon" })).is_err());
+}
+
 #[test]
 fn reads_the_model_and_a_bad_value_as_none() {
     assert_eq!(ok(json!({"model": "opus"})).model.as_deref(), Some("opus"));

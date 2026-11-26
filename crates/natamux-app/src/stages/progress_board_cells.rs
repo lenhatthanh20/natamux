@@ -124,7 +124,8 @@ impl ProgressBoard {
     pub(super) fn next_cell(&self, task: &Task, now: i64, cx: &Context<Self>) -> impl IntoElement {
         let id = task.id.clone();
         let open_id = task.id.clone();
-        let body = match next_button(task, now) {
+        let attention = self.dashboard.read(cx).attention(now);
+        let body = match next_button(task, attention) {
             Some(label) => action_button(SharedString::from(format!("progress-next-{id}")), label)
                 .label_size(LabelSize::Small)
                 .on_click(cx.listener(move |this, _, _, cx| this.open_task(&open_id, cx)))

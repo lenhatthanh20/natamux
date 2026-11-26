@@ -11,63 +11,28 @@ use super::task_time::{age_change_after, parse_iso_ms};
 
 #[path = "task_filter.rs"]
 mod filter;
+#[path = "task_quiet.rs"]
+mod quiet;
 pub use filter::filter_task_refs;
 #[cfg(test)]
 pub use filter::filter_tasks;
-
-/// Ten minutes: a long command can keep an agent silent for a while without a problem.
-pub const QUIET_AFTER_MS: i64 = 10 * 60 * 1000;
-
-/// A running task with no sign of life for `QUIET_AFTER_MS` is probably stuck or closed. An agent
-/// that waits for background work, such as a CI watch, is woken by it, so it is never quiet.
-pub fn is_quiet(task: &Task, now_ms: i64) -> bool {
-    task.state == TaskState::Running
-        && task.background_since.is_none()
-        && parse_iso_ms(&task.updated_at).is_some_and(|at| now_ms - at >= QUIET_AFTER_MS)
-}
-
-/// How long until the next running task turns quiet: then it needs the user by the clock alone,
-/// with no change of the data. None when no task can turn quiet.
-pub fn next_quiet_ms<'a>(tasks: impl IntoIterator<Item = &'a Task>, now_ms: i64) -> Option<i64> {
-    tasks
-        .into_iter()
-        .filter_map(|task| quiet_wait(task, now_ms))
-        .min()
-}
-
-/// Only a running task that waits for no background work turns quiet.
-fn may_turn_quiet(task: &Task) -> bool {
-    task.state == TaskState::Running && task.background_since.is_none()
-}
-
-fn quiet_wait(task: &Task, now_ms: i64) -> Option<i64> {
-    if !may_turn_quiet(task) {
-        return None;
-    }
-    quiet_wait_from(parse_iso_ms(&task.updated_at)?, now_ms)
-}
-
-/// The wait of a task that may turn quiet and was last updated at `at_ms`.
-fn quiet_wait_from(at_ms: i64, now_ms: i64) -> Option<i64> {
-    let wait = at_ms + QUIET_AFTER_MS - now_ms;
-    (wait > 0).then_some(wait)
-}
+use quiet::quiet_wait;
+pub use quiet::{Attention, is_quiet, is_stale_background, next_quiet_ms, stale_reason};
 
 /// How long until a row of these tasks shows another label by the clock alone: the age of its
 /// last change, or the quiet mark. None when nothing will change.
 pub fn next_row_change_ms<'a>(
     tasks: impl IntoIterator<Item = &'a Task>,
-    now_ms: i64,
+    attention: impl Into<Attention>,
 ) -> Option<i64> {
+    let attention = attention.into();
     tasks
         .into_iter()
         .flat_map(|task| {
-            // Read once: the age label and the quiet mark both count from this time.
             let at = parse_iso_ms(&task.updated_at);
-            let quiet = at.filter(|_| may_turn_quiet(task));
             [
-                at.and_then(|at| age_change_after(at, now_ms)),
-                quiet.and_then(|at| quiet_wait_from(at, now_ms)),
+                at.and_then(|at| age_change_after(at, attention.now_ms)),
+                quiet_wait(task, attention),
             ]
         })
         .flatten()
@@ -75,11 +40,12 @@ pub fn next_row_change_ms<'a>(
 }
 
 /// How many tasks `needs_me_tasks` gives, with no copy of them.
-pub fn needs_me_count<T: Borrow<Task>>(tasks: &[T], now_ms: i64) -> usize {
+pub fn needs_me_count<T: Borrow<Task>>(tasks: &[T], at: impl Into<Attention>) -> usize {
+    let at = at.into();
     tasks
         .iter()
         .map(task_of)
-        .filter(|task| needs_me(task.state) || is_quiet(task, now_ms))
+        .filter(|task| needs_me(task.state) || is_quiet(task, at))
         .count()
 }
 
@@ -91,11 +57,12 @@ pub fn needs_me_tasks(tasks: &[Task], now_ms: i64) -> Vec<Task> {
 }
 
 /// `needs_me_tasks` without cloning: the same tasks in the same order, borrowed.
-pub fn needs_me_refs<T: Borrow<Task>>(tasks: &[T], now_ms: i64) -> Vec<&Task> {
+pub fn needs_me_refs<T: Borrow<Task>>(tasks: &[T], at: impl Into<Attention>) -> Vec<&Task> {
+    let at = at.into();
     let mut list: Vec<&Task> = tasks
         .iter()
         .map(task_of)
-        .filter(|task| needs_me(task.state) || is_quiet(task, now_ms))
+        .filter(|task| needs_me(task.state) || is_quiet(task, at))
         .collect();
     list.sort_by(|a, b| {
         a.updated_at

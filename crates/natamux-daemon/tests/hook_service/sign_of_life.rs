@@ -68,7 +68,7 @@ fn keeps_the_time_the_wait_for_background_work_began() {
     let task = l.running_task();
     let paused = hook(
         "Stop",
-        json!({ "session_crons": [{ "id": "c1", "prompt": "check CI" }] }),
+        json!({ "background_tasks": [{ "type": "subagent", "description": "review" }] }),
     );
     l.later(10);
     claude(&l.service, &task.id, &paused, None);

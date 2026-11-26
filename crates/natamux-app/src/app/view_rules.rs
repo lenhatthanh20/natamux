@@ -21,6 +21,9 @@ pub const MAX_RECENT: usize = 20;
 
 pub use crate::app::tab_rules::{DetailsView, WorkspaceTab, details_view_for};
 
+#[path = "seen_results.rs"]
+pub mod seen_results;
+
 /// The workspaces that were opened, newest first, each once.
 pub fn with_recent(current: &[String], task_id: &str) -> Vec<String> {
     std::iter::once(task_id.to_owned())

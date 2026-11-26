@@ -205,7 +205,8 @@ impl TaskView {
             self.shown_key = (dashboard.sort, dashboard.state_filter, filter);
         }
         let rows = ordered.iter().map(|task| &**task);
-        let next_change = next_row_change_ms(rows, now).map(|wait| now + wait);
+        let attention = self.dashboard.read(cx).attention(now);
+        let next_change = next_row_change_ms(rows, attention).map(|wait| now + wait);
         let width = *self.main_width.read(cx);
         // Only the layout on screen gets the rows. A switch of layout changes the dashboard,
         // which refreshes again for the new one.
