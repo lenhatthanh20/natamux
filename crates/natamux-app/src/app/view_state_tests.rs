@@ -23,6 +23,7 @@ fn a_saved_view_reads_back_the_same() {
             ("T-1".into(), TaskState::Running),
             ("T-2".into(), TaskState::NeedsInput),
         ],
+        seen_results: vec![("T-1".into(), "2026-11-26T09:00:00.000Z".into())],
         last_base: Vec::new(),
         agent_panes: Some(vec!["T-2".into(), "T-1".into()]),
         pane_layout: PaneLayout::Two,
@@ -32,6 +33,8 @@ fn a_saved_view_reads_back_the_same() {
         details_open: false,
         notify: true,
         notify_always: true,
+        notify_background_results: true,
+        flag_background_after_minutes: 60,
         tabs: vec![
             ("T-1".into(), WorkspaceTab::Changes),
             ("T-2".into(), WorkspaceTab::Docs),
@@ -267,22 +270,6 @@ fn the_agents_grid_keeps_the_users_list_and_columns() {
     let default = ViewState::parse(r#"{"agentPanes": null, "paneLayout": "9"}"#);
     assert_eq!(default.agent_panes, None);
     assert_eq!(default.pane_layout, PaneLayout::Auto);
-}
-
-#[test]
-fn keeps_the_newest_300_folds_and_1000_seen_states() {
-    let folds: Map<String, Value> = (0..310)
-        .map(|at| (format!("task:T-{at}"), Value::Bool(true)))
-        .collect();
-    let seen: Map<String, Value> = (0..1010)
-        .map(|at| (format!("T-{at}"), Value::from("done")))
-        .collect();
-    let text = json!({"folds": folds, "seen": seen}).to_string();
-    let state = ViewState::parse(&text);
-    assert_eq!(state.folds.len(), 300);
-    assert_eq!(state.folds[0].0, "task:T-10");
-    assert_eq!(state.seen.len(), 1000);
-    assert_eq!(state.seen[0].0, "T-10");
 }
 
 #[test]

@@ -186,4 +186,15 @@ impl Dashboard {
     pub fn toggle_notify_always(&mut self, cx: &mut Context<Self>) {
         self.update_view(cx, |state| state.notify_always = !state.notify_always);
     }
+
+    pub fn toggle_notify_background_results(&mut self, cx: &mut Context<Self>) {
+        self.update_view(cx, |state| {
+            state.notify_background_results = !state.notify_background_results
+        });
+    }
+
+    /// 0 turns the flag off (`tasks/task_quiet.rs`).
+    pub fn set_flag_background_after_minutes(&mut self, minutes: u32, cx: &mut Context<Self>) {
+        self.update_view(cx, |state| state.flag_background_after_minutes = minutes);
+    }
 }

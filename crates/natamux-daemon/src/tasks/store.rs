@@ -34,9 +34,7 @@ pub struct WorkspaceRef {
 use crate::shared::event_bus::{DaemonMessage, EventBus};
 use crate::shared::jobs::Clock;
 use crate::tasks::errors::{TaskError, TaskResult};
-use crate::tasks::helpers::{
-    background_since_after, compare_text, move_task, position_of, subtask_repo,
-};
+use crate::tasks::helpers::{background_after, compare_text, move_task, position_of, subtask_repo};
 
 /// The stages of a repository (`.natamux.json`); None is the default project.
 pub type SettingsOf = Arc<dyn Fn(Option<&str>) -> Vec<Step> + Send + Sync>;
@@ -472,7 +470,8 @@ impl Store {
         let applied = apply_task_event(&position, &event, &steps);
         let updated = if applied.accepted {
             let mut moved = move_task(&task, &applied.position, applied.moved, &event.at);
-            moved.background_since = background_since_after(&task, &event, applied.position.state);
+            (moved.background_since, moved.background_result_at) =
+                background_after(&task, &event, applied.position.state);
             moved.updated_at.clone_from(&event.at);
             moved
         } else {

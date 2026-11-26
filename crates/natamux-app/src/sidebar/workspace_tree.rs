@@ -25,6 +25,7 @@ use crate::sidebar::tree_lines::{LinesChange, changed_lines, tree_news};
 use crate::sidebar::tree_model::{Line, TaskLook, TreeInput, TreeModel};
 use crate::sidebar::tree_rename::Rename;
 use crate::sidebar::workspace_groups::{Hold, held_id, next_hold};
+use crate::tasks::task_attention::Attention;
 
 /// Rows laid out above and below the visible ones, so a scroll does not show them late.
 const OVERDRAW: f32 = 200.;
@@ -42,6 +43,10 @@ pub(super) struct Snapshot {
     /// Rows show the task id before the title (`sidebarIds`).
     pub(super) show_ids: bool,
     pub(super) seen: Vec<(String, TaskState)>,
+    /// The background result of each task the user has seen (T-0390).
+    pub(super) seen_results: Vec<(String, String)>,
+    /// The clock and the limit for background work of the quiet checks (T-0390).
+    pub(super) attention: Attention,
     /// The tooltip of each task's title, already masked for a blurred project.
     pub(super) tips: BTreeMap<String, String>,
     /// The short word on the right of each attention row.
@@ -355,10 +360,11 @@ impl WorkspaceTree {
 
     /// Draws the tree again when the soonest time label changes (`follow_labels`).
     fn follow_clock(&mut self, now: i64, cx: &mut Context<Self>) {
+        let attention = self.dashboard.read(cx).attention(now);
         let wait = self
             .model
             .as_ref()
-            .and_then(|model| model.next_label_change_ms(now));
+            .and_then(|model| model.next_label_change_ms(attention));
         follow_labels(&mut self.clock, wait, cx, Self::on_clock);
     }
 
@@ -375,18 +381,21 @@ impl WorkspaceTree {
         let data = &dashboard.data;
         let view = dashboard.view();
         let current = dashboard.open_task.clone();
+        let now = now_ms();
         let mut snapshot = Snapshot {
             current,
             blurred: view.blurred.clone(),
             show_ids: view.sidebar_ids,
             seen: view.seen.clone(),
+            seen_results: view.seen_results.clone(),
+            attention: dashboard.attention(now),
             tips: BTreeMap::new(),
             labels: BTreeMap::new(),
             terminal_activity: BTreeMap::new(),
             diff_stats: data.diff_stats.clone(),
             waiting: BTreeMap::new(),
             subtasks: BTreeMap::new(),
-            now_ms: now_ms(),
+            now_ms: now,
             focused: self.focus.contains_focused(window, cx),
             stop: None,
         };

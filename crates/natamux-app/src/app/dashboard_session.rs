@@ -19,11 +19,13 @@ use super::super::flow_bench;
 use super::super::settings_rules::{SettingsFocus, SettingsPage, page_to_open};
 use super::super::source::{Feed, Rows, Source};
 use super::super::theme_catalog::ThemeKind;
-use super::super::view_rules::with_seen;
+use super::super::view_rules::seen_results::{note_result, seen_results_after_list};
+use super::super::view_rules::{seen_after_list, with_seen};
 use super::super::view_state::ViewState;
 use super::saves::Wait;
 use super::{Dashboard, DashboardChange};
 use crate::agents::agent_choices::{custom_agents_set_count, set_custom_agents};
+use crate::tasks::task_attention::Attention;
 
 /// Events that came together apply in one update, at most this many.
 const BATCH_MAX: usize = 64;
@@ -287,10 +289,31 @@ impl Dashboard {
             return;
         };
         let seen = with_seen(&self.view.seen, &[(&task.id, task.state)], true);
-        if active && seen != self.view.seen {
+        let mut results = self.view.seen_results.clone();
+        note_result(&mut results, task, true);
+        if active && (seen != self.view.seen || results != self.view.seen_results) {
             self.view.seen = seen;
+            self.view.seen_results = results;
             self.save_view(cx);
             cx.notify();
+        }
+    }
+
+    /// The clock and the user's limit for background work, for the quiet checks (T-0390).
+    pub fn attention(&self, now_ms: i64) -> Attention {
+        Attention::new(now_ms, self.view.flag_background_after_minutes)
+    }
+
+    /// The seen states and background results after a new task list. The open task is looked
+    /// at only while the window is in front.
+    pub(super) fn mark_seen_after_list(&mut self, cx: &mut Context<Self>) {
+        let open = self.open_task.as_deref().filter(|_| self.window_active);
+        let seen = seen_after_list(&self.view.seen, &self.data.tasks, open);
+        let results = seen_results_after_list(&self.view.seen_results, &self.data.tasks, open);
+        if seen != self.view.seen || results != self.view.seen_results {
+            self.view.seen = seen;
+            self.view.seen_results = results;
+            self.save_view_after(Wait::Later, cx);
         }
     }
 }

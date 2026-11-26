@@ -132,6 +132,15 @@ pub fn age_change_after(at_ms: i64, now_ms: i64) -> Option<i64> {
     Some(unit - age % unit)
 }
 
+/// The local time of day, like `09:05` (T-0390).
+pub fn format_clock(iso_time: &str, offset_minutes: i32) -> String {
+    let Some(ms) = parse_iso_ms(iso_time) else {
+        return String::new();
+    };
+    let (_, seconds) = local_parts(ms, offset_minutes);
+    format!("{:02}:{:02}", seconds / 3600, seconds % 3600 / 60)
+}
+
 /// The exact local date and time for the tooltip of a relative time, like `Oct 8, 2026, 9:00:00 AM`.
 pub fn format_exact(iso_time: &str, offset_minutes: i32) -> String {
     let Some(ms) = parse_iso_ms(iso_time) else {

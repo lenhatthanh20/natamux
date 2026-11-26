@@ -74,6 +74,10 @@ fn says_how_long_the_agent_was_quiet() {
         quiet_banner("2026-10-08T09:00:00.000Z", now, 0),
         "No sign of life for 12m. The agent may be stuck."
     );
+    assert_eq!(
+        background_quiet_banner("2026-10-08T09:00:00.000Z", now, 0),
+        "Background work with no sign of life for 12m. It may hang."
+    );
 }
 
 #[test]

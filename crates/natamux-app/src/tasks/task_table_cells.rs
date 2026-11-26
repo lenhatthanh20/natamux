@@ -13,7 +13,7 @@ use super::table_columns::ColumnKey;
 use super::table_rules::{
     ChecksTone, diff_size, format_tokens, format_usd, pull_request_cell, pull_request_number,
 };
-use super::task_attention::is_quiet;
+use super::task_attention::{Attention, is_quiet};
 use super::task_rules::{lane_summary, stage_state_label};
 use super::task_time::{AgeStyle, format_age, format_exact};
 use crate::app::dashboard_data::DashboardData;
@@ -41,7 +41,8 @@ pub struct RowData {
 }
 
 impl RowData {
-    pub fn of(task: &Arc<Task>, data: &DashboardData, now: i64) -> Self {
+    pub fn of(task: &Arc<Task>, data: &DashboardData, at: impl Into<Attention>) -> Self {
+        let at = at.into();
         let note = (task.state == TaskState::Running)
             .then(|| data.activity.get(&task.id))
             .flatten()
@@ -49,13 +50,13 @@ impl RowData {
             .map(str::to_owned);
         RowData {
             task: Arc::clone(task),
-            quiet: is_quiet(task, now),
+            quiet: is_quiet(task, at),
             stat: data.diff_stats.get(&task.id).cloned(),
             usage: data.usage.get(&task.id).cloned(),
             note,
             waits: data.waits_for(task).join(", "),
             show_repo: data.repos.len() > 1,
-            now,
+            now: at.now_ms,
         }
     }
 }

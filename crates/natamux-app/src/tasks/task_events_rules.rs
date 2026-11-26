@@ -170,7 +170,18 @@ fn detail_of(event: &TaskEvent) -> Option<String> {
             None => to.to_string(),
         });
     }
-    if event.kind != "agent.waiting" {
+    // A question may come while background work runs on, and a turn end may leave a scheduled
+    // prompt (T-0390).
+    if event.kind == "agent.finished" {
+        let next = event
+            .payload
+            .get("scheduled")?
+            .as_array()?
+            .first()?
+            .as_str()?;
+        return Some(format!("Finished its turn \u{b7} next: {next}"));
+    }
+    if !matches!(event.kind.as_str(), "agent.waiting" | "agent.asked") {
         return None;
     }
     let entries: Vec<&str> = event

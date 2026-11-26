@@ -165,8 +165,9 @@ impl StatusBarView {
         if self.clock.is_some() {
             return;
         }
-        let tasks = self.dashboard.read(cx).data.tasks.iter().map(task_of);
-        let Some(wait) = next_quiet_ms(tasks, now) else {
+        let dashboard = self.dashboard.read(cx);
+        let tasks = dashboard.data.tasks.iter().map(task_of);
+        let Some(wait) = next_quiet_ms(tasks, dashboard.attention(now)) else {
             return;
         };
         self.clock = Some(cx.spawn(async move |bar, cx| {
@@ -186,10 +187,11 @@ impl StatusBarView {
         match self.counts {
             Some(counts) if counts_hold(Some(counts.at_ms), now) => counts,
             _ => {
-                let tasks = &self.dashboard.read(cx).data.tasks;
+                let dashboard = self.dashboard.read(cx);
+                let tasks = &dashboard.data.tasks;
                 let counts = BarCounts {
                     at_ms: now,
-                    needs_you: needs_me_count(tasks, now),
+                    needs_you: needs_me_count(tasks, dashboard.attention(now)),
                     running: running_count(tasks),
                 };
                 self.counts = Some(counts);

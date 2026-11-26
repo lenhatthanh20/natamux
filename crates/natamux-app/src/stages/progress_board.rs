@@ -293,7 +293,8 @@ impl Render for ProgressBoard {
             })
             .collect();
         let settings = self.settings_state(&repos, cx);
-        let sections = board_sections(&self.rows, &repos, &settings.pipelines, now);
+        let attention = self.dashboard.read(cx).attention(now);
+        let sections = board_sections(&self.rows, &repos, &settings.pipelines, attention);
         let body = v_flex()
             .id("progress-board")
             .track_focus(&self.focus)

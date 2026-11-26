@@ -7,8 +7,8 @@ use serde_json::{Map, Value, json};
 
 use super::fields;
 use super::{
-    HookResult, NormalizedHook, SUMMARY_LENGTH, Signal, input_runs_ask, question_of, shorten,
-    slice_utf16,
+    BACKGROUND, HookResult, NormalizedHook, PROMPT_HEAD_KEY, SUMMARY_LENGTH, Signal, WAKE_KEY,
+    input_runs_ask, question_of, shorten, slice_utf16,
 };
 
 const MAX_MESSAGE_LENGTH: usize = 500;
@@ -21,6 +21,10 @@ const ASKING_NOTIFICATIONS: [&str; 3] = [
     "elicitation_dialog",
     "agent_needs_input",
 ];
+
+// A background shell or subagent that ends wakes the agent with a prompt that starts so
+// (T-0390). Such a turn is no turn of the user.
+const BACKGROUND_WAKE: &str = "<task-notification>";
 
 // Not checked against a real session yet; any other status counts as still running.
 const FINISHED_STATUSES: [&str; 4] = ["completed", "failed", "killed", "stopped"];
@@ -36,6 +40,7 @@ struct Input {
     last_assistant_message: Option<String>,
     tool_name: Option<String>,
     tool_input: Option<Map<String, Value>>,
+    prompt: Option<String>,
     // Read entry by entry in `background_work`, so a bad entry does not lose the hook.
     background_tasks: Option<Value>,
     session_crons: Option<Value>,
@@ -56,6 +61,11 @@ fn read(map: &Map<String, Value>, issues: &mut Issues) -> Input {
             .map(str::to_string),
         tool_name: fields::text(map, "tool_name", issues),
         tool_input: fields::record(map, "tool_input", issues),
+        // Read leniently, as the last message: only a hint of where the turn came from.
+        prompt: map
+            .get("prompt")
+            .and_then(Value::as_str)
+            .map(str::to_string),
         background_tasks: map.get("background_tasks").cloned(),
         session_crons: map.get("session_crons").cloned(),
     }
@@ -88,13 +98,19 @@ fn task_text(entry: &Value) -> Option<String> {
     }
 }
 
-fn cron_text(entry: &Value) -> Option<String> {
+/// The prompt of a cron, else its schedule; empty when it has neither.
+fn cron_what(entry: &Value) -> Option<String> {
     let map = entry.as_object()?;
     let prompt = optional(map, "prompt")?;
     let schedule = optional(map, "schedule")?;
-    match prompt.or(schedule).filter(|what| !what.is_empty()) {
-        Some(what) => Some(format!("scheduled prompt: {what}")),
-        None => Some("scheduled prompt".to_string()),
+    Some(prompt.or(schedule).unwrap_or_default().to_string())
+}
+
+fn cron_text(what: &str) -> String {
+    if what.is_empty() {
+        "scheduled prompt".to_string()
+    } else {
+        format!("scheduled prompt: {what}")
     }
 }
 
@@ -105,12 +121,56 @@ fn entries(list: Option<&Value>, read: fn(&Value) -> Option<String>) -> Vec<Stri
     }
 }
 
-/// What a stopping session still has in flight, such as "Bash: pnpm test". Each of these wakes
-/// Claude Code again when it ends or fires, so the session is paused, not done.
-fn background_work(input: &Input) -> Vec<String> {
-    let mut work = entries(input.background_tasks.as_ref(), task_text);
-    work.extend(entries(input.session_crons.as_ref(), cron_text));
-    work
+/// What a stopping session still has in flight: the running tasks, such as "Bash: pnpm test",
+/// and the scheduled prompts. Each wakes Claude Code again when it ends or fires.
+struct Background {
+    /// The tasks, then the scheduled prompts, while a task runs: the session is paused.
+    waiting_for: Vec<String>,
+    /// The scheduled prompts when no task runs. A cron may wait for days, so the turn counts as
+    /// ended, with the cron kept (T-0390).
+    scheduled: Vec<String>,
+}
+
+fn background_work(input: &Input) -> Background {
+    if input.event != "Stop" {
+        return Background {
+            waiting_for: Vec::new(),
+            scheduled: Vec::new(),
+        };
+    }
+    let mut tasks = entries(input.background_tasks.as_ref(), task_text);
+    let crons = entries(input.session_crons.as_ref(), cron_what);
+    if tasks.is_empty() {
+        let scheduled = crons
+            .into_iter()
+            .map(|what| {
+                if what.is_empty() {
+                    cron_text(&what)
+                } else {
+                    what
+                }
+            })
+            .collect();
+        return Background {
+            waiting_for: tasks,
+            scheduled,
+        };
+    }
+    tasks.extend(crons.iter().map(|what| cron_text(what)));
+    Background {
+        waiting_for: tasks,
+        scheduled: Vec::new(),
+    }
+}
+
+/// The first part of a list, each entry cut, as a payload value.
+fn capped(list: &[String]) -> Value {
+    let shown: Vec<String> = list
+        .iter()
+        .take(MAX_WAITING_ENTRIES)
+        .map(|entry| shorten(entry, MAX_WAITING_LENGTH))
+        .collect();
+    json!(shown)
 }
 
 // "Waiting for Bash: pnpm test and 2 more", cut to the length of a summary.
@@ -149,15 +209,16 @@ fn signal(input: &Input, waiting: bool) -> Option<Signal> {
             .as_deref()
             .is_some_and(|kind| ASKING_NOTIFICATIONS.contains(&kind))
             .then_some(Signal::Asking),
-        "Stop" if waiting => Some(Signal::TurnPaused),
+        // A question waits for the user even while background work runs on (T-0390).
         "Stop" if question(input).is_some() => Some(Signal::TurnAsked),
+        "Stop" if waiting => Some(Signal::TurnPaused),
         "Stop" => Some(Signal::TurnEnded),
         "StopFailure" => Some(Signal::Failed),
         _ => None,
     }
 }
 
-fn details(input: &Input, waiting_for: &[String]) -> Map<String, Value> {
+fn details(input: &Input, work: &Background) -> Map<String, Value> {
     let mut details = Map::new();
     details.insert("hook".into(), json!(input.event));
     if let Some(id) = &input.session_id {
@@ -173,13 +234,24 @@ fn details(input: &Input, waiting_for: &[String]) -> Map<String, Value> {
             json!(slice_utf16(message, MAX_MESSAGE_LENGTH)),
         );
     }
-    if !waiting_for.is_empty() {
-        let shown: Vec<String> = waiting_for
-            .iter()
-            .take(MAX_WAITING_ENTRIES)
-            .map(|entry| shorten(entry, MAX_WAITING_LENGTH))
-            .collect();
-        details.insert("waitingFor".into(), json!(shown));
+    if !work.waiting_for.is_empty() {
+        details.insert("waitingFor".into(), capped(&work.waiting_for));
+    }
+    if !work.scheduled.is_empty() {
+        details.insert("scheduled".into(), capped(&work.scheduled));
+    }
+    if input.event == "UserPromptSubmit"
+        && let Some(prompt) = input.prompt.as_deref()
+    {
+        if prompt.trim_start().starts_with(BACKGROUND_WAKE) {
+            details.insert(WAKE_KEY.into(), json!(BACKGROUND));
+        } else {
+            // Only to match a scheduled prompt; the daemon drops it before it logs anything.
+            details.insert(
+                PROMPT_HEAD_KEY.into(),
+                json!(shorten(prompt, MAX_WAITING_LENGTH)),
+            );
+        }
     }
     details
 }
@@ -194,11 +266,8 @@ pub fn normalize(raw: &Value, _home: &Path) -> HookResult {
     if input.event == "PostToolUse" && input_runs_ask(input.tool_input.as_ref()) {
         return Ok(None);
     }
-    let waiting_for = if input.event == "Stop" {
-        background_work(&input)
-    } else {
-        Vec::new()
-    };
+    let work = background_work(&input);
+    let waiting_for = &work.waiting_for;
     let Some(signal) = signal(&input, !waiting_for.is_empty()) else {
         return Ok(None);
     };
@@ -210,12 +279,12 @@ pub fn normalize(raw: &Value, _home: &Path) -> HookResult {
             input.cwd.as_deref(),
         ),
         "UserPromptSubmit" => Some("Reading the prompt".to_string()),
-        _ if !waiting_for.is_empty() => Some(waiting_summary(&waiting_for)),
+        _ if !waiting_for.is_empty() => Some(waiting_summary(waiting_for)),
         _ => None,
     };
     Ok(Some(NormalizedHook {
         signal,
-        details: details(&input, &waiting_for),
+        details: details(&input, &work),
         cwd: input.cwd,
         summary,
         transcript: input.transcript_path,
@@ -225,3 +294,7 @@ pub fn normalize(raw: &Value, _home: &Path) -> HookResult {
 #[cfg(test)]
 #[path = "claude_code_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "claude_code_background_tests.rs"]
+mod background_tests;

@@ -95,7 +95,7 @@ impl Base {
             commands: &self.commands,
             repos: &self.repos,
             recent: &self.recent,
-            now_ms: now(),
+            attention: now().into(),
             scope: self.scope.as_ref(),
         })
     }
@@ -113,7 +113,7 @@ impl Base {
             query,
             tasks: &self.shared(),
             recent: &self.recent,
-            now_ms: now(),
+            attention: now().into(),
             scope: self.scope.as_ref(),
             terminals,
         })

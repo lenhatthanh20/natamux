@@ -69,7 +69,8 @@ fn treats_the_end_of_a_turn_as_finished_when_the_agent_was_running() {
 // T-0008: `natamux ask`, then the turn ended. The question still waits for the user.
 #[test]
 fn keeps_a_task_that_waits_for_the_user_waiting_when_the_turn_ends() {
-    for signal in [Signal::TurnEnded, Signal::TurnPaused, Signal::TurnAsked] {
+    // T-0390: also when background work woke the agent and its turn ended.
+    for signal in [Signal::TurnEnded, Signal::TurnPaused, Signal::Activity] {
         assert!(
             kinds(TaskState::NeedsInput, signal).is_empty(),
             "{}",
@@ -79,6 +80,16 @@ fn keeps_a_task_that_waits_for_the_user_waiting_when_the_turn_ends() {
 }
 
 // a permission the user denied leaves no tool hook; the turn end ends that wait.
+// T-0390: background work woke the agent and it asked again. The newer question is logged, as a
+// second `natamux ask` is; it cannot move the state, so the task still waits for the answer.
+#[test]
+fn logs_a_new_question_of_a_task_that_waits_for_an_answer() {
+    assert_eq!(
+        kinds(TaskState::NeedsInput, Signal::TurnAsked),
+        ["agent.asked"]
+    );
+}
+
 #[test]
 fn ends_a_hooks_wait_at_the_end_of_the_turn() {
     let ends = |signal| kinds_in(TaskState::NeedsInput, Wait::Hook, signal);
@@ -262,7 +273,15 @@ fn only_plans_events_the_state_machine_accepts_in_every_state() {
                     payload: Map::new(),
                 };
                 let applied = apply_task_event(&position, &event, &steps);
-                assert!(applied.accepted, "{} in {start:?}", signal.as_str());
+                // The one planned event the state cannot take: a newer question while the task
+                // already waits for an answer. It is logged to show the question (T-0390).
+                let newer_question =
+                    start == TaskState::NeedsInput && planned.kind == "agent.asked";
+                assert!(
+                    applied.accepted || newer_question,
+                    "{} in {start:?}",
+                    signal.as_str()
+                );
                 position = applied.position;
             }
         }
