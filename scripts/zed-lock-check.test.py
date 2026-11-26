@@ -6,6 +6,7 @@ import importlib.util
 import io
 import pathlib
 import tempfile
+import tomllib
 import unittest
 
 HERE = pathlib.Path(__file__).parent
@@ -55,6 +56,11 @@ class ZedLockCheckTest(unittest.TestCase):
 
     def test_other_git_sources_with_zed_in_the_name_do_not_count(self):
         self.assertEqual(zed_lock_check.zed_crates(TODAY), {"gpui", "editor"})
+
+    def test_deny_and_about_allow_the_same_licences(self):
+        deny = tomllib.loads((zed_lock_check.ROOT / "deny.toml").read_text())
+        about = tomllib.loads((zed_lock_check.ROOT / "about.toml").read_text())
+        self.assertEqual(set(deny["licenses"]["allow"]), set(about["accepted"]))
 
     def test_main_reads_the_files_and_exits_1_on_a_problem(self):
         with tempfile.TemporaryDirectory() as folder:

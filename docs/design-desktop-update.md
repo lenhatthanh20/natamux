@@ -34,7 +34,7 @@ The desktop app finds a new release, downloads it in the background, and install
 - When **Check for Updates Automatically** is ticked: 30 seconds after the app starts, then every 6 hours while it runs.
 - **Check for Updates…** in the menu checks now. It is on the app menu on macOS and on the **Help** menu on Linux and Windows.
 - A manual check opens a small popup over the window at once (see Popup below). Timed checks show none.
-- **Check for Updates Automatically** (a tick in the same menu, and in the dashboard's Settings dialog) turns the timed checks off and on. It is saved as `autoUpdate` in `<user data>/settings.json`, off by default: only `true` turns it on. A manual check works unless offline mode is on.
+- **Check for Updates Automatically** (a tick in the same menu, and in the dashboard's Settings dialog) turns the timed checks off and on. It is saved as `autoUpdate` in `<user data>/settings.json`, off by default: only `true` turns it on. A manual check works unless offline mode is on, or an administrator set `"updates": false` in the settings file of the machine (no check and no download, timed or manual; the reason is "Updates are turned off by your administrator").
 - Electron only: no check when the app was not packaged or in smoke mode. The Rust app has neither case.
 
 ## What counts as newer

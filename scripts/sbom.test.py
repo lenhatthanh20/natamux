@@ -2,7 +2,9 @@
 """Tests of sbom.py. Run: python3 scripts/sbom.test.py"""
 
 import importlib.util
+import json
 import pathlib
+import tomllib
 import unittest
 
 SPEC = importlib.util.spec_from_file_location("sbom", pathlib.Path(__file__).with_name("sbom.py"))
@@ -41,6 +43,16 @@ METADATA = {
 }
 
 
+def with_sqlite(version):
+    meta = json.loads(json.dumps(METADATA))
+    meta["packages"].append(package("libsqlite3-sys", version))
+    for node in meta["resolve"]["nodes"]:
+        if node["id"] == "used 1.0.0":
+            node["deps"].append(dep("libsqlite3-sys", version=version))
+    meta["resolve"]["nodes"].append({"id": f"libsqlite3-sys {version}", "deps": []})
+    return meta
+
+
 class SbomTest(unittest.TestCase):
     def setUp(self):
         self.out = sbom.sbom(METADATA, "9.9.9", "x86_64-unknown-linux-gnu", {("used", "1.0.0", IO): "ab" * 32})
@@ -69,6 +81,31 @@ class SbomTest(unittest.TestCase):
         self.assertIn("pkg:cargo/used@1.0.0", graph[app])
         self.assertNotIn("pkg:cargo/xtask-only@1.0.0", graph)
         self.assertEqual(graph["pkg:cargo/used@1.0.0"], ["pkg:cargo/deep@1.0.0"])
+
+    def test_the_bundled_sqlite_is_a_component(self):
+        out = sbom.sbom(with_sqlite("0.39.1"), "9.9.9", "t", {})
+        by_name = {c["name"]: c for c in out["components"]}
+        self.assertEqual(by_name["sqlite"]["purl"], "pkg:generic/sqlite@3.54.1")
+        self.assertEqual(by_name["sqlite"]["licenses"], [{"license": {"id": "blessing"}}])
+        graph = {d["ref"]: d["dependsOn"] for d in out["dependencies"]}
+        self.assertEqual(graph["pkg:cargo/libsqlite3-sys@0.39.1"], ["pkg:generic/sqlite@3.54.1"])
+        self.assertIn("pkg:generic/sqlite@3.54.1", graph)
+        self.assertNotIn("sqlite", self.by_name)
+
+    def test_an_unknown_libsqlite3_sys_version_fails(self):
+        with self.assertRaisesRegex(ValueError, "libsqlite3-sys 9.9.9"):
+            sbom.sbom(with_sqlite("9.9.9"), "9.9.9", "t", {})
+
+    def test_the_lock_libsqlite3_sys_version_is_in_the_table(self):
+        lock = tomllib.loads((sbom.ROOT / "Cargo.lock").read_text())
+        for p in lock["package"]:
+            if p["name"] == "libsqlite3-sys":
+                self.assertIn(p["version"], sbom.SQLITE)
+
+    def test_the_rustc_version_is_in_the_metadata(self):
+        out = sbom.sbom(METADATA, "9.9.9", "t", {}, "rustc 1.91.0 (abc 2026-10-01)")
+        self.assertEqual(out["metadata"]["tools"]["components"], [{"type": "application", "name": "rustc", "version": "1.91.0"}])
+        self.assertNotIn("tools", self.out["metadata"])
 
     def test_reads_checksums_from_the_lock(self):
         text = f'[[package]]\nname = "used"\nversion = "1.0.0"\nsource = "{IO}"\nchecksum = "cd"\n\n[[package]]\nname = "ours"\nversion = "1.0.0"\n'

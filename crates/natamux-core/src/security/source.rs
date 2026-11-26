@@ -7,17 +7,23 @@
 
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
 use super::decide::tighten;
 use super::settings::{SecurityState, read_text};
+use super::{SecurityMode, StrictSettings};
 use crate::workspaces::private_dir::{private_dir, write_private};
 
 pub const FILE_NAME: &str = "security.json";
 pub const WRITTEN_NAME: &str = "security-written.json";
 pub const OUTSIDE_CHANGE_WARNING: &str = "security.json changed outside Natamux, so the stricter \
      of the old and the new settings is used. Review the Security settings and save them.";
+/// Why `PUT /security` refuses Strict off while the machine file forces it.
+pub const MACHINE_STRICT: &str = "Strict mode is set by your administrator";
+pub const MACHINE_STRICT_WARNING: &str = "Strict mode is set by your administrator in the \
+     settings file of this machine, so security.json cannot turn it off.";
 
 /// How often a decision may read the files again.
 const RECHECK: Duration = Duration::from_secs(1);
@@ -29,12 +35,16 @@ struct Inner {
     checked: Instant,
     /// Goes up each time the state changes, so a watcher can tell.
     generation: u64,
+    /// The machine file forces Strict mode (`"strict": true`).
+    machine: bool,
 }
 
 pub struct Source {
     path: PathBuf,
     written_path: PathBuf,
     inner: Mutex<Inner>,
+    /// Test hook: the machine key as if the machine file set it.
+    machine_forced: AtomicBool,
 }
 
 pub(super) fn read(path: &Path) -> Option<Vec<u8>> {
@@ -60,6 +70,18 @@ pub(super) fn written_in(data_dir: &Path) -> Option<Vec<u8>> {
     match super::installed() {
         Some(source) if source.path.parent() == Some(data_dir) => source.written(),
         _ => read(&data_dir.join(WRITTEN_NAME)),
+    }
+}
+
+/// The state with the machine key on: Strict always, the user's own Strict keys kept.
+pub fn with_machine(state: SecurityState, machine: bool) -> SecurityState {
+    if !machine || state.mode.is_strict() {
+        return state;
+    }
+    SecurityState {
+        mode: SecurityMode::Strict(StrictSettings::default()),
+        ignored: state.ignored,
+        warning: Some(MACHINE_STRICT_WARNING.to_string()),
     }
 }
 
@@ -93,7 +115,9 @@ impl Source {
                 state,
                 checked: Instant::now(),
                 generation: 0,
+                machine: crate::offline::machine_strict(),
             }),
+            machine_forced: AtomicBool::new(false),
         }
     }
 
@@ -118,7 +142,19 @@ impl Source {
         if inner.checked.elapsed() >= RECHECK {
             self.reload(&mut inner);
         }
-        inner.state.clone()
+        with_machine(inner.state.clone(), inner.machine)
+    }
+
+    /// The machine file forces Strict mode, as of the last read.
+    pub fn machine_strict(&self) -> bool {
+        self.lock().machine
+    }
+
+    /// Test hook: the machine key on or off for this Source only, applied at once.
+    pub fn force_machine(&self, on: bool) {
+        self.machine_forced.store(on, Ordering::Relaxed);
+        let mut inner = self.lock();
+        self.reload(&mut inner);
     }
 
     /// Reads the files now. Gives the generation, which goes up when the state changed.
@@ -137,6 +173,12 @@ impl Source {
     /// change the file can change the copy too.
     fn reload(&self, inner: &mut Inner) {
         inner.checked = Instant::now();
+        let machine =
+            self.machine_forced.load(Ordering::Relaxed) || crate::offline::machine_strict();
+        if machine != inner.machine {
+            inner.machine = machine;
+            inner.generation += 1;
+        }
         let file = read(&self.path);
         if file == inner.file {
             return;
@@ -172,7 +214,7 @@ impl Source {
         inner.checked = Instant::now();
         let state = evaluate(Some(text.as_bytes()), Some(text.as_bytes()));
         self.set(&mut inner, state.clone());
-        Ok(state)
+        Ok(with_machine(state, inner.machine))
     }
 }
 

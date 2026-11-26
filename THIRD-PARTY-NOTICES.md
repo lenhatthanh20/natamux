@@ -33,6 +33,7 @@ package of the lock.
   feature, `crates/gpui/src/gpui.rs` and `crates/gpui/src/test.rs` have the proptest items behind
   the `proptest` feature, and `crates/http_client/src/http_client.rs` has the `github` module
   behind the `github` feature.
+  The git history of the fork is the full record of every change to these crates.
 - License: Apache-2.0 (<https://www.apache.org/licenses/LICENSE-2.0>).
 - Copyright 2022 - 2025 Zed Industries, Inc. Zed has no NOTICE file.
 
@@ -64,6 +65,10 @@ package of the lock.
   `crates/natamux-app/assets/icons/files/LICENSE-material-icon-theme`).
 - lobe-icons, MIT, Copyright 2023 LobeHub
   (`crates/natamux-app/assets/icons/agents/LICENSE-lobe-icons`).
+- Agent logos: the names and logos of agents and their companies (Claude, Codex, Gemini, Copilot,
+  Cursor, Meta, Charm, Factory and others) are trademarks of their owners. Natamux shows them only
+  to name the agent. It has no affiliation with them and no endorsement from them. The source of
+  each file is in `crates/natamux-app/assets/icons/agents/SOURCES.md`, copied to `site/public/agents/`.
 
 ## Themes
 

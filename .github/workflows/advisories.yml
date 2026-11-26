@@ -27,7 +27,8 @@ jobs:
             ~/.cargo/bin/cargo-deny
             ~/.cargo/bin/cargo-audit
             ~/.cargo/bin/cargo-vet
-          key: supply-chain-tools-${{ runner.os }}-cargo-deny-0.20.2-cargo-audit-0.22.2-cargo-vet-0.10.0
+            ~/.cargo/bin/cargo-about
+          key: supply-chain-tools-${{ runner.os }}-cargo-deny-0.20.2-cargo-audit-0.22.2-cargo-vet-0.10.0-cargo-about-0.8.2
       - if: ${{ steps.tools.outputs.cache-hit != 'true' }}
         run: |
           cargo install --locked cargo-deny --version 0.20.2

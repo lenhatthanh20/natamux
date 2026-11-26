@@ -26,6 +26,7 @@ COPY --from=rust-build /app/target/release/natamux-daemon /usr/local/bin/natamux
 COPY --from=rust-build /app/target/release/natamux /usr/local/bin/natamux
 COPY --from=rust-build /app/target/release/nmx /usr/local/bin/nmx
 ENV NATAMUX_HOST=0.0.0.0 \
+    NATAMUX_ALLOW_REMOTE_BIND=1 \
     NATAMUX_DATA_DIR=/data \
     NATAMUX_REPO_DIR=/repo \
     NATAMUX_WORKTREES_DIR=/data/worktrees \

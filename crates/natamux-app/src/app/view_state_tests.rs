@@ -310,26 +310,50 @@ fn the_data_folder_follows_each_os() {
         "APPDATA" => Some("C:\\Users\\an\\AppData\\Roaming".into()),
         _ => None,
     };
+    let none = |_: &Path| false;
     assert_eq!(
-        folder_for("macos", env),
+        folder_for("macos", env, none),
         Some(PathBuf::from(
             "/Users/an/Library/Application Support/Natamux"
         ))
     );
     assert_eq!(
-        folder_for("windows", env),
+        folder_for("windows", env, none),
         Some(PathBuf::from("C:\\Users\\an\\AppData\\Roaming").join("Natamux"))
     );
     assert_eq!(
-        folder_for("linux", env),
+        folder_for("linux", env, none),
         Some(PathBuf::from("/Users/an/.config/Natamux"))
     );
     let xdg = |name: &str| (name == "XDG_CONFIG_HOME").then(|| "/data".into());
     assert_eq!(
-        folder_for("linux", xdg),
+        folder_for("linux", xdg, none),
         Some(PathBuf::from("/data/Natamux"))
     );
-    assert_eq!(folder_for("macos", |_| None), None);
+    assert_eq!(folder_for("macos", |_| None, none), None);
+}
+
+#[test]
+fn the_windows_data_folder_is_local_unless_only_the_old_roaming_one_exists() {
+    let env = |name: &str| match name {
+        "LOCALAPPDATA" => Some("C:\\Users\\an\\AppData\\Local".into()),
+        "APPDATA" => Some("C:\\Users\\an\\AppData\\Roaming".into()),
+        _ => None,
+    };
+    let local = PathBuf::from("C:\\Users\\an\\AppData\\Local").join("Natamux");
+    let roaming = PathBuf::from("C:\\Users\\an\\AppData\\Roaming").join("Natamux");
+    assert_eq!(folder_for("windows", env, |_| false), Some(local.clone()));
+    assert_eq!(folder_for("windows", env, |_| true), Some(local.clone()));
+    let only_roaming = |path: &Path| path == roaming;
+    assert_eq!(
+        folder_for("windows", env, only_roaming),
+        Some(roaming.clone())
+    );
+    let both_with_data = |path: &Path| path == roaming || path.starts_with(&local);
+    assert_eq!(
+        folder_for("windows", env, both_with_data),
+        Some(local.clone())
+    );
 }
 
 #[test]

@@ -90,8 +90,14 @@ The app keeps its files in the user data folder.
 | System | Folder |
 |---|---|
 | macOS | `~/Library/Application Support/Natamux` |
-| Windows | `%APPDATA%\Natamux` |
+| Windows | `%LOCALAPPDATA%\Natamux` (an older install: `%APPDATA%\Natamux`) |
 | Linux | `~/.config/Natamux` |
+
+A new Windows install keeps the folder in `%LOCALAPPDATA%\Natamux`, so a roaming profile does not copy your code and token to a server. An install that has `%APPDATA%\Natamux` and no `%LOCALAPPDATA%\Natamux\data` keeps using the old folder. Natamux does not move it by itself, because git worktrees and task files store absolute paths. To move it:
+
+1. Quit Natamux.
+2. Move the folder `%APPDATA%\Natamux` to `%LOCALAPPDATA%\Natamux`.
+3. In each project, run `git worktree repair` with the path of each moved worktree.
 
 | Path in that folder | Holds |
 |---|---|

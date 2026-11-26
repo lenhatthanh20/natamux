@@ -18,6 +18,8 @@ mod download_tests;
 #[cfg(test)]
 mod install_tests;
 #[cfg(test)]
+mod policy_tests;
+#[cfg(test)]
 mod preferences_tests;
 #[cfg(test)]
 mod signature_tests;

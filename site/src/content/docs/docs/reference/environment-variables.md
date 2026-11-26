@@ -12,7 +12,8 @@ Set these in the environment where the daemon starts.
 | Variable | Default | Meaning |
 |---|---|---|
 | `NATAMUX_PORT` | `4317` | Port. Must be 0 to 65535 |
-| `NATAMUX_HOST` | `127.0.0.1` | Address to bind. It is not checked: any address works, including `0.0.0.0`. A non-wildcard value is added to the `Host` allow-list. The Docker image sets `0.0.0.0` inside its container, and `compose.prod.yaml` publishes on `${NATAMUX_BIND:-127.0.0.1}` |
+| `NATAMUX_HOST` | `127.0.0.1` | Address to bind. The daemon refuses to start when it is not loopback (`127.0.0.1`, `localhost`, `::1`, any case) unless `NATAMUX_ALLOW_REMOTE_BIND` is `1`. A non-wildcard value is added to the `Host` allow-list. The Docker image sets `0.0.0.0` inside its container, and `compose.prod.yaml` publishes on `${NATAMUX_BIND:-127.0.0.1}` |
+| `NATAMUX_ALLOW_REMOTE_BIND` | none | Only the exact value `1` lets `NATAMUX_HOST` be an address that is not loopback. Any other value (`true`, ` 1`) does not. Without it, such a host stops the daemon with `NATAMUX_HOST "<host>" is not a loopback address; set NATAMUX_ALLOW_REMOTE_BIND=1 to bind it`. The Docker image sets it |
 | `NATAMUX_ALLOWED_HOSTS` | none | Comma list of host names a request may use in its `Host` header, besides `127.0.0.1`, `localhost`, `::1` and `NATAMUX_HOST`. Names only, no ports. Other hosts get 403. A WebSocket `Origin` must use an allowed name too |
 | `NATAMUX_TOKEN` | A random token for each run, printed at start | The token every request needs |
 | `NATAMUX_OFFLINE` | none | Only the value `1` turns on [offline mode](/docs/help/security-review/#offline-mode): no update check, no `gh`, and no `git` command that reaches a remote. `"offline": true` in the app's `settings.json` or in the settings file of the machine turns it on too, for every user in the second case. Read once at start: restart to change it. The desktop app reads it and passes it to the daemon it starts |
@@ -63,6 +64,14 @@ Every terminal of a task gets the daemon's environment plus:
 | `NATAMUX_PORT` | The first port of the task's own block of 10 ports, from 20000 |
 | `PORT` | The same value, for a dev server |
 | `LANG` | `C.UTF-8`, only when the daemon has none of `LANG`, `LC_ALL` and `LC_CTYPE`. Without a UTF-8 locale, a shell garbles typed letters such as Vietnamese |
+
+## Install scripts
+
+Set these in the environment of `install.sh` or `install.ps1`.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `NATAMUX_VERSION` | none | A release tag such as `v1.1.0`. The script installs that release and not the newest one. Any other form is refused. See [Install a chosen version](/docs/getting-started/install/#install-a-chosen-version) |
 
 ## Desktop app
 

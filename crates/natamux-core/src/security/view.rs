@@ -28,5 +28,7 @@ pub fn view_of(state: &SecurityState) -> SecurityView {
         warning: state.warning.clone(),
         isolation: None,
         network: None,
+        // The daemon route sets it from its own Source, which a test can force.
+        machine_strict: false,
     }
 }

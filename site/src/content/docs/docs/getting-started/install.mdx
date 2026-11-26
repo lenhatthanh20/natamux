@@ -64,6 +64,18 @@ The script:
 4. Checks the file against `SHA256SUMS.txt`. On any failed check it stops and installs nothing.
 5. Installs the app and tells you where it is.
 
+### Install a chosen version
+
+Set `NATAMUX_VERSION` to a release tag such as `v1.1.0` to install that release and not the newest one. The script checks the tag (`v`, then three numbers, no pre-release) and refuses any other value. Every other check stays the same.
+
+```sh frame="terminal"
+curl -fsSL https://natamux.github.io/install.sh | NATAMUX_VERSION=v1.1.0 sh
+```
+
+```powershell
+$env:NATAMUX_VERSION = 'v1.1.0'; irm https://natamux.github.io/install.ps1 | iex
+```
+
 Read the scripts before you run them: [`install.sh`](https://github.com/lenhatthanh20/natamux/blob/main/site/public/install.sh) and [`install.ps1`](https://github.com/lenhatthanh20/natamux/blob/main/site/public/install.ps1).
 
 ## Download
@@ -216,7 +228,7 @@ The folder is `bin` inside the app's user data folder:
 | System | Folder |
 |---|---|
 | macOS | `~/Library/Application Support/Natamux/bin` |
-| Windows | `%APPDATA%\Natamux\bin` |
+| Windows | `%LOCALAPPDATA%\Natamux\bin` (an older install: `%APPDATA%\Natamux\bin`, see [Where things are](/docs/guides/desktop-app/#where-things-are)) |
 | Linux | `~/.config/Natamux/bin` |
 
 <Tabs syncKey="os">
@@ -242,13 +254,15 @@ natamux task list
 In PowerShell, for your user, once:
 
 ```powershell
-[Environment]::SetEnvironmentVariable('Path', "$env:APPDATA\Natamux\bin;" + [Environment]::GetEnvironmentVariable('Path', 'User'), 'User')
+$dir = "$env:LOCALAPPDATA\Natamux"
+if (-not (Test-Path "$dir\data") -and (Test-Path "$env:APPDATA\Natamux")) { $dir = "$env:APPDATA\Natamux" }
+[Environment]::SetEnvironmentVariable('Path', "$dir\bin;" + [Environment]::GetEnvironmentVariable('Path', 'User'), 'User')
 ```
 
 Open a new terminal. The command also needs the daemon's token and address:
 
 ```powershell
-$env:NATAMUX_TOKEN = Get-Content "$env:APPDATA\Natamux\daemon-token"
+$env:NATAMUX_TOKEN = Get-Content "$dir\daemon-token"
 $env:NATAMUX_URL = 'http://127.0.0.1:4317'
 natamux task list
 ```

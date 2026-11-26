@@ -32,7 +32,10 @@ pub use network::{
     force_network, network, network_for, network_in, network_of, tighten_network,
 };
 pub use settings::{BAD_FILE_WARNING, FIXED_KEYS, SecurityState, read_text, read_value, to_text};
-pub use source::{FILE_NAME, OUTSIDE_CHANGE_WARNING, Source, WRITTEN_NAME, evaluate};
+pub use source::{
+    FILE_NAME, MACHINE_STRICT, MACHINE_STRICT_WARNING, OUTSIDE_CHANGE_WARNING, Source,
+    WRITTEN_NAME, evaluate, with_machine,
+};
 pub use view::view_of;
 
 /// The Strict keys the Strict rules read.

@@ -1,6 +1,7 @@
 #!/bin/sh
 # Installs or updates the Natamux desktop app on macOS, Debian and Ubuntu.
 # Usage: curl -fsSL https://natamux.github.io/install.sh | sh
+# A fixed version: curl -fsSL https://natamux.github.io/install.sh | NATAMUX_VERSION=v1.1.0 sh
 # Windows: irm https://natamux.github.io/install.ps1 | iex
 # Source: https://github.com/lenhatthanh20/natamux/blob/main/site/public/install.sh
 set -eu
@@ -33,6 +34,17 @@ latest_tag() {
   printf '%s\n' "${url##*/}"
 }
 
+# wanted_tag: NATAMUX_VERSION when set, else the latest release.
+wanted_tag() {
+  if [ -z "${NATAMUX_VERSION:-}" ]; then
+    latest_tag
+    return
+  fi
+  valid_tag "$NATAMUX_VERSION" ||
+    fail "NATAMUX_VERSION must be a release tag such as v1.1.0, not '$NATAMUX_VERSION'."
+  printf '%s\n' "$NATAMUX_VERSION"
+}
+
 # sum_for <file name> <SHA256SUMS.txt>: the expected hash, empty when the file has no line.
 sum_for() { awk -v f="$1" '$2 == f || $2 == "*" f { print $1; exit }' "$2"; }
 
@@ -61,10 +73,10 @@ verify_signature() {
     fail "SHA256SUMS.txt is signed for another version, not $tag. Nothing was installed."
 }
 
-# get_release <file> <minisign install hint>: downloads the file of the latest release
+# get_release <file> <minisign install hint>: downloads the file of the wanted release
 # into $tmp and checks it.
 get_release() {
-  tag=$(latest_tag)
+  tag=$(wanted_tag) || exit 1
   valid_tag "$tag" || fail "unexpected release tag '$tag'."
   base=$REPO/releases/download/$tag
   say "Downloading $1 of Natamux $tag..."

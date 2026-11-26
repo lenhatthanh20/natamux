@@ -3,8 +3,9 @@
 
 Usage: zed-lock-check.py [<Cargo.lock> <crate list>]
 
-A Zed crate is a package whose source is the Zed fork. cargo deny may skip them (they are
-publish = false), so this list is the guard that no Zed crate comes back. Exit 0 when the two
+A Zed crate is a package whose source is the Zed fork. cargo deny and cargo about skip them
+(private crates, listed by hand in THIRD-PARTY-NOTICES.md), so this list is the guard that no Zed
+crate comes back. Exit 0 when the two
 sets are equal, 1 when not.
 """
 

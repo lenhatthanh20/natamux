@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fails when a traced program reached past loopback.
 
-Usage: strace -f -e trace=connect,sendto,sendmsg -o <file> <program>; net-trace.py <file>
+Usage: strace -f -e trace=connect,sendto,sendmsg,sendmmsg -o <file> <program>; net-trace.py <file>
 
 Reads the strace output and looks at every IPv4 and IPv6 address a process connected or sent
 to. Loopback is fine. Any other address fails, and so does port 53 on any address: a DNS lookup

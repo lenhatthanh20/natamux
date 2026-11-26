@@ -64,7 +64,7 @@ As Markdown files with a small header, in `<data folder>/tasks/T-0001.md`. A SQL
 | Setup | Data folder |
 |---|---|
 | Desktop app, macOS | `~/Library/Application Support/Natamux/data` |
-| Desktop app, Windows | `%APPDATA%\Natamux\data` |
+| Desktop app, Windows | `%LOCALAPPDATA%\Natamux\data` (an older install keeps `%APPDATA%\Natamux\data`, see [Where things are](/docs/guides/desktop-app/#where-things-are)) |
 | Desktop app, Linux | `~/.config/Natamux/data` |
 | A daemon started in a repository | `.natamux/` in that folder, unless you set `NATAMUX_DATA_DIR` |
 
@@ -86,6 +86,6 @@ Yes, from version 0.1.2, for the macOS app, the AppImage and the `.deb`. The Win
 
 1. Quit the app.
 2. macOS: drag Natamux from Applications to the Trash. Windows: **Settings → Apps → Installed apps → Natamux → Uninstall** (Windows 10: **Apps & features**). Linux: remove the AppImage or tar.gz folder, or remove the `.deb` with your package manager.
-3. Optional: delete the user data folder (`~/Library/Application Support/Natamux` on macOS, `%APPDATA%\Natamux` on Windows, `~/.config/Natamux` on Linux). This removes your tasks, the token and the logs.
+3. Optional: delete the user data folder (`~/Library/Application Support/Natamux` on macOS, `%LOCALAPPDATA%\Natamux` on Windows (`%APPDATA%\Natamux` on an older install), `~/.config/Natamux` on Linux). This removes your tasks, the token and the logs.
 4. Optional: remove worktrees you no longer need. In each repository, `git worktree list` shows them and `git worktree remove <path>` removes one.
 5. Optional: remove the `PATH` line you added for the `natamux` command.

@@ -555,11 +555,19 @@ pub fn save(folder: &Path, state: &ViewState) -> std::io::Result<()> {
 
 /// The app's data folder on this OS, from the environment.
 pub fn folder() -> Option<PathBuf> {
-    folder_for(std::env::consts::OS, |name| std::env::var_os(name))
+    folder_for(
+        std::env::consts::OS,
+        |name| std::env::var_os(name),
+        Path::exists,
+    )
 }
 
 /// `os` is `std::env::consts::OS`. Linux and the rest follow the XDG data folder.
-pub fn folder_for(os: &str, var: impl Fn(&str) -> Option<std::ffi::OsString>) -> Option<PathBuf> {
+pub fn folder_for(
+    os: &str,
+    var: impl Fn(&str) -> Option<std::ffi::OsString>,
+    exists: impl Fn(&Path) -> bool,
+) -> Option<PathBuf> {
     let set = |name: &str| {
         var(name)
             .filter(|value| !value.is_empty())
@@ -567,7 +575,7 @@ pub fn folder_for(os: &str, var: impl Fn(&str) -> Option<std::ffi::OsString>) ->
     };
     match os {
         "macos" => Some(set("HOME")?.join("Library/Application Support/Natamux")),
-        "windows" => Some(set("APPDATA")?.join("Natamux")),
+        "windows" => natamux_client::config::windows_folder(&var, exists),
         _ => Some(
             set("XDG_CONFIG_HOME")
                 .or_else(|| Some(set("HOME")?.join(".config")))?

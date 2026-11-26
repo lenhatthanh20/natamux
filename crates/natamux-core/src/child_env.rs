@@ -1,13 +1,14 @@
 //! The environment of the programs Natamux starts for a task (terminals, stage checks, the
 //! commit-draft agent). With `credentials.agentEnv: strip` (the Strict default) they lose the
 //! user's git and GitHub credentials; the model keys stay, so the agent still works. With a proxy
-//! set, they get it and `NO_PROXY` becomes loopback plus `noProxy`.
+//! set, they get it and `NO_PROXY` becomes loopback plus `noProxy`. In Strict mode they also get
+//! the agents' opt-out variables (`STRICT_OPT_OUTS`).
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::security::{NetworkSettings, installed, network};
+use crate::security::{NetworkSettings, installed, mode, network};
 
 pub type Env = BTreeMap<String, String>;
 
@@ -33,6 +34,11 @@ const PROXY_NAMES: [&str; 6] = [
     "all_proxy",
 ];
 const LOOPBACK_HOSTS: [&str; 3] = ["127.0.0.1", "localhost", "::1"];
+/// The opt-outs set in Strict mode: the common one and Claude Code's; no guessed names.
+pub const STRICT_OPT_OUTS: [(&str, &str); 2] = [
+    ("DO_NOT_TRACK", "1"),
+    ("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "1"),
+];
 
 /// `withGitConfig`: the `GIT_CONFIG_*` variables that add `entries` after the ones the
 /// environment has (`current_count` is its `GIT_CONFIG_COUNT`).
@@ -76,9 +82,18 @@ pub fn empty_gh_dir() -> PathBuf {
         .join("gh-none")
 }
 
-/// The changes `settings` make to `env`. Empty for `inherit` and no proxy: today's environment.
-pub fn changes(settings: &NetworkSettings, env: &Env, gh_dir: &Path) -> Changes {
+/// The changes `settings` make to `env`. Empty for `inherit`, no proxy and Personal mode:
+/// today's environment.
+pub fn changes(settings: &NetworkSettings, strict: bool, env: &Env, gh_dir: &Path) -> Changes {
     let mut out = Changes::default();
+    if strict {
+        for (name, value) in STRICT_OPT_OUTS {
+            // A value the user set wins, so a user can still choose another one.
+            if !env.contains_key(name) {
+                out.set.push((name.into(), value.into()));
+            }
+        }
+    }
     if settings.strip {
         let named = |name: &str| {
             STRIPPED.contains(&name)
@@ -117,9 +132,9 @@ pub fn changes(settings: &NetworkSettings, env: &Env, gh_dir: &Path) -> Changes 
     out
 }
 
-/// `env` changed by `settings`.
-pub fn scrub_with(settings: &NetworkSettings, env: &Env, gh_dir: &Path) -> Env {
-    let changes = changes(settings, env, gh_dir);
+/// `env` changed by `settings` and the security mode.
+pub fn scrub_with(settings: &NetworkSettings, strict: bool, env: &Env, gh_dir: &Path) -> Env {
+    let changes = changes(settings, strict, env, gh_dir);
     let mut out = env.clone();
     for name in &changes.remove {
         out.remove(name);
@@ -130,7 +145,7 @@ pub fn scrub_with(settings: &NetworkSettings, env: &Env, gh_dir: &Path) -> Env {
 
 /// `env` changed by the network settings now.
 pub fn scrub(env: &Env) -> Env {
-    scrub_with(&network(), env, &empty_gh_dir())
+    scrub_with(&network(), mode().is_strict(), env, &empty_gh_dir())
 }
 
 /// The environment `command` starts with: the daemon's, changed by what was set on it.
@@ -148,7 +163,8 @@ fn env_of(command: &Command) -> Env {
 
 /// `scrub` for a command that inherits the daemon's environment.
 pub fn scrub_command(command: &mut Command) {
-    let changes = changes(&network(), &env_of(command), &empty_gh_dir());
+    let strict = mode().is_strict();
+    let changes = changes(&network(), strict, &env_of(command), &empty_gh_dir());
     for name in &changes.remove {
         command.env_remove(name);
     }
